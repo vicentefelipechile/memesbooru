@@ -1,5 +1,5 @@
 export function renderHeader(user: { username: string; rank: string } | null): string {
-  return `
+	return `
   <header class="header">
     <a href="/" data-link class="logo">memesbooru</a>
     <nav class="nav">

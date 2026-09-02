@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { normalizeTag } from "../../src/shared/validation/index.js";
-import { totpVerify, generateTotpSecret } from "../../src/server/services/authService.js";
+import { normalizeTag } from "../../src/validators.js";
+import { AuthService } from "../../src/services/auth-service.js";
+const svc = new AuthService(null as never);
+const { totpVerify, generateTotpSecret } = { totpVerify: svc.totpVerify.bind(svc), generateTotpSecret: svc.generateTotpSecret.bind(svc) };
 
 describe("normalizeTag", () => {
   it("quita acentos y ñ, minusculas, _", () => {

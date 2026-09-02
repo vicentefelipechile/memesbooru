@@ -1,9 +1,9 @@
-import { renderHeader } from "../components/header.js";
-import { getMe } from "../services/api.js";
+import { renderHeader } from '../components/header.js';
+import { getMe } from '../services/api.js';
 export async function renderUpload(): Promise<string> {
-  const { user } = await getMe().catch(() => ({ user: null }));
-  if (!user) return `${renderHeader(null)}<main class="page"><p>Necesitas login con Google para subir.</p><a href="/api/auth/google">Login</a></main>`;
-  return `
+	const { user } = await getMe().catch(() => ({ user: null }));
+	if (!user) return `${renderHeader(null)}<main class="page"><p>Necesitas login con Google para subir.</p><a href="/api/auth/google">Login</a></main>`;
+	return `
     ${renderHeader(user)}
     <main class="page">
       <h1>Subir meme</h1>
@@ -19,19 +19,19 @@ export async function renderUpload(): Promise<string> {
     </main>`;
 }
 export function bindUpload(): void {
-  document.getElementById("upload-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const tags = (document.getElementById("tags") as HTMLInputElement).value.trim().split(/\s+/);
-    const mediaType = (document.getElementById("mediaType") as unknown as HTMLSelectElement).value;
-    const title = (document.getElementById("title") as HTMLInputElement).value;
-    const status = document.getElementById("upload-status")!;
-    status.textContent = "Subiendo...";
-    const res = await fetch("/api/posts", { method: "POST", headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify({ title, tags, mediaType }) });
-    if (!res.ok) status.textContent = `Error: ${await res.text()}`;
-    else {
-      const j = await res.json() as { publicId: string };
-      status.textContent = `Creado ${j.publicId} — en procesamiento (variant low). Redirigiendo...`;
-      setTimeout(() => location.assign(`/post/${j.publicId}`), 800);
-    }
-  });
+	document.getElementById('upload-form')?.addEventListener('submit', async (e) => {
+		e.preventDefault();
+		const tags = (document.getElementById('tags') as HTMLInputElement).value.trim().split(/\s+/);
+		const mediaType = (document.getElementById('mediaType') as unknown as HTMLSelectElement).value;
+		const title = (document.getElementById('title') as HTMLInputElement).value;
+		const status = document.getElementById('upload-status')!;
+		status.textContent = 'Subiendo...';
+		const res = await fetch('/api/posts', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ title, tags, mediaType }) });
+		if (!res.ok) status.textContent = `Error: ${await res.text()}`;
+		else {
+			const j = (await res.json()) as { publicId: string };
+			status.textContent = `Creado ${j.publicId} — en procesamiento (variant low). Redirigiendo...`;
+			setTimeout(() => location.assign(`/post/${j.publicId}`), 800);
+		}
+	});
 }

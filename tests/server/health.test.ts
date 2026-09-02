@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import worker from "../../src/server/entrypoint";
+import worker from "../../src/index";
 
 async function req(path: string): Promise<Response> {
   return worker.fetch(new Request(`http://localhost${path}`), {} as never, {} as never);
