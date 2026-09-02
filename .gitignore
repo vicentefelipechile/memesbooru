@@ -1,3 +1,5 @@
+src/tools/*.sql
+
 # Logs
 logs
 *.log
