@@ -31,7 +31,7 @@ Hono (src/index.ts / src/http/routes/*)
 
 ```
 src/
-  client/        # vanilla TS frontend (no framework): app/router, pages/*, components/*, services/api.ts, state/store, styles/
+  client/        # vanilla TS frontend (no framework): app/router, pages/*, components/*, services/api.ts, state/store, styles/ (modular, one file per category)
   db/            # schema.ts (Row interfaces snake_case) + client.ts (typed D1 client)
   domain/        # errors.ts (DomainError hierarchy)
   helpers/       # cursor.ts, query-builder.ts, file-validation.ts, net.ts, http.ts, crypto.ts (pure, reusable)
@@ -62,11 +62,13 @@ Contains:
 - `AuthUser { id: UserId }`, `PaginatedResponse<T>`
 - Branded ids: `Brand<T,B>`, `UserId/PostId/PublicId/TagId/CommentId` + constructors `toUserId(n)` etc. (`src/types.ts:89`). Use at boundaries, never mix raw `number`.
 - Helpers: `SqlParam`, `JsonValue/JsonPrimitive`, `ErrorDetails`, `QueueMessage` (discriminated union), `CamelCased<T>` (`SnakeToCamel`), `DeepReadonly<T>`, `NoInfer<T>`, `VariadicFn`, `AwaitedReturn`, `PostSearchResult`, `PostDetailResult`
+- `PostDetailResult` = `PostListingRow` + `author_id/author_username/title/description/canonical_post_id/tags` (tags are `PostTagResult[]` = `{name,category,count}`, enriched for the booru sidebar)
+- `CommentResult` = `CommentRow` + `author_username` (joined in `comment-repository.listByPost`)
 - Derived: `EntityId = Pick<ReportRow,'id'>`, `CreatedPostResult = { publicId: PublicId; postId: PostId }`
 - Re-exports: `ReportInput`, `CreatePostInput` etc. from `validators.ts` — never inline anonymous `{id:number}`
 
 ### 4.3 `src/validators.ts` — Zod is the only validator
-Every route `safeParse` before service. Helpers: `sanitizeHtml`, `normalizeTag`, `parseQueryWithArrays`. Enums `USER_RANKS/POST_STATUSES/MEDIA_TYPES/TAG_CATEGORIES as const satisfies readonly string[]`. Schemas `CreatePostSchema/CommentSchema/RatingSchema/ReportSchema/...` + inferred `z.infer` types (`SearchQueryInput`, `PaginationInput` etc.). Response schemas `HealthResponseSchema/SearchResponseSchema/PostResponseSchema...` for frontend `safeParse` without `as`.
+Every route `safeParse` before service. Helpers: `sanitizeHtml`, `normalizeTag`, `parseQueryWithArrays`. Enums `USER_RANKS/POST_STATUSES/MEDIA_TYPES/TAG_CATEGORIES as const satisfies readonly string[]`. Schemas `CreatePostSchema/CommentSchema/RatingSchema/ReportSchema/...` + inferred `z.infer` types (`SearchQueryInput`, `PaginationInput` etc.). Response schemas `HealthResponseSchema/SearchResponseSchema/PostResponseSchema/...` for frontend `safeParse` without `as`. Detail/tag/comment schemas expose the booru sidebar fields: `PostTagSchema {name,category,count}`, `PostResponseSchema.author_username`, `CommentItemSchema.author_username/created_at`, `FavoritesResponseSchema`, `TotpSetupResponseSchema/TotpVerifyResponseSchema`.
 
 ## 5. Why `unknown` is FORBIDDEN
 
@@ -151,7 +153,43 @@ export async function searchByTags(db: DB, tagIds: TagId[], opts:{sort:'recent'|
 
 ## 11. Frontend Vanilla
 
-`src/client/` — vanilla TS + HTML + CSS (`vite` build, no React/Vue). `router.ts` (`history.pushState`), `pages/*`, `components/*`, `services/api.ts` (`apiGet(path):Promise<JsonValue>` → `Schema.safeParse`), `state/store.ts`. No backend type imports.
+`src/client/` — vanilla TS + HTML + CSS (`vite` build, no React/Vue). SPA with `history.pushState`. No backend type imports (`src/client` never imports `src/types`); the frontend consumes the Zod response schemas in `src/validators.ts` via `safeParse`.
+
+### 11.1 Views (7 + 404)
+
+`src/client/app/router.ts` mounts: Catálogo `/`, Detalle `/post/:publicId`, Subir `/upload`, Favoritos `/favorites`, Configuración `/settings`, Perfil `/profile`, + 404. Moderación es TO DO. Login es redirect a Google OAuth, no vista SPA.
+
+### 11.2 Shell & navigation (no full page reloads)
+
+- `main.ts` boot: `applyTheme()` + **one** `getMe()` → cached in `store.user`. Never call `getMe` per render.
+- Router renders a **persistent shell** (header) once; navigation only swaps `<main id="page">`. No `location.reload()` anywhere — actions update the DOM in place.
+- **Global delegation** (bound once): `a[data-link]` navigation, plus home's `[data-ac]` (add tag), `[data-remove]` (remove tag), `[data-sort]`, `[data-page]` — so re-rendered content needs no re-binding.
+- Post actions are in-place: vote/favorite refetch the post and update `#score-line` + `#stats`; a new comment is appended to `#comments-list`.
+
+### 11.3 Booru catalog UI
+
+- Dense square thumbnail grid (no wrapping cards), numeric paginator `« 1 2 3 … »`. The backend stays cursor-paginated; the **client maps page↔cursor** in `store.ts` (`pages[]`, `cursorForPage(page)`, `recordPage`).
+- Search bar keeps its input stable; only `#results` (grid + paginator), `#selected-tags`, `#sort-row` re-render when the query/tags/sort/page change (`home.ts loadResults`).
+- Post detail: two-column layout with sidebar blocks `Statistics` (score/favs/comments/media/autor/fecha) + `Tagged` (tags grouped by category with usage counts, from `PostTagResult`).
+- Tags are plain-text links with usage counts; comments show author + date.
+
+### 11.4 Themes (user-selectable)
+
+4 light palettes in `styles/tokens.css` as `[data-theme="android"|"solarized"|"gruvbox"|"nord"]` (`android` default). Applied via `data-theme` on `<html>`, persisted in `localStorage` (`memesbooru.theme`), switched from `/settings` (`setTheme` in `state/store.ts`). All colors come from CSS custom properties — never hardcode hex in markup/components.
+
+### 11.5 Modular CSS (no monolith)
+
+`src/client/styles/index.css` imports only; split by category: `tokens.css` (font + palettes), `base.css`, `typography.css`, `layout.css`, `grid.css`, `post.css`, `forms.css`, `comments.css`.
+
+### 11.6 Design rules (anti-AI-slop)
+
+Light utilitarian base (no dark-mode reflex), self-hosted `@fontsource/ibm-plex-sans` (Latin, bundled to `dist/`, no CDN; fallback `Helvetica, Arial, sans-serif`), `border-radius: var(--radius)` = 2px, no gradients/glassmorphism/pills/emojis/decorative icons, `prefers-reduced-motion` respected, real `:hover/:active/:focus-visible` states.
+
+### 11.7 Services & state
+
+- `services/api.ts`: `apiGet/apiPost` → `Schema.safeParse`, no `as` casts.
+- `state/store.ts`: user, query, tags, sort, theme, and pagination cursor history.
+- `components/*` are pure render functions returning HTML strings; `pages/*` render + bind.
 
 ## 12. Cloudflare Verification Rule
 
@@ -193,6 +231,10 @@ Conventional Commits, English, imperative: `refactor: ...` / `feat: ...` / `fix:
 - SQL outside `src/repositories/*` or `c.env.DB` outside routes/`index.ts`
 - Business logic in `src/http/routes/*` or Hono in `src/services/*`
 - `SELECT *` on public endpoints, JSON columns for filterable data, `OFFSET` pagination, `ORDER BY RANDOM()`
+- `location.reload()` in `src/client` — update the DOM in place (vote/fav/comment/search)
+- Calling `getMe()` per render in `src/client` — fetch once into `store.user` at boot
+- AI-slop UI: dark-mode reflex, Inter/system-ui/Poppins/Geist, `border-radius >= 8px` on cards/buttons, gradients/glassmorphism/pills/emojis, gray-bordered cards wrapping thumbnails, "load more" instead of the numeric paginator, hardcoded hex in markup instead of CSS tokens
+- Monolithic `main.css` — keep the category-split `styles/*.css`
 - Dual `types` files — keep monoliths `src/types.ts` + `src/validators.ts`
 - New `src/server` / `src/shared` dirs from `PLAN.md` — actual layout is `src/db|domain|helpers|http|queues|repositories|services`
 - `wrangler.toml` — use `wrangler.jsonc`
