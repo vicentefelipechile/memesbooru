@@ -30,7 +30,7 @@ import { spawnSync } from 'node:child_process';
 // Constants
 // =========================================================================================================
 
-const DEFAULT_DB = 'memesbooru-db' as const;
+const DEFAULT_DB = 'memesbooru' as const;
 const MINIMAL_USERS = [
 	{ id: 1, username: 'admin', display_name: 'Admin', rank: 'trusted', status: 'active', trust_score: 100 },
 	{ id: 2, username: 'meme_lord', display_name: 'Meme Lord', rank: 'normal', status: 'active', trust_score: 10 },
