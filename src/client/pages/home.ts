@@ -1,7 +1,8 @@
-import { renderSearch, renderAutocomplete, renderSelectedTags, renderSortLinks } from '../components/search.js';
+import { renderAutocomplete, renderSelectedTags, renderSortLinks } from '../components/search.js';
 import { renderGrid, renderPaginator, type GridItem } from '../components/grid.js';
+import { renderSidebar } from '../components/sidebar.js';
 import { store, resetPagination, cursorForPage, recordPage, setCurrentPage, setHasMore } from '../state/store.js';
-import { searchPosts, autocompleteTags } from '../services/api.js';
+import { searchPosts, autocompleteTags, browseTags } from '../services/api.js';
 
 type SearchResult = { data: GridItem[]; nextCursor: string | null; hasMore?: boolean };
 
@@ -12,37 +13,76 @@ type SearchResult = { data: GridItem[]; nextCursor: string | null; hasMore?: boo
 export async function renderHome(): Promise<string> {
 	parseUrlIntoStore();
 	const page = store.get().currentPage;
-	const result = await fetchPage(page);
+	const [result, tagGroups] = await Promise.all([
+		fetchPage(page),
+		browseTags(30).catch(() => ({ groups: {} })),
+	]);
+	const flatGroups: Record<string, any[]> = {};
+	for (const [k, v] of Object.entries((tagGroups as any).groups || {})) {
+		flatGroups[k] = (v as any)?.tags || [];
+	}
 	return `
-    <div class="page-head"><h1>Memesbooru</h1></div>
-    ${renderSearch(store.get().query, store.get().tags, store.get().sort)}
-    <div id="results">
-      ${renderGrid(result.data)}
-      ${renderPaginatorFor(page, result)}
+    <div class="home-layout">
+      <aside class="home-side" id="home-side">${renderSidebar(flatGroups)}</aside>
+      <div class="home-main">
+        <div class="page-head"><h1>Memesbooru</h1></div>
+        <div class="search-toolbar">
+          <div id="selected-tags" class="selected-tags">${renderSelectedTags(store.get().tags)}</div>
+          <div id="sort-row" class="sort-row">${renderSortLinks(store.get().sort)}</div>
+        </div>
+        <div id="results">
+          ${renderGrid(result.data)}
+          ${renderPaginatorFor(page, result)}
+        </div>
+        <div id="status" class="status-line" aria-live="polite"></div>
+      </div>
     </div>
-    <div id="status" class="status-line" aria-live="polite"></div>
   `;
 }
 
 export function bindHome(): void {
-	const input = document.getElementById('tag-input');
+	const input = document.getElementById('sidebar-tag-input');
 	if (!(input instanceof HTMLInputElement)) return;
+	// Sync input with current store state (URL-driven renders).
+	const s = store.get();
+	input.value = s.query;
 	let t: number | undefined;
 	input.addEventListener('input', () => {
 		store.set({ query: input.value });
 		clearTimeout(t);
 		t = window.setTimeout(async () => {
 			const q = input.value.trim().split(/\s+/).pop() ?? '';
-			if (!q) return;
+			const el = document.getElementById('sidebar-autocomplete');
+			if (!el) return;
+			if (!q) {
+				el.innerHTML = '';
+				return;
+			}
 			const ac = await autocompleteTags(q).catch(() => ({ tags: [] }));
-			const el = document.getElementById('autocomplete');
-			if (el) el.innerHTML = ac.tags.length ? renderAutocomplete(ac.tags) : '';
+			el.innerHTML = ac.tags.length ? renderAutocomplete(ac.tags) : '';
 		}, 200);
 	});
 	input.addEventListener('keydown', (e) => {
+		if (e.key === ' ' && !e.ctrlKey && !e.metaKey) {
+			const parts = input.value.split(/\s+/).filter(Boolean);
+			if (parts.length >= 1) {
+				const cur = store.get();
+				const merged = [...new Set([...cur.tags, ...parts])];
+				if (merged.length !== cur.tags.length) {
+					e.preventDefault();
+					navigateTo(buildUrl({ tags: merged }));
+					void loadResults().then(() => {
+						input.value = '';
+						input.focus();
+					});
+				}
+			}
+			return;
+		}
 		if (e.key === 'Enter') {
 			const parts = input.value.trim().split(/\s+/).filter(Boolean);
 			if (!parts.length) return;
+			e.preventDefault();
 			navigateTo(buildUrl({ tags: parts }));
 			void loadResults();
 		}
@@ -115,10 +155,10 @@ async function fetchPage(page: number): Promise<SearchResult> {
 
 function updateDom(page: number, result: SearchResult): void {
 	const s = store.get();
-	const input = document.getElementById('tag-input');
+	const input = document.getElementById('sidebar-tag-input');
 	if (input instanceof HTMLInputElement) input.value = s.query;
-	const autocomplete = document.getElementById('autocomplete');
-	if (autocomplete) autocomplete.innerHTML = '';
+	const acEl = document.getElementById('sidebar-autocomplete');
+	if (acEl) acEl.innerHTML = '';
 	const tagsEl = document.getElementById('selected-tags');
 	if (tagsEl) tagsEl.innerHTML = renderSelectedTags(s.tags);
 	const sortEl = document.getElementById('sort-row');
@@ -142,7 +182,7 @@ function buildUrl({ tags, sort, page }: { tags?: string[]; sort?: 'recent' | 'po
 	const so = sort ?? s.sort;
 	const p = page ?? 1;
 	const params = new URLSearchParams();
-	if (t.length) params.set('tags', t.join(' '));
+	for (const tag of t) params.append('tags', tag);
 	if (so === 'popular') params.set('sort', so);
 	if (p > 1) params.set('page', String(p));
 	const qs = params.toString();
@@ -155,7 +195,8 @@ function navigateTo(path: string): void {
 
 function parseUrlIntoStore(): void {
 	const sp = new URLSearchParams(location.search);
-	const tags = (sp.get('tags') ?? '').split(/\s+/).filter(Boolean);
+	const tagParams = sp.getAll('tags');
+	const tags = tagParams.flatMap((p) => p.split(/\s+/)).filter(Boolean);
 	const sort = sp.get('sort') === 'popular' ? 'popular' : 'recent';
 	const page = Math.max(1, parseInt(sp.get('page') ?? '1', 10) || 1);
 	const s = store.get();

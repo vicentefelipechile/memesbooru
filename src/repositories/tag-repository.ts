@@ -45,6 +45,32 @@ export async function findById(db: DB, id: number): Promise<TagRow | null> {
 	return queryOne<TagRow>(db, 'SELECT * FROM tags WHERE id = ?', [id]);
 }
 
+export async function listByCategory(db: DB, category: string, opts: { limit: number; offset?: number }): Promise<TagRow[]> {
+	const limit = opts.limit;
+	const offset = opts.offset ?? 0;
+	return queryAll<TagRow>(db, `SELECT * FROM tags WHERE category = ? ORDER BY usage_count DESC, normalized_name ASC LIMIT ? OFFSET ?`, [category, limit, offset]);
+}
+
+export async function listGroupedByCategory(db: DB, perCategoryLimit = 25): Promise<Record<string, TagRow[]>> {
+	const sql = `
+		WITH ranked AS (
+			SELECT *, ROW_NUMBER() OVER (PARTITION BY category ORDER BY normalized_name ASC) AS rn
+			FROM tags
+			WHERE status = 'active'
+		)
+		SELECT id, normalized_name, display_name, category, usage_count, status, created_by, created_at, updated_at
+		FROM ranked
+		WHERE rn <= ?
+		ORDER BY category, normalized_name ASC
+	`;
+	const rows = await queryAll<TagRow>(db, sql, [perCategoryLimit]);
+	const groups: Record<string, TagRow[]> = {};
+	for (const r of rows) {
+		(groups[r.category] ??= []).push(r);
+	}
+	return groups;
+}
+
 // =========================================================================================================
 // Commands
 // =========================================================================================================
@@ -78,7 +104,7 @@ export async function ensureTags(db: DB, normalized: string[], authorId: number)
 			continue;
 		}
 		const nextId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM tags', []))?.v ?? 1;
-		await batch(db, [db.prepare('INSERT INTO tags (id, normalized_name, category, usage_count, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(nextId, n, 'general', 0, 'active', authorId, now, now)]);
+		await batch(db, [db.prepare('INSERT INTO tags (id, normalized_name, category, usage_count, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(nextId, n, 'reaction', 0, 'active', authorId, now, now)]);
 		ids.push(nextId);
 	}
 	return ids;

@@ -38,6 +38,21 @@ router.get('/', optionalAuth, async (c) => {
 });
 
 // =========================================================================================================
+// GET /api/posts/random
+// Returns { public_id } for a random available post (for Random nav).
+// =========================================================================================================
+
+router.get('/random', async (c) => {
+	const db = c.env.DB;
+	if (!db) return c.json({ public_id: null });
+	const service = new PostService(db);
+	const pid = await service.random();
+	if (!pid) return c.json({ public_id: null }, 404);
+	c.header('Cache-Control', 'no-store');
+	return c.json({ public_id: pid });
+});
+
+// =========================================================================================================
 // GET /api/posts/:publicId
 // Detail with duplicate redirect + video gating.
 // =========================================================================================================

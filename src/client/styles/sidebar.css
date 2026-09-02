@@ -1,0 +1,138 @@
+/* =========================================================================================================
+ * SIDEBAR (booru catalog left column)
+ * Dense tag browser. Collapsible categories, usage counts, minimal search.
+ * ========================================================================================================= */
+
+.home-layout {
+	display: grid;
+	grid-template-columns: 210px minmax(0, 1fr);
+	gap: 1rem;
+	align-items: start;
+}
+
+.home-side {
+	border: 1px solid var(--border);
+	background: var(--bg-raise);
+	padding: 0.5rem;
+	font-size: 0.85rem;
+}
+
+.home-main {
+	min-width: 0;
+}
+
+.sidebar {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+
+.sidebar-search {
+	margin-bottom: 0.4rem;
+}
+.sidebar-search input {
+	width: 100%;
+	border: 1px solid var(--border);
+	background: var(--bg);
+	padding: 0.2rem 0.35rem;
+	font-size: 0.85rem;
+}
+
+.sidebar-autocomplete {
+	position: relative;
+}
+.sidebar-autocomplete ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border: 1px solid var(--border);
+	background: var(--bg-raise);
+	font-size: 0.85rem;
+	max-height: 320px;
+	overflow-y: auto;
+}
+.sidebar-autocomplete li a {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.5rem;
+	padding: 0.25rem 0.45rem;
+	color: var(--link);
+	white-space: nowrap;
+}
+.sidebar-autocomplete li a:hover {
+	background: var(--bg-alt);
+	color: var(--link-hover);
+	text-decoration: none;
+}
+.sidebar-autocomplete li .count {
+	color: var(--fg-faint);
+	font-size: 0.72rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.pool-filter {
+	margin-top: 0.25rem;
+	font-size: 0.78rem;
+	color: var(--fg-muted);
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+}
+.pool-filter input {
+	vertical-align: middle;
+}
+.pool-filter .tiny {
+	color: var(--fg-faint);
+	font-size: 0.7rem;
+}
+
+.sidebar-cat {
+	border-bottom: 1px solid var(--border);
+}
+.sidebar-cat:last-child {
+	border-bottom: 0;
+}
+.sidebar-cat summary {
+	cursor: pointer;
+	font-weight: 600;
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: var(--fg-muted);
+	padding: 0.2rem 0;
+	user-select: none;
+}
+.sidebar-cat[open] summary {
+	margin-bottom: 0.1rem;
+}
+.sidebar-cat .tag-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 0.4rem;
+	line-height: 1.55;
+	padding-bottom: 0.3rem;
+}
+.sidebar-cat .tag-links a {
+	color: var(--link);
+	white-space: nowrap;
+}
+.sidebar-cat .tag-links .count {
+	color: var(--fg-faint);
+	font-size: 0.72rem;
+	margin-left: 0.1rem;
+}
+
+.tiny {
+	font-size: 0.72rem;
+	color: var(--fg-faint);
+}
+
+@media (max-width: 860px) {
+	.home-layout {
+		grid-template-columns: 1fr;
+	}
+	.home-side {
+		order: 2;
+	}
+}

@@ -1,4 +1,4 @@
-import { HealthResponseSchema, SearchResponseSchema, PostResponseSchema, AutocompleteResponseSchema, UserResponseSchema, CreatePostResponseSchema, CommentListResponseSchema, FavoritesResponseSchema, TotpSetupResponseSchema, TotpVerifyResponseSchema } from '../../validators';
+import { HealthResponseSchema, SearchResponseSchema, PostResponseSchema, AutocompleteResponseSchema, UserResponseSchema, CreatePostResponseSchema, CommentListResponseSchema, FavoritesResponseSchema, TotpSetupResponseSchema, TotpVerifyResponseSchema, BrowseTagsResponseSchema } from '../../validators';
 import type { JsonValue } from '../../types';
 
 export async function apiGet(path: string): Promise<JsonValue> {
@@ -39,6 +39,13 @@ export async function autocompleteTags(q: string) {
 	const raw = await apiGet(`/api/tags/autocomplete?q=${encodeURIComponent(q)}`);
 	const parsed = AutocompleteResponseSchema.safeParse(raw);
 	if (!parsed.success) return { tags: [] };
+	return parsed.data;
+}
+
+export async function browseTags(per = 25) {
+	const raw = await apiGet(`/api/tags/browse?per=${per}`);
+	const parsed = BrowseTagsResponseSchema.safeParse(raw);
+	if (!parsed.success) return { groups: {} };
 	return parsed.data;
 }
 export async function getMe() {

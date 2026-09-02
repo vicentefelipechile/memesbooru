@@ -14,6 +14,7 @@ import { renderUpload, bindUpload } from '../pages/upload.js';
 import { renderFavorites, bindFavorites } from '../pages/favorites.js';
 import { renderSettings, bindSettings } from '../pages/settings.js';
 import { renderProfile, bindProfile } from '../pages/profile.js';
+import { renderRandom, bindRandom } from '../pages/random.js';
 
 const routes: Route[] = [
 	{ pattern: /^\/(\?.*)?$/, render: () => renderHome(), bind: () => bindHome() },
@@ -22,6 +23,7 @@ const routes: Route[] = [
 	{ pattern: /^\/favorites$/, render: () => renderFavorites(), bind: () => bindFavorites() },
 	{ pattern: /^\/settings$/, render: () => renderSettings(), bind: () => bindSettings() },
 	{ pattern: /^\/profile$/, render: () => renderProfile(), bind: () => bindProfile() },
+	{ pattern: /^\/random$/, render: () => renderRandom(), bind: () => bindRandom() },
 ];
 
 async function renderRoute(path: string): Promise<void> {

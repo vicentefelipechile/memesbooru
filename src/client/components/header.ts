@@ -3,6 +3,8 @@
 // Flat booru nav: brand + text links. No pills, no gradients.
 // =========================================================================================================
 
+import { renderSubNav } from './sub-nav.js';
+
 export function renderHeader(user: { username: string; rank: string } | null): string {
 	return `
   <a href="#contenido" class="skip-link">Saltar al contenido</a>
@@ -20,5 +22,6 @@ export function renderHeader(user: { username: string; rank: string } | null): s
 					: `<a href="/api/auth/google">Entrar con Google</a>`
 			}
     </nav>
-  </header>`;
+  </header>
+  ${renderSubNav()}`;
 }

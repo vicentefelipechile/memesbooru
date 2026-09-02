@@ -48,6 +48,10 @@ export class PostService {
 		return { data: rows, nextCursor, hasMore: !!nextCursor };
 	}
 
+	async random(): Promise<string | null> {
+		return postRepo.findRandomPublicId(this.db);
+	}
+
 	async detail(publicId: string, viewer: AuthUser | null): Promise<PostDetailResult> {
 		const row = await postRepo.findByPublicId(this.db, publicId);
 		if (!row) throw new NotFoundError('Post not found');

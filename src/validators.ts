@@ -53,7 +53,7 @@ export { parseQueryWithArrays };
 export const USER_RANKS = ['new', 'normal', 'trusted', 'restricted', 'banned'] as const satisfies readonly string[];
 export const POST_STATUSES = ['uploading', 'processing', 'available', 'duplicate', 'rejected', 'hidden'] as const satisfies readonly string[];
 export const MEDIA_TYPES = ['image', 'gif', 'video'] as const satisfies readonly string[];
-export const TAG_CATEGORIES = ['general', 'artist', 'character', 'series', 'meta', 'copyright'] as const satisfies readonly string[];
+export const TAG_CATEGORIES = ['reaction', 'source', 'people', 'character', 'meta'] as const satisfies readonly string[];
 
 // =========================================================================================================
 // Schemas
@@ -146,6 +146,15 @@ export const PaginationSchema = z.object({
 export const HealthResponseSchema = z.object({ status: z.string(), version: z.string(), db: z.string() });
 export const UserResponseSchema = z.object({ user: z.object({ id: z.number(), username: z.string(), rank: z.string(), display_name: z.string().nullable().optional(), status: z.string().optional() }).nullable() });
 export const AutocompleteResponseSchema = z.object({ tags: z.array(z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number().optional() })) });
+export const TagItemSchema = z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number() });
+export const BrowseTagsQuerySchema = z.object({
+	category: z.enum(TAG_CATEGORIES).optional().catch(undefined),
+	limit: z.coerce.number().int().min(1).max(100).catch(50).default(50),
+	offset: z.coerce.number().int().min(0).catch(0).default(0),
+});
+export const BrowseTagsResponseSchema = z.object({
+	groups: z.record(z.enum(TAG_CATEGORIES), z.object({ tags: z.array(TagItemSchema) })),
+});
 export const GridItemSchema = z.object({ public_id: z.string(), low_variant_key: z.string().nullable().optional(), score: z.number(), favorite_count: z.number(), tags: z.array(z.string()).optional() });
 export const SearchResponseSchema = z.object({ data: z.array(GridItemSchema), nextCursor: z.string().nullable(), hasMore: z.boolean().optional(), warning: z.string().optional() });
 export const PostTagSchema = z.object({ name: z.string(), category: z.string(), count: z.number() });
@@ -186,3 +195,5 @@ export type SearchQueryInput = z.infer<typeof SearchQuerySchema>;
 export type PostFilterInput = z.infer<typeof PostFilterSchema>;
 export type PaginationInput = z.infer<typeof PaginationSchema>;
 export type TotpVerifyInput = z.infer<typeof TotpVerifySchema>;
+export type BrowseTagsQueryInput = z.infer<typeof BrowseTagsQuerySchema>;
+export type BrowseTagsResponse = z.infer<typeof BrowseTagsResponseSchema>;

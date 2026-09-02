@@ -20,15 +20,19 @@ export function renderSearch(query: string, tags: string[], sort: 'recent' | 'po
 }
 
 export function renderSortLinks(sort: 'recent' | 'popular'): string {
-	return `<span class="small muted">Orden:</span>
-    <a href="/" data-sort="recent" class="${sort === 'recent' ? 'on' : ''}">Recientes</a>
-    <span class="sep">·</span>
-    <a href="/" data-sort="popular" class="${sort === 'popular' ? 'on' : ''}">Populares</a>`;
+	return `<span class="toolbar-label small muted">Orden</span>
+    <button type="button" class="sort-btn ${sort === 'recent' ? 'on' : ''}" data-sort="recent">Recientes</button>
+    <button type="button" class="sort-btn ${sort === 'popular' ? 'on' : ''}" data-sort="popular">Populares</button>`;
 }
 
 export function renderSelectedTags(tags: string[]): string {
-	if (tags.length === 0) return '';
-	return `<span class="small muted">Tags:</span>${tags.map((t) => `<span class="tag"><a href="/?tags=${encodeURIComponent(t)}" data-link>${t}</a> <button class="remove" data-remove="${escapeAttr(t)}" aria-label="Quitar ${t}">×</button></span>`).join(' ')}`;
+	if (tags.length === 0) return '<span class="toolbar-label small muted">Tags</span><span class="small muted">—</span>';
+	return `<span class="toolbar-label small muted">Tags</span>${tags
+		.map(
+			(t) =>
+				`<span class="tag-chip"><a href="/?tags=${encodeURIComponent(t)}" data-link class="tag-name">${escapeHtml(t)}</a><button type="button" class="tag-x" data-remove="${escapeAttr(t)}" aria-label="Quitar ${t}">×</button></span>`,
+		)
+		.join(' ')}`;
 }
 
 export function renderAutocomplete(items: AutocompleteTag[]): string {

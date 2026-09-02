@@ -157,39 +157,55 @@ export async function searchByTags(db: DB, tagIds: TagId[], opts:{sort:'recent'|
 
 ### 11.1 Views (7 + 404)
 
-`src/client/app/router.ts` mounts: Catálogo `/`, Detalle `/post/:publicId`, Subir `/upload`, Favoritos `/favorites`, Configuración `/settings`, Perfil `/profile`, + 404. Moderación es TO DO. Login es redirect a Google OAuth, no vista SPA.
+`src/client/app/router.ts` mounts: Catálogo `/`, Detalle `/post/:publicId`, Subir `/upload`, Favoritos `/favorites`, Configuración `/settings`, Perfil `/profile`, Aleatorio `/random` (redirect-to-detail), + 404. Moderación es TO DO. Login es redirect a Google OAuth, no vista SPA.
 
 ### 11.2 Shell & navigation (no full page reloads)
 
 - `main.ts` boot: `applyTheme()` + **one** `getMe()` → cached in `store.user`. Never call `getMe` per render.
-- Router renders a **persistent shell** (header) once; navigation only swaps `<main id="page">`. No `location.reload()` anywhere — actions update the DOM in place.
+- Router renders a **persistent shell** (header + sub-nav) once; navigation only swaps `<main id="page">`. No `location.reload()` anywhere — actions update the DOM in place.
 - **Global delegation** (bound once): `a[data-link]` navigation, plus home's `[data-ac]` (add tag), `[data-remove]` (remove tag), `[data-sort]`, `[data-page]` — so re-rendered content needs no re-binding.
 - Post actions are in-place: vote/favorite refetch the post and update `#score-line` + `#stats`; a new comment is appended to `#comments-list`.
 
-### 11.3 Booru catalog UI
+### 11.3 Booru catalog UI (Rule34-style)
 
+- **Two-column home**: left sidebar (`#home-side` 210px) + main. Sidebar contains: search input + autocomplete dropdown, "Filter pools" toggle (placeholder, disabled), collapsible category groups with alphabetical tag list + usage counts. Main contains: search-toolbar (selected tag chips + sort buttons) + dense square grid + numeric paginator.
+- **Single search input** lives in the sidebar (`#sidebar-tag-input`). The main area has NO duplicate search input. Input is synced with `store.query` on every render.
+- **Sub-nav bar** (`site-subnav`) under the header: Posts / Upload / Random / Favorites. Targeted at publications + tags navigation (no wiki, no external sites, no comments index).
+- Selected tags are buttons (`<span class="tag-chip">`) with `<a>` name + `×` close. Sort is `<button class="sort-btn on|">` Recientes/Populares.
+- **Tag chaining**: typing space in the sidebar input commits prior tokens to `store.tags` (deduplicated via `Set`) and clears the input for the next tag — the user keeps typing in a single continuous string. Enter commits every token.
+- **Multi-param tags in URL** (`?tags=choker&tags=wojak`), never `?tags=choker+wojak`. `buildUrl` uses `params.append('tags', t)`; `parseUrlIntoStore` uses `sp.getAll('tags').flatMap(s => s.split(/\s+/)).filter(Boolean)`. Server still receives space-joined `tags` in `SearchQuerySchema` (each item is whitespace-free post-normalize).
 - Dense square thumbnail grid (no wrapping cards), numeric paginator `« 1 2 3 … »`. The backend stays cursor-paginated; the **client maps page↔cursor** in `store.ts` (`pages[]`, `cursorForPage(page)`, `recordPage`).
-- Search bar keeps its input stable; only `#results` (grid + paginator), `#selected-tags`, `#sort-row` re-render when the query/tags/sort/page change (`home.ts loadResults`).
+- Only `#results` (grid + paginator), `#selected-tags`, `#sort-row` re-render on search/tag/sort/page change (`home.ts loadResults`/`updateDom`). Sidebar is rendered once per home visit.
 - Post detail: two-column layout with sidebar blocks `Statistics` (score/favs/comments/media/autor/fecha) + `Tagged` (tags grouped by category with usage counts, from `PostTagResult`).
 - Tags are plain-text links with usage counts; comments show author + date.
+
+### 11.4 Tag categories (memes domain)
+
+5 categories, alphabetically ordered inside the sidebar (RULE34 pattern): `reaction` (pepe/wojak/doge), `source` (mangas/pelis/juegos), `people` (real people — políticos, famosos), `character` (personajes ficticios), `meta` (meta-tags — rare_tags/hd/wallpaper). Defined in `validators.ts` `TAG_CATEGORIES` and enforced by `CHECK` in `migrations/0002_tag_categories.sql` (table rebuilt to swap `general/copyright/series/artist` for the new set, remapping old rows). The R34-style sidebar labels are in `components/sidebar.ts` `CATEGORY_LABELS`.
+
+### 11.5 Themes (user-selectable)
 
 ### 11.4 Themes (user-selectable)
 
 4 light palettes in `styles/tokens.css` as `[data-theme="android"|"solarized"|"gruvbox"|"nord"]` (`android` default). Applied via `data-theme` on `<html>`, persisted in `localStorage` (`memesbooru.theme`), switched from `/settings` (`setTheme` in `state/store.ts`). All colors come from CSS custom properties — never hardcode hex in markup/components.
 
-### 11.5 Modular CSS (no monolith)
+### 11.6 Modular CSS (no monolith)
 
-`src/client/styles/index.css` imports only; split by category: `tokens.css` (font + palettes), `base.css`, `typography.css`, `layout.css`, `grid.css`, `post.css`, `forms.css`, `comments.css`.
+`src/client/styles/index.css` imports only; split by category: `tokens.css` (font + palettes), `base.css`, `typography.css`, `layout.css`, `grid.css`, `post.css`, `forms.css`, `comments.css`, `sidebar.css`.
 
-### 11.6 Design rules (anti-AI-slop)
+### 11.7 Design rules (anti-AI-slop)
 
 Light utilitarian base (no dark-mode reflex), self-hosted `@fontsource/ibm-plex-sans` (Latin, bundled to `dist/`, no CDN; fallback `Helvetica, Arial, sans-serif`), `border-radius: var(--radius)` = 2px, no gradients/glassmorphism/pills/emojis/decorative icons, `prefers-reduced-motion` respected, real `:hover/:active/:focus-visible` states.
 
-### 11.7 Services & state
+### 11.8 Services & state
 
-- `services/api.ts`: `apiGet/apiPost` → `Schema.safeParse`, no `as` casts.
+- `services/api.ts`: `apiGet/apiPost` → `Schema.safeParse`, no `as` casts. Includes `browseTags(per)` for the tag sidebar.
 - `state/store.ts`: user, query, tags, sort, theme, and pagination cursor history.
 - `components/*` are pure render functions returning HTML strings; `pages/*` render + bind.
+
+### 11.9 Tag browse endpoint
+
+`GET /api/tags/browse?per=25` returns `BrowseTagsResponse = { groups: Record<Category, {tags: TagItem[]}> }` (one query via `ROW_NUMBER() OVER (PARTITION BY category)` over `tags WHERE status='active'`, ordered by `normalized_name ASC`). Cached `public, max-age=300`. Pagination per category is `GET /api/tags/browse/:category?limit&offset`. Migration 0002 rebuilds the `tags` table to enforce the 5-category `CHECK`.
 
 ## 12. Cloudflare Verification Rule
 

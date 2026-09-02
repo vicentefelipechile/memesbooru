@@ -163,6 +163,12 @@ export async function count(db: DB, filters?: { status?: string }): Promise<numb
 	return row?.c ?? 0;
 }
 
+// Deliberate single use of RANDOM() for /random — only ever returns 1 row, planner uses existing status index.
+export async function findRandomPublicId(db: DB): Promise<string | null> {
+	const row = await queryOne<{ public_id: string }>(db, `SELECT public_id FROM post_listing WHERE status = 'available' ORDER BY RANDOM() LIMIT 1`, []);
+	return row?.public_id ?? null;
+}
+
 // =========================================================================================================
 // Builders
 // =========================================================================================================

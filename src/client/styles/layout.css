@@ -50,6 +50,22 @@
 	color: var(--fg-muted);
 }
 
+.site-subnav {
+	display: flex;
+	gap: 1rem;
+	padding: 0.35rem 1rem;
+	background: var(--bg-alt);
+	border-bottom: 1px solid var(--border);
+	font-size: 0.85rem;
+}
+.site-subnav a {
+	color: var(--fg);
+}
+.site-subnav a:hover {
+	color: var(--link-hover);
+	text-decoration: none;
+}
+
 .site-main {
 	max-width: 1180px;
 	margin: 0 auto;
@@ -91,55 +107,84 @@
 	width: 100%;
 }
 
+.search-toolbar {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	margin-bottom: 1rem;
+	padding: 0.5rem 0.6rem;
+	border: 1px solid var(--border);
+	background: var(--bg-raise);
+}
+
+.toolbar-label {
+	display: inline-block;
+	margin-right: 0.3rem;
+	vertical-align: middle;
+}
+
 .sort-row {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 0.5rem;
-	margin-top: 0.35rem;
+	gap: 0.3rem;
 	font-size: 0.85rem;
 }
 
-.sort-row .sep {
-	color: var(--fg-faint);
-}
-
-.sort-row a {
+.sort-btn {
+	font: inherit;
+	font-size: 0.85rem;
 	color: var(--fg-muted);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	padding: 0.15rem 0.55rem;
+	border-radius: var(--radius);
+	cursor: pointer;
 }
-
-.sort-row a.on {
+.sort-btn:hover {
 	color: var(--fg);
+	border-color: var(--link);
+}
+.sort-btn.on {
+	color: #fff;
+	background: var(--link);
+	border-color: var(--link);
 	font-weight: 600;
 }
 
 .selected-tags {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.35rem;
-	margin-top: 0.45rem;
-}
-
-.selected-tags .tag {
-	display: inline-flex;
 	align-items: center;
 	gap: 0.3rem;
+	font-size: 0.85rem;
+}
+
+.tag-chip {
+	display: inline-flex;
+	align-items: center;
+	background: var(--bg-alt);
+	border: 1px solid var(--border);
+	padding: 0.05rem 0.05rem 0.05rem 0.45rem;
 	font-size: 0.82rem;
 }
-
-.selected-tags .tag a {
+.tag-chip .tag-name {
 	color: var(--link);
+	padding-right: 0.3rem;
 }
-
-.selected-tags .tag .remove {
+.tag-chip .tag-x {
 	border: 0;
-	background: none;
+	background: transparent;
 	color: var(--fg-muted);
-	padding: 0 0.1rem;
-	font-size: 0.85rem;
+	padding: 0 0.35rem;
+	font-size: 0.9rem;
 	line-height: 1;
+	cursor: pointer;
 }
-
-.selected-tags .tag .remove:hover {
+.tag-chip:hover {
+	border-color: var(--link);
+}
+.tag-chip .tag-x:hover {
 	color: var(--err);
 }
 
