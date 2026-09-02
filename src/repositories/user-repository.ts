@@ -41,13 +41,6 @@ export async function findGoogleIdentity(db: DB, userId: number): Promise<Google
 // Builders (for batch composition)
 // =========================================================================================================
 
-export function buildInsertUser(row: { id: number; username: string; rank: string; status: string; trustScore: number; createdAt: number }): D1PreparedStatement {
-	// Caller must have DB to prepare — this factory is called via repo.buildInsert(db, ...) pattern
-	// To keep batch composable, we expose a helper that needs DB; alternative is to return {sql, params}
-	// Here we use the raw DB injection pattern: callers do db.prepare(...)
-	throw new Error('Use buildInsertUserWithDB');
-}
-
 export function buildInsertUserStatement(db: DB, row: { id: number; username: string; rank: string; status: string; trustScore: number; createdAt: number }): D1PreparedStatement {
 	return db.prepare('INSERT INTO users (id, username, rank, status, trust_score, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(row.id, row.username, row.rank, row.status, row.trustScore, row.createdAt);
 }

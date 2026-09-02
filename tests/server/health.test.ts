@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import worker from "../../src/index";
 
 async function req(path: string): Promise<Response> {
-  return worker.fetch(new Request(`http://localhost${path}`), {} as never, {} as never);
+  return worker.fetch(new Request(`http://localhost${path}`, { headers: { host: 'localhost' } }), {} as never, {} as never);
 }
 
 describe("GET /api/health", () => {

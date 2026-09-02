@@ -12,7 +12,8 @@ import type { DB } from '../db/client';
 import * as userRepo from '../repositories/user-repository';
 import * as sessionRepo from '../repositories/session-repository';
 import { normalizeTag } from '../validators';
-import { ValidationError, UnauthorizedError } from '../domain/errors';
+import { ValidationError } from '../domain/errors';
+import { b64url, hashToken } from '../helpers/crypto';
 
 // =========================================================================================================
 // Types
@@ -24,23 +25,14 @@ export type GoogleEnv = { GOOGLE_CLIENT_ID: string; GOOGLE_CLIENT_SECRET: string
 // Helpers
 // =========================================================================================================
 
-function b64url(bytes: Uint8Array): string {
-	return btoa(String.fromCharCode(...bytes))
-		.replace(/\+/g, '-')
-		.replace(/\//g, '_')
-		.replace(/=+$/, '');
-}
-
 export async function generateSessionToken(): Promise<{ token: string; hash: ArrayBuffer }> {
 	const bytes = crypto.getRandomValues(new Uint8Array(32));
 	const token = b64url(bytes);
-	const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+	const hash = await hashToken(token);
 	return { token, hash };
 }
 
-export function hashTokenSync(token: string): Promise<ArrayBuffer> {
-	return crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-}
+export const hashTokenSync = hashToken;
 
 function base32Decode(s: string): Uint8Array {
 	const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -139,7 +131,7 @@ export class AuthService {
 	}
 
 	async verifySession(token: string): Promise<{ userId: number } | null> {
-		const hash = await hashTokenSync(token);
+		const hash = await hashToken(token);
 		const row = await sessionRepo.findByTokenHash(this.db, hash);
 		if (!row || row.revoked_at) return null;
 		if (row.expires_at < Date.now()) return null;

@@ -55,6 +55,19 @@ export async function incrementUsage(db: DB, tagIds: number[]): Promise<void> {
 	await batch(db, stmts);
 }
 
+export async function getTagUsageCounts(db: DB, tagIds: number[]): Promise<Map<number, number>> {
+	if (!tagIds.length) return new Map();
+	const placeholders = tagIds.map(() => '?').join(',');
+	const rows = await queryAll<{ id: number; usage_count: number }>(db, `SELECT id, usage_count FROM tags WHERE id IN (${placeholders})`, tagIds);
+	return new Map(rows.map((r) => [r.id, r.usage_count]));
+}
+
+export async function sortTagIdsByUsage(db: DB, tagIds: number[]): Promise<number[]> {
+	if (tagIds.length <= 1) return tagIds;
+	const counts = await getTagUsageCounts(db, tagIds);
+	return [...tagIds].sort((a, b) => (counts.get(a) ?? 0) - (counts.get(b) ?? 0));
+}
+
 export async function ensureTags(db: DB, normalized: string[], authorId: number): Promise<number[]> {
 	const ids: number[] = [];
 	const now = Date.now();

@@ -10,18 +10,15 @@
 
 import { queryOne, queryAll, batch, type DB } from '../db/client';
 import type { CommentRow } from '../db/schema';
+import { decodeCursor, type CommentCursor } from '../helpers/cursor';
+import { NotFoundError, ForbiddenError } from '../domain/errors';
 
 // =========================================================================================================
 // Queries
 // =========================================================================================================
 
 export async function listByPost(db: DB, postId: number, cursor?: string, limit = 20): Promise<CommentRow[]> {
-	let cursorVal: { created_at: number; id: number } | null = null;
-	if (cursor) {
-		try {
-			cursorVal = JSON.parse(atob(cursor));
-		} catch {}
-	}
+	const cursorVal = cursor ? decodeCursor<CommentCursor>(cursor) : null;
 	if (cursorVal) {
 		return queryAll<CommentRow>(db, "SELECT * FROM comments WHERE post_id = ? AND status = 'visible' AND (created_at > ? OR (created_at = ? AND id > ?)) ORDER BY created_at ASC, id ASC LIMIT ?", [
 			postId,
@@ -56,7 +53,7 @@ export async function create(db: DB, data: { postId: number; authorId: number; b
 	const now = Date.now();
 	if (data.parentId) {
 		const parent = await queryOne<{ id: number; parent_id: number | null }>(db, 'SELECT id, parent_id FROM comments WHERE id = ?', [data.parentId]);
-		if (!parent) throw new Error('parent not found');
+		if (!parent) throw new NotFoundError('parent not found');
 		let depth = 1;
 		let cur: number | null = data.parentId;
 		while (cur) {
@@ -64,7 +61,7 @@ export async function create(db: DB, data: { postId: number; authorId: number; b
 			if (!row?.parent_id) break;
 			depth++;
 			cur = row.parent_id;
-			if (depth > 2) throw new Error('max depth exceeded');
+			if (depth > 2) throw new ForbiddenError('max depth exceeded');
 		}
 	}
 	const nextId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM comments', []))?.v ?? 1;
@@ -79,7 +76,7 @@ export async function create(db: DB, data: { postId: number; authorId: number; b
 
 export async function softDelete(db: DB, commentId: number, requesterId: number, isModerator: boolean): Promise<void> {
 	const c = await queryOne<{ author_id: number }>(db, 'SELECT author_id FROM comments WHERE id = ?', [commentId]);
-	if (!c) throw new Error('not found');
-	if (c.author_id !== requesterId && !isModerator) throw new Error('forbidden');
+	if (!c) throw new NotFoundError('comment not found');
+	if (c.author_id !== requesterId && !isModerator) throw new ForbiddenError('forbidden');
 	await batch(db, [db.prepare("UPDATE comments SET status = 'hidden', deleted_at = ?, updated_at = ? WHERE id = ?").bind(Date.now(), Date.now(), commentId)]);
 }

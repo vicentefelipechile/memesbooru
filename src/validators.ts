@@ -5,6 +5,7 @@
 // =========================================================================================================
 
 import { z } from 'zod';
+import { ValidationError } from './domain/errors';
 
 // =========================================================================================================
 // Helpers
@@ -13,8 +14,12 @@ import { z } from 'zod';
 const MAX_SANITIZE_LENGTH = 100_000;
 
 export function sanitizeHtml(str: string): string {
-	if (str.length > MAX_SANITIZE_LENGTH) throw new Error('Input too large');
+	if (str.length > MAX_SANITIZE_LENGTH) throw new ValidationError('Input too large');
 	return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function sanitizedString(max: number) {
+	return z.string().max(max).transform(sanitizeHtml);
 }
 
 export function normalizeTag(input: string): string {
@@ -67,28 +72,14 @@ export const tagNormalizedSchema = z
 	.regex(/^[a-z0-9_]+$/, 'tag debe ser minusculas, sin ñ/acentos, espacios como _');
 
 export const CreatePostSchema = z.object({
-	title: z
-		.string()
-		.max(120)
-		.optional()
-		.nullable()
-		.transform((v) => (v ? sanitizeHtml(v) : v)),
-	description: z
-		.string()
-		.max(2000)
-		.optional()
-		.nullable()
-		.transform((v) => (v ? sanitizeHtml(v) : v)),
+	title: sanitizedString(120).optional().nullable(),
+	description: sanitizedString(2000).optional().nullable(),
 	tags: z.array(z.string()).min(1).max(20),
 	media_type: z.enum(MEDIA_TYPES),
 });
 
 export const CommentSchema = z.object({
-	body: z
-		.string()
-		.min(1)
-		.max(2000)
-		.transform((v) => sanitizeHtml(v)),
+	body: sanitizedString(2000).refine((v) => v.trim().length > 0, 'body requerido'),
 	parent_id: z.number().int().nullable().optional(),
 });
 
@@ -104,12 +95,17 @@ export const RatingSchema = z.object({
 export const ReportSchema = z.object({
 	target_type: z.enum(['post', 'comment', 'user', 'tag']),
 	target_id: z.number().int().min(1),
-	reason: z
-		.string()
-		.min(1)
-		.max(500)
-		.transform((v) => sanitizeHtml(v)),
+	reason: sanitizedString(500).refine((v) => v.trim().length > 0, 'reason requerido'),
 });
+
+export const ModerationActionSchema = z.object({
+	target_type: z.enum(['post', 'user', 'comment', 'tag']),
+	target_id: z.number().int().min(1),
+	action: z.enum(['hide', 'reject', 'ban', 'restrict', 'approve']),
+	reason: sanitizedString(500).optional().nullable(),
+});
+
+export const TotpVerifySchema = z.object({ code: z.string().length(6) });
 
 export const SearchQuerySchema = z.object({
 	tags: z.string().max(500).optional().catch(undefined),

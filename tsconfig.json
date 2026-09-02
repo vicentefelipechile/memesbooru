@@ -19,12 +19,9 @@
     "noEmit": true,
     "types": ["vitest/globals"],
     "paths": {
-      "@/*": ["src/*"],
-      "@shared/*": ["src/shared/*"],
-      "@server/*": ["src/server/*"],
-      "@client/*": ["src/client/*"]
+      "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "tests/**/*", "vite.config.ts", "vitest.config.ts", "worker-configuration.d.ts"],
-  "exclude": ["node_modules", "dist", ".wrangler"]
+  "include": ["src/**/*", "vite.config.ts", "vitest.config.ts", "worker-configuration.d.ts"],
+  "exclude": ["node_modules", "dist", ".wrangler", "tests"]
 }

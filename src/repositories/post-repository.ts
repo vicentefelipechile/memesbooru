@@ -10,22 +10,16 @@
 
 import { queryOne, queryAll, batch, type DB } from '../db/client';
 import type { PostRow, PostListingRow, MediaAssetRow } from '../db/schema';
+import { encodeCursor as encodeCursorHelper, decodeCursor as decodeCursorHelper, type PostCursor } from '../helpers/cursor';
+import { normalizeTag } from '../validators';
+import * as tagRepo from './tag-repository';
 
 // =========================================================================================================
-// Helpers
+// Helpers — re-export canonical cursor helpers (single source in helpers/cursor.ts)
 // =========================================================================================================
 
-export function encodeCursor(obj: { score?: number; published_at?: number; id: number }): string {
-	return btoa(JSON.stringify(obj));
-}
-
-export function decodeCursor(c: string): { score?: number; published_at?: number; id: number } | null {
-	try {
-		return JSON.parse(atob(c));
-	} catch {
-		return null;
-	}
-}
+export const encodeCursor = encodeCursorHelper;
+export const decodeCursor = decodeCursorHelper;
 
 // =========================================================================================================
 // Sorting whitelist (never interpolate user input)
@@ -49,9 +43,72 @@ export async function findPostById(db: DB, id: number): Promise<PostRow | null> 
 	return queryOne<PostRow>(db, 'SELECT * FROM posts WHERE id = ?', [id]);
 }
 
+export async function findPublicIdById(db: DB, id: number): Promise<string | null> {
+	const row = await queryOne<{ public_id: string }>(db, 'SELECT public_id FROM posts WHERE id = ?', [id]);
+	return row?.public_id ?? null;
+}
+
+export async function findPostIdByPublicId(db: DB, publicId: string): Promise<number | null> {
+	const row = await queryOne<{ id: number }>(db, 'SELECT id FROM posts WHERE public_id = ?', [publicId]);
+	return row?.id ?? null;
+}
+
+export async function updateUserActivityOnUpload(db: DB, userId: number, now = Date.now()): Promise<void> {
+	await queryOne(db, 'UPDATE user_activity SET last_upload_at = ?, updated_at = ? WHERE user_id = ?', [now, now, userId]);
+}
+
+export async function getLastUploadAt(db: DB, userId: number): Promise<number | null> {
+	const row = await queryOne<{ last_upload_at: number | null }>(db, 'SELECT last_upload_at FROM user_activity WHERE user_id = ?', [userId]);
+	return row?.last_upload_at ?? null;
+}
+
+export async function recalcScoreForPosts(db: DB, postIds: number[]): Promise<void> {
+	for (const postId of postIds) {
+		const vals = await queryAll<{ value: number }>(db, 'SELECT value FROM post_ratings WHERE post_id = ?', [postId]);
+		const score = vals.reduce((s, x) => s + x.value, 0);
+		await batch(db, [db.prepare('UPDATE posts SET score = ? WHERE id = ?').bind(score, postId), db.prepare('UPDATE post_listing SET score = ? WHERE post_id = ?').bind(score, postId)]);
+	}
+}
+
+export async function findRecentlyRatedPostIds(db: DB, limit = 100): Promise<number[]> {
+	const rows = await queryAll<{ post_id: number }>(db, 'SELECT DISTINCT post_id FROM post_ratings WHERE updated_at > ? LIMIT ?', [Date.now() - 3600_000, limit]);
+	return rows.map((r) => r.post_id);
+}
+
+export async function upsertRating(db: DB, postId: number, userId: number, value: number): Promise<void> {
+	const now = Date.now();
+	await batch(db, [
+		db.prepare('INSERT INTO post_ratings (post_id, user_id, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(post_id, user_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').bind(postId, userId, value, now, now),
+		db.prepare('INSERT INTO jobs (job_type, entity_id, status, available_at, created_at) VALUES (?, ?, ?, ?, ?)').bind('recalculate_post_score', postId, 'pending', now + 60_000, now),
+	]);
+}
+
+export async function addFavorite(db: DB, postId: number, userId: number): Promise<void> {
+	const now = Date.now();
+	await batch(db, [
+		db.prepare('INSERT OR IGNORE INTO post_favorites (post_id, user_id, created_at) VALUES (?, ?, ?)').bind(postId, userId, now),
+		db.prepare('UPDATE posts SET favorite_count = (SELECT COUNT(*) FROM post_favorites WHERE post_id = ?), updated_at = ? WHERE id = ?').bind(postId, now, postId),
+		db.prepare('UPDATE post_listing SET favorite_count = (SELECT COUNT(*) FROM post_favorites WHERE post_id = ?) WHERE post_id = ?').bind(postId, postId),
+	]);
+}
+
+export async function removeFavorite(db: DB, postId: number, userId: number): Promise<void> {
+	const now = Date.now();
+	await batch(db, [
+		db.prepare('DELETE FROM post_favorites WHERE post_id = ? AND user_id = ?').bind(postId, userId),
+		db.prepare('UPDATE posts SET favorite_count = (SELECT COUNT(*) FROM post_favorites WHERE post_id = ?), updated_at = ? WHERE id = ?').bind(postId, now, postId),
+		db.prepare('UPDATE post_listing SET favorite_count = (SELECT COUNT(*) FROM post_favorites WHERE post_id = ?) WHERE post_id = ?').bind(postId, postId),
+	]);
+}
+
+export async function listFavoritesByUser(db: DB, userId: number, limit = 50): Promise<unknown[]> {
+	const rows = await queryAll(db, 'SELECT pl.* FROM post_listing pl JOIN post_favorites pf ON pf.post_id = pl.post_id WHERE pf.user_id = ? ORDER BY pf.created_at DESC LIMIT ?', [userId, limit]);
+	return rows;
+}
+
 export async function searchByTags(db: DB, tagIds: number[], opts: { sort: 'recent' | 'popular'; cursor?: string; limit: number }): Promise<PostListingRow[]> {
 	const limit = opts.limit;
-	const cursor = opts.cursor ? decodeCursor(opts.cursor) : null;
+	const cursor = opts.cursor ? decodeCursor<PostCursor>(opts.cursor) : null;
 
 	if (tagIds.length === 0) {
 		if (opts.sort === 'popular') {
@@ -129,7 +186,6 @@ export function buildInsertMediaAssetStatement(db: DB, row: { id: number; postId
 // =========================================================================================================
 
 export async function createPost(db: DB, data: { publicId: string; authorId: number; mediaType: string; tags: string[]; title?: string | null; checksum: ArrayBuffer; originalKey: string }): Promise<number> {
-	const { normalizeTag } = await import('../validators');
 	const normalized = data.tags.map(normalizeTag).filter(Boolean);
 	const now = Date.now();
 	const postId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM posts', []))?.v ?? 1;
@@ -139,18 +195,7 @@ export async function createPost(db: DB, data: { publicId: string; authorId: num
 	const status = isDuplicate ? 'duplicate' : 'processing';
 	const canonical = dup?.post_id ?? null;
 
-	const tagIds: number[] = [];
-	for (const n of normalized) {
-		const existing = await queryOne<{ id: number }>(db, 'SELECT id FROM tags WHERE normalized_name = ?', [n]);
-		if (existing) tagIds.push(existing.id);
-		else {
-			const nextTagId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM tags', []))?.v ?? 1;
-			await batch(db, [
-				db.prepare('INSERT INTO tags (id, normalized_name, category, usage_count, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(nextTagId, n, 'general', 0, 'active', data.authorId, now, now),
-			]);
-			tagIds.push(nextTagId);
-		}
-	}
+	const tagIds = await tagRepo.ensureTags(db, normalized, data.authorId);
 
 	const stmts: D1PreparedStatement[] = [
 		buildInsertPostStatement(db, { id: postId, publicId: data.publicId, authorId: data.authorId, canonicalPostId: canonical, mediaType: data.mediaType, status, title: data.title ?? null, createdAt: now, updatedAt: now }),

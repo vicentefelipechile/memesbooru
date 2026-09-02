@@ -13,6 +13,7 @@ import { requireAuth, type AuthVariables } from '../middleware/auth';
 import { InteractionService } from '../../services/interaction-service';
 import { RatingSchema } from '../../validators';
 import { fail } from '../responses';
+import { parseJsonBody } from '../../helpers/http';
 
 // =========================================================================================================
 // Endpoints
@@ -27,13 +28,9 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
 router.post('/post/:publicId/rating', requireAuth, async (c) => {
 	const db = c.env.DB;
-	let body: unknown;
-	try {
-		body = await c.req.json();
-	} catch {
-		return fail(c, 'Invalid JSON', 400);
-	}
-	const parsed = RatingSchema.safeParse(body);
+	const parsedBody = await parseJsonBody<unknown>(c);
+	if (!parsedBody.ok) return parsedBody.response;
+	const parsed = RatingSchema.safeParse(parsedBody.data);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
 	const publicId = c.req.param('publicId')!;
 	const viewer = c.get('user');

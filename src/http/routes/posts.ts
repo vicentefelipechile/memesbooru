@@ -9,12 +9,12 @@
 // =========================================================================================================
 
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { requireAuth, optionalAuth, type AuthVariables } from '../middleware/auth';
 import { PostService } from '../../services/post-service';
 import { fail } from '../responses';
-import { CreatePostSchema, SearchQuerySchema } from '../../validators';
+import { CreatePostSchema, SearchQuerySchema, parseQueryWithArrays } from '../../validators';
+import { ValidationError } from '../../domain/errors';
 
 // =========================================================================================================
 // Endpoints
@@ -29,7 +29,8 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
 router.get('/', optionalAuth, async (c) => {
 	const db = c.env.DB;
-	const parsed = SearchQuerySchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams.entries()));
+	if (!db) return c.json({ data: [], nextCursor: null, hasMore: false });
+	const parsed = SearchQuerySchema.safeParse(parseQueryWithArrays(c.req.url));
 	if (!parsed.success) return fail(c, 'Invalid query', 400, parsed.error.issues);
 	const service = new PostService(db);
 	const result = await service.search({ tags: parsed.data.tags, sort: parsed.data.sort, cursor: parsed.data.cursor, limit: parsed.data.limit });
@@ -51,12 +52,9 @@ router.get('/:publicId', optionalAuth, async (c) => {
 		c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
 		return c.json(result);
 	} catch (e) {
-		if (typeof e === 'object' && e !== null && 'details' in e) {
-			const details = e.details;
-			if (details && typeof details === 'object' && 'redirectTo' in details) {
-				const redirectTo = details.redirectTo;
-				if (typeof redirectTo === 'string') return c.json({ redirectTo }, 302);
-			}
+		if (e instanceof ValidationError && e.details && typeof e.details === 'object' && 'redirectTo' in e.details) {
+			const redirectTo = (e.details as { redirectTo: string }).redirectTo;
+			if (typeof redirectTo === 'string') return c.json({ redirectTo }, 302);
 		}
 		throw e;
 	}

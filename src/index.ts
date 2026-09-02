@@ -13,6 +13,8 @@ import { z } from 'zod';
 import { securityMiddleware } from './http/middleware/security';
 import { registerRateLimits } from './http/rate-limits';
 import { DomainError } from './domain/errors';
+import * as sessionRepo from './repositories/session-repository';
+import * as postRepo from './repositories/post-repository';
 import healthRoutes from './http/routes/health';
 import authRoutes from './http/routes/auth';
 import postRoutes from './http/routes/posts';
@@ -33,7 +35,7 @@ registerRateLimits(app);
 
 app.onError((err, c) => {
 	if (err instanceof DomainError) {
-		return c.json(err.details === undefined ? { error: err.message } : { error: err.message, details: err.details }, err.status as 400);
+		return c.json(err.details === undefined ? { error: err.message } : { error: err.message, details: err.details }, err.status as 400 | 401 | 403 | 404 | 409 | 410 | 429);
 	}
 	if (err instanceof z.ZodError) {
 		return c.json({ error: 'Validation error', details: err.issues }, 400);
@@ -72,18 +74,10 @@ export default {
 	async queue(batch: MessageBatch<unknown>, env: Env) {
 		await handleQueue(batch, env);
 	},
-	async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
+	async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
 		const db = env.DB;
-		await db.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(Date.now()).run();
-		const recent = await db
-			.prepare('SELECT DISTINCT post_id FROM post_ratings WHERE updated_at > ? LIMIT 100')
-			.bind(Date.now() - 3600_000)
-			.all<{ post_id: number }>();
-		for (const r of recent.results ?? []) {
-			const vals = await db.prepare('SELECT value FROM post_ratings WHERE post_id = ?').bind(r.post_id).all<{ value: number }>();
-			const score = (vals.results ?? []).reduce((s, x) => s + x.value, 0);
-			await db.prepare('UPDATE posts SET score = ? WHERE id = ?').bind(score, r.post_id).run();
-			await db.prepare('UPDATE post_listing SET score = ? WHERE post_id = ?').bind(score, r.post_id).run();
-		}
+		await sessionRepo.cleanupExpired(db);
+		const recent = await postRepo.findRecentlyRatedPostIds(db, 100);
+		await postRepo.recalcScoreForPosts(db, recent);
 	},
 };

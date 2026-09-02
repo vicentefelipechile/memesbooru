@@ -14,6 +14,10 @@ import { z } from 'zod';
 import { requireAuth, type AuthVariables } from '../middleware/auth';
 import { AuthService } from '../../services/auth-service';
 import { fail } from '../responses';
+import { hashToken } from '../../helpers/crypto';
+import * as sessionRepo from '../../repositories/session-repository';
+import * as authRepo from '../../repositories/auth-repository';
+import { TotpVerifySchema } from '../../validators';
 
 // =========================================================================================================
 // Endpoints
@@ -74,9 +78,8 @@ router.post('/logout', async (c) => {
 	const token = getCookie(c, 'session');
 	if (token) {
 		const db = c.env.DB;
-		const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-		const { revokeSession } = await import('../../repositories/session-repository');
-		await revokeSession(db, hash);
+		const hash = await hashToken(token);
+		await sessionRepo.revokeSession(db, hash);
 	}
 	deleteCookie(c, 'session', { path: '/' });
 	return c.json({ ok: true });
@@ -94,7 +97,7 @@ router.get('/me', async (c) => {
 	const service = new AuthService(db);
 	const sess = await service.verifySession(token);
 	if (!sess) return c.json({ user: null });
-	const row = await db.prepare('SELECT id, username, display_name, rank, status FROM users WHERE id = ?').bind(sess.userId).first();
+	const row = await authRepo.findUserPublicById(db, sess.userId);
 	return c.json({ user: row });
 });
 
@@ -109,7 +112,7 @@ router.post('/totp/setup', requireAuth, async (c) => {
 	const service = new AuthService(db);
 	const secret = service.generateTotpSecret();
 	const enc = new TextEncoder().encode(secret);
-	await db.prepare('INSERT OR REPLACE INTO user_totp (user_id, secret_encrypted, is_verified, created_at) VALUES (?, ?, 0, ?)').bind(user.id, enc, Date.now()).run();
+	await authRepo.upsertTotpSecret(db, user.id, enc);
 	return c.json({ secret, uri: `otpauth://totp/Memesbooru:${user.id}?secret=${secret}&issuer=Memesbooru` });
 });
 
@@ -119,29 +122,29 @@ router.post('/totp/setup', requireAuth, async (c) => {
 // =========================================================================================================
 
 router.post('/totp/verify', requireAuth, async (c) => {
-	let body: { code: string };
+	let body: unknown;
 	try {
 		body = await c.req.json();
 	} catch {
 		return fail(c, 'Invalid JSON', 400);
 	}
-	const parsed = z.object({ code: z.string().length(6) }).safeParse(body);
+	const parsed = TotpVerifySchema.safeParse(body);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
 	const user = c.get('user');
 	const db = c.env.DB;
 	const service = new AuthService(db);
-	const row = await db.prepare('SELECT secret_encrypted FROM user_totp WHERE user_id = ?').bind(user.id).first<{ secret_encrypted: Uint8Array }>();
-	if (!row) return fail(c, 'no totp', 400);
-	const secret = new TextDecoder().decode(row.secret_encrypted);
+	const enc = await authRepo.getTotpSecret(db, user.id);
+	if (!enc) return fail(c, 'no totp', 400);
+	const secret = new TextDecoder().decode(enc);
 	const ok = await service.totpVerify(secret, parsed.data.code);
 	if (!ok) return fail(c, 'invalid code', 400);
-	await db.prepare('UPDATE user_totp SET is_verified = 1, verified_at = ? WHERE user_id = ?').bind(Date.now(), user.id).run();
+	await authRepo.verifyTotp(db, user.id);
 	const codes: string[] = [];
 	for (let i = 0; i < 10; i++) {
 		const rc = Math.random().toString(36).slice(2, 10).toUpperCase();
 		codes.push(rc);
-		const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(rc));
-		await db.prepare('INSERT INTO totp_recovery_codes (user_id, code_hash, created_at) VALUES (?, ?, ?)').bind(user.id, hash, Date.now()).run();
+		const hash = await hashToken(rc);
+		await authRepo.insertRecoveryCode(db, user.id, hash);
 	}
 	return c.json({ ok: true, recoveryCodes: codes });
 });

@@ -22,7 +22,9 @@ export class QueryBuilder {
 		return this;
 	}
 
-	orderBy(column: string, direction: 'asc' | 'desc' = 'asc'): this {
+	orderBy(column: string, direction: 'asc' | 'desc' = 'asc', allowed?: readonly string[]): this {
+		if (allowed && !allowed.includes(column)) throw new Error(`Invalid sort column: ${column}`);
+		if (!/^[a-zA-Z0-9_.]+$/.test(column)) throw new Error(`Invalid column: ${column}`);
 		this.orderClause = `ORDER BY ${column} ${direction.toUpperCase()}`;
 		return this;
 	}

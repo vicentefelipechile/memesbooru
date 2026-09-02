@@ -8,9 +8,8 @@ import type { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { UnauthorizedError, ForbiddenError } from '../../domain/errors';
 import type { AuthUser, UserRank, UserStatus } from '../../types';
-async function hashTokenSync(token: string): Promise<ArrayBuffer> {
-	return crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-}
+import { hashToken } from '../../helpers/crypto';
+import * as sessionRepo from '../../repositories/session-repository';
 
 export type AuthVariables = { user: AuthUser };
 
@@ -18,17 +17,14 @@ async function getAuthUser(c: Context<{ Bindings: Env; Variables: AuthVariables 
 	const token = getCookie(c, 'session');
 	if (!token) return null;
 	const db = c.env.DB;
-	const hash = await hashTokenSync(token);
-	const row = await db
-		.prepare('SELECT s.user_id, s.expires_at, s.revoked_at, u.username, u.rank, u.status FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?')
-		.bind(hash)
-		.first<{ user_id: number; expires_at: number; revoked_at: number | null; username: string; rank: UserRank; status: UserStatus }>();
+	const hash = await hashToken(token);
+	const row = await sessionRepo.findSessionWithUser(db, hash);
 	if (!row || row.revoked_at || row.expires_at < Date.now()) return null;
 	return {
 		id: row.user_id,
 		username: row.username,
-		rank: row.rank,
-		status: row.status,
+		rank: row.rank as UserRank,
+		status: row.status as UserStatus,
 		isAdmin: row.rank === 'trusted',
 	};
 }

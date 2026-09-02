@@ -11,8 +11,9 @@
 import { Hono } from 'hono';
 import { requireAuth, type AuthVariables } from '../middleware/auth';
 import { CommentService } from '../../services/comment-service';
-import { CommentSchema } from '../../validators';
+import { CommentSchema, PaginationSchema } from '../../validators';
 import { fail } from '../responses';
+import { parseJsonBody } from '../../helpers/http';
 
 // =========================================================================================================
 // Endpoints
@@ -29,7 +30,8 @@ router.get('/post/:publicId', async (c) => {
 	const db = c.env.DB;
 	const publicId = c.req.param('publicId')!;
 	const cursor = c.req.query('cursor');
-	const limit = Math.min(50, parseInt(c.req.query('limit') ?? '20', 10));
+	const pag = PaginationSchema.safeParse({ limit: c.req.query('limit'), page: undefined });
+	const limit = pag.success ? Math.min(50, pag.data.limit) : 20;
 	const service = new CommentService(db);
 	const data = await service.listByPost(publicId, cursor, limit);
 	return c.json({ data });
@@ -42,13 +44,9 @@ router.get('/post/:publicId', async (c) => {
 
 router.post('/post/:publicId', requireAuth, async (c) => {
 	const db = c.env.DB;
-	let body: unknown;
-	try {
-		body = await c.req.json();
-	} catch {
-		return fail(c, 'Invalid JSON', 400);
-	}
-	const parsed = CommentSchema.safeParse(body);
+	const parsedBody = await parseJsonBody<unknown>(c);
+	if (!parsedBody.ok) return parsedBody.response;
+	const parsed = CommentSchema.safeParse(parsedBody.data);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
 	const publicId = c.req.param('publicId')!;
 	const viewer = c.get('user');
