@@ -26,7 +26,7 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 // =========================================================================================================
 
 router.post('/post/:publicId/rating', requireAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	let body: unknown;
 	try {
 		body = await c.req.json();
@@ -37,9 +37,9 @@ router.post('/post/:publicId/rating', requireAuth, async (c) => {
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
 	const publicId = c.req.param('publicId')!;
 	const viewer = c.get('user');
-	const queue = (c.env as unknown as { MEDIA_QUEUE: Queue }).MEDIA_QUEUE;
+	const queue = c.env.MEDIA_QUEUE;
 	const service = new InteractionService(db);
-	await service.rate(viewer as never, publicId, parsed.data.value, queue);
+	await service.rate(viewer, publicId, parsed.data.value, queue);
 	return c.json({ ok: true });
 });
 
@@ -49,11 +49,11 @@ router.post('/post/:publicId/rating', requireAuth, async (c) => {
 // =========================================================================================================
 
 router.post('/post/:publicId/favorite', requireAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	const publicId = c.req.param('publicId')!;
 	const viewer = c.get('user');
 	const service = new InteractionService(db);
-	await service.favorite(viewer as never, publicId);
+	await service.favorite(viewer, publicId);
 	return c.json({ ok: true });
 });
 
@@ -63,11 +63,11 @@ router.post('/post/:publicId/favorite', requireAuth, async (c) => {
 // =========================================================================================================
 
 router.delete('/post/:publicId/favorite', requireAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	const publicId = c.req.param('publicId')!;
 	const viewer = c.get('user');
 	const service = new InteractionService(db);
-	await service.unfavorite(viewer as never, publicId);
+	await service.unfavorite(viewer, publicId);
 	return c.json({ ok: true });
 });
 
@@ -77,10 +77,10 @@ router.delete('/post/:publicId/favorite', requireAuth, async (c) => {
 // =========================================================================================================
 
 router.get('/favorites', requireAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	const viewer = c.get('user');
 	const service = new InteractionService(db);
-	const data = await service.listFavorites(viewer as never);
+	const data = await service.listFavorites(viewer);
 	return c.json({ data });
 });
 

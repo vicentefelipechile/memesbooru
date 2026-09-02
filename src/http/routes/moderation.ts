@@ -26,7 +26,7 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 // =========================================================================================================
 
 router.post('/reports', requireAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	let body: unknown;
 	try {
 		body = await c.req.json();
@@ -37,7 +37,7 @@ router.post('/reports', requireAuth, async (c) => {
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
 	const viewer = c.get('user');
 	const service = new ModerationService(db);
-	const result = await service.report(viewer as never, parsed.data);
+	const result = await service.report(viewer, parsed.data);
 	return c.json(result, 201);
 });
 
@@ -47,17 +47,24 @@ router.post('/reports', requireAuth, async (c) => {
 // =========================================================================================================
 
 router.post('/actions', requireAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	let body: unknown;
 	try {
 		body = await c.req.json();
 	} catch {
 		return fail(c, 'Invalid JSON', 400);
 	}
+	if (typeof body !== 'object' || body === null) return fail(c, 'Invalid body', 400);
+	if (!('target_type' in body) || !('target_id' in body) || !('action' in body)) return fail(c, 'Missing fields', 400);
+	const target_type = Reflect.get(body, 'target_type');
+	const target_id = Reflect.get(body, 'target_id');
+	const action = Reflect.get(body, 'action');
+	const reason = Reflect.get(body, 'reason');
+	if (typeof target_type !== 'string' || typeof target_id !== 'number' || typeof action !== 'string') return fail(c, 'Invalid types', 400);
+	if (reason !== undefined && typeof reason !== 'string') return fail(c, 'Invalid reason', 400);
 	const viewer = c.get('user');
 	const service = new ModerationService(db);
-	// service asserts trusted internally
-	const result = await service.act(viewer as never, body as never);
+	const result = await service.act(viewer, { target_type, target_id, action, reason });
 	return c.json(result);
 });
 
@@ -67,10 +74,10 @@ router.post('/actions', requireAuth, async (c) => {
 // =========================================================================================================
 
 router.get('/reports', requireAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	const viewer = c.get('user');
 	const service = new ModerationService(db);
-	const data = await service.listReports(viewer as never);
+	const data = await service.listReports(viewer);
 	return c.json({ data });
 });
 

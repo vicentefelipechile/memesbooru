@@ -19,19 +19,27 @@ export async function renderUpload(): Promise<string> {
     </main>`;
 }
 export function bindUpload(): void {
-	document.getElementById('upload-form')?.addEventListener('submit', async (e) => {
+	const form = document.getElementById('upload-form');
+	if (!(form instanceof HTMLFormElement)) return;
+	form.addEventListener('submit', async (e) => {
 		e.preventDefault();
-		const tags = (document.getElementById('tags') as HTMLInputElement).value.trim().split(/\s+/);
-		const mediaType = (document.getElementById('mediaType') as unknown as HTMLSelectElement).value;
-		const title = (document.getElementById('title') as HTMLInputElement).value;
-		const status = document.getElementById('upload-status')!;
+		const tagsEl = document.getElementById('tags');
+		const mediaTypeEl = document.getElementById('mediaType');
+		const titleEl = document.getElementById('title');
+		const status = document.getElementById('upload-status');
+		if (!(tagsEl instanceof HTMLInputElement) || !(mediaTypeEl instanceof HTMLSelectElement) || !(titleEl instanceof HTMLInputElement) || !(status instanceof HTMLElement)) return;
+		const tags = tagsEl.value.trim().split(/\s+/);
+		const mediaType = mediaTypeEl.value;
+		const title = titleEl.value;
 		status.textContent = 'Subiendo...';
 		const res = await fetch('/api/posts', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ title, tags, mediaType }) });
 		if (!res.ok) status.textContent = `Error: ${await res.text()}`;
 		else {
-			const j = (await res.json()) as { publicId: string };
-			status.textContent = `Creado ${j.publicId} — en procesamiento (variant low). Redirigiendo...`;
-			setTimeout(() => location.assign(`/post/${j.publicId}`), 800);
+			const raw = await res.json();
+			let publicId = '';
+			if (typeof raw === 'object' && raw !== null && 'publicId' in raw && typeof raw.publicId === 'string') publicId = raw.publicId;
+			status.textContent = `Creado ${publicId} — en procesamiento (variant low). Redirigiendo...`;
+			setTimeout(() => location.assign(`/post/${publicId}`), 800);
 		}
 	});
 }

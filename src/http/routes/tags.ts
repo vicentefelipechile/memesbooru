@@ -24,8 +24,7 @@ const router = new Hono<{ Bindings: Env }>();
 // =========================================================================================================
 
 router.get('/autocomplete', async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
-	if (!db) return c.json({ tags: [] });
+	const db = c.env.DB;
 	const q = c.req.query('q') ?? '';
 	if (!q) return c.json({ tags: [] });
 	const tags = await tagRepo.autocomplete(db, q, 20);
@@ -39,8 +38,7 @@ router.get('/autocomplete', async (c) => {
 // =========================================================================================================
 
 router.get('/:name', async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
-	if (!db) return fail(c, 'DB no configurado', 500);
+	const db = c.env.DB;
 	const name = c.req.param('name')!;
 	const tags = await tagRepo.autocomplete(db, name, 1);
 	const t = tags.find((x) => x.normalized_name === name);

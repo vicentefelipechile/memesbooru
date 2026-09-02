@@ -142,3 +142,27 @@ export const PaginationSchema = z.object({
 	page: z.coerce.number().int().min(1).catch(1).default(1),
 	limit: z.coerce.number().int().min(1).max(60).catch(24).default(24),
 });
+
+// =========================================================================================================
+// Response schemas — shared frontend/backend, frontend safeParse sin as
+// =========================================================================================================
+
+export const HealthResponseSchema = z.object({ status: z.string(), version: z.string(), db: z.string() });
+export const UserResponseSchema = z.object({ user: z.object({ id: z.number(), username: z.string(), rank: z.string() }).nullable() });
+export const AutocompleteResponseSchema = z.object({ tags: z.array(z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number().optional() })) });
+export const GridItemSchema = z.object({ public_id: z.string(), low_variant_key: z.string().nullable().optional(), score: z.number(), favorite_count: z.number(), tags: z.array(z.string()).optional() });
+export const SearchResponseSchema = z.object({ data: z.array(GridItemSchema), nextCursor: z.string().nullable(), hasMore: z.boolean().optional(), warning: z.string().optional() });
+export const PostResponseSchema = z.object({
+	public_id: z.string().optional(),
+	publicId: z.string().optional(),
+	title: z.string().nullable().optional(),
+	score: z.number().optional(),
+	favorite_count: z.number().optional(),
+	comment_count: z.number().optional(),
+	tags: z.array(z.string()).optional(),
+	restricted: z.boolean().optional(),
+	redirectTo: z.string().optional(),
+});
+export const CreatePostResponseSchema = z.object({ publicId: z.string(), postId: z.number(), status: z.string().optional() });
+export const CommentItemSchema = z.object({ id: z.number(), body: z.string(), author_id: z.number() });
+export const CommentListResponseSchema = z.object({ data: z.array(CommentItemSchema) });

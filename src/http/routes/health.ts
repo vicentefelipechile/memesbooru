@@ -22,15 +22,12 @@ const router = new Hono<{ Bindings: Env }>();
 // =========================================================================================================
 
 router.get('/', async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB;
-	let dbStatus: 'ok' | 'unconfigured' | 'error' = 'unconfigured';
-	if (db) {
-		try {
-			await db.prepare('SELECT 1 as v').first();
-			dbStatus = 'ok';
-		} catch {
-			dbStatus = 'error';
-		}
+	let dbStatus: 'ok' | 'error' = 'error';
+	try {
+		await c.env.DB.prepare('SELECT 1 as v').first();
+		dbStatus = 'ok';
+	} catch {
+		dbStatus = 'error';
 	}
 	return c.json({ status: 'ok', version: '0.1.0', db: dbStatus });
 });

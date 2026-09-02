@@ -70,11 +70,10 @@ app.notFound((c) => {
 export default {
 	fetch: app.fetch,
 	async queue(batch: MessageBatch<unknown>, env: Env) {
-		await handleQueue(batch, env as unknown as Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket; QUARANTINE_BUCKET: R2Bucket });
+		await handleQueue(batch, env);
 	},
 	async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
-		const db = (env as unknown as { DB: D1Database }).DB;
-		if (!db) return;
+		const db = env.DB;
 		await db.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(Date.now()).run();
 		const recent = await db
 			.prepare('SELECT DISTINCT post_id FROM post_ratings WHERE updated_at > ? LIMIT 100')

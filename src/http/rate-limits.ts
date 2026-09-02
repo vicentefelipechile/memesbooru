@@ -13,36 +13,29 @@ function isLocalRequest(c: { req: { header: (name: string) => string | undefined
 }
 
 export function registerRateLimits(app: Hono<{ Bindings: Env }>) {
-	// Global catch-all 500/60s — lowest priority, registered first
+	// Docs verificadas 2026-09-02: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+	// ratelimits[].name -> env.NAME.limit({ key }) — que falle si no existe, sin if (!rl)
 	app.use('/api/*', async (c, next) => {
-		if (isLocalRequest(c as never)) return next();
-		const rl = (c.env as unknown as { RL_GLOBAL?: { limit: (opts: { key: string }) => Promise<{ success: boolean }> } }).RL_GLOBAL;
-		if (!rl) return next();
+		if (isLocalRequest(c)) return next();
 		const key = c.req.header('cf-connecting-ip') ?? 'unknown';
-		const { success } = await rl.limit({ key: `global:${key}` });
+		const { success } = await c.env.RL_GLOBAL.limit({ key: `global:${key}` });
 		if (!success) return c.json({ error: 'Rate limited' }, 429);
 		await next();
 	});
 
-	// Strict 1/60s for uploads
 	app.use('/api/posts', async (c, next) => {
 		if (c.req.method !== 'POST') return next();
-		if (isLocalRequest(c as never)) return next();
-		const rl = (c.env as unknown as { RL_STRICT?: { limit: (opts: { key: string }) => Promise<{ success: boolean }> } }).RL_STRICT;
-		if (!rl) return next();
+		if (isLocalRequest(c)) return next();
 		const key = c.req.header('cf-connecting-ip') ?? 'unknown';
-		const { success } = await rl.limit({ key: `strict:${key}` });
+		const { success } = await c.env.RL_STRICT.limit({ key: `strict:${key}` });
 		if (!success) return c.json({ error: 'Rate limited - slow down' }, 429);
 		await next();
 	});
 
-	// Login 10/60s
 	app.use('/api/auth/*', async (c, next) => {
-		if (isLocalRequest(c as never)) return next();
-		const rl = (c.env as unknown as { RL_LOGIN?: { limit: (opts: { key: string }) => Promise<{ success: boolean }> } }).RL_LOGIN;
-		if (!rl) return next();
+		if (isLocalRequest(c)) return next();
 		const key = c.req.header('cf-connecting-ip') ?? 'unknown';
-		const { success } = await rl.limit({ key: `login:${key}` });
+		const { success } = await c.env.RL_LOGIN.limit({ key: `login:${key}` });
 		if (!success) return c.json({ error: 'Too many login attempts' }, 429);
 		await next();
 	});

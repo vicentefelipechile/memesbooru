@@ -28,12 +28,11 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 // =========================================================================================================
 
 router.get('/', optionalAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
-	if (!db) return c.json({ data: [], nextCursor: null, hasMore: false, warning: 'DB no configurado (dev)' });
+	const db = c.env.DB;
 	const parsed = SearchQuerySchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams.entries()));
 	if (!parsed.success) return fail(c, 'Invalid query', 400, parsed.error.issues);
 	const service = new PostService(db);
-	const result = await service.search({ tags: parsed.data.tags, sort: parsed.data.sort as never, cursor: parsed.data.cursor, limit: parsed.data.limit });
+	const result = await service.search({ tags: parsed.data.tags, sort: parsed.data.sort, cursor: parsed.data.cursor, limit: parsed.data.limit });
 	return c.json(result);
 });
 
@@ -43,18 +42,22 @@ router.get('/', optionalAuth, async (c) => {
 // =========================================================================================================
 
 router.get('/:publicId', optionalAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
-	if (!db) return fail(c, 'DB no configurado', 500);
+	const db = c.env.DB;
 	const publicId = c.req.param('publicId')!;
-	const viewer = (c.get('user') as AuthVariables['user'] | undefined) ?? null;
+	const viewer = c.get('user');
 	const service = new PostService(db);
 	try {
-		const result = await service.detail(publicId, viewer as never);
+		const result = await service.detail(publicId, viewer ?? null);
 		c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
 		return c.json(result);
 	} catch (e) {
-		const details = (e as unknown as { details?: unknown }).details as { redirectTo?: string } | undefined;
-		if (details?.redirectTo) return c.json({ redirectTo: details.redirectTo }, 302);
+		if (typeof e === 'object' && e !== null && 'details' in e) {
+			const details = e.details;
+			if (details && typeof details === 'object' && 'redirectTo' in details) {
+				const redirectTo = details.redirectTo;
+				if (typeof redirectTo === 'string') return c.json({ redirectTo }, 302);
+			}
+		}
 		throw e;
 	}
 });
@@ -65,12 +68,12 @@ router.get('/:publicId', optionalAuth, async (c) => {
 // =========================================================================================================
 
 router.post('/', requireAuth, zValidator('json', CreatePostSchema), async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	const viewer = c.get('user');
 	const input = c.req.valid('json');
-	const queue = (c.env as unknown as { MEDIA_QUEUE: Queue }).MEDIA_QUEUE;
+	const queue = c.env.MEDIA_QUEUE;
 	const service = new PostService(db);
-	const result = await service.create(viewer as never, { title: input.title ?? null, tags: input.tags, mediaType: input.media_type }, queue);
+	const result = await service.create(viewer, { title: input.title ?? null, tags: input.tags, mediaType: input.media_type }, queue);
 	return c.json({ publicId: result.publicId, postId: result.postId, status: 'processing' }, 201);
 });
 

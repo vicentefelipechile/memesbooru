@@ -1,16 +1,18 @@
 import { renderHeader } from '../components/header.js';
-import { getPost, getMe } from '../services/api.js';
+import { getPost, getMe, getComments } from '../services/api.js';
+import { renderTagList } from '../components/tag-list.js';
+import { renderScore } from '../components/score.js';
+import { renderCommentList, renderCommentForm } from '../components/comment.js';
 
 export async function renderPost(publicId: string): Promise<string> {
-	const user = (await getMe().catch(() => ({ user: null }))).user;
-	const data = (await getPost(publicId).catch(() => null)) as Record<string, unknown> | null;
+	const { user } = await getMe().catch(() => ({ user: null }));
+	const data = await getPost(publicId).catch(() => null);
 	if (!data) return `${renderHeader(user)}<main class="page"><p>Post no encontrado</p><a href="/" data-link>Volver</a></main>`;
-	if ((data as { redirectTo?: string }).redirectTo) {
-		// Duplicado — redirigir
-		location.replace(`/post/${(data as { redirectTo: string }).redirectTo}`);
+	if (data.redirectTo) {
+		location.replace(`/post/${data.redirectTo}`);
 		return '';
 	}
-	const restricted = (data as { restricted?: boolean }).restricted;
+	const restricted = data.restricted === true;
 	return `
     ${renderHeader(user)}
     <main class="page post-page">
@@ -24,9 +26,9 @@ export async function renderPost(publicId: string): Promise<string> {
 				}
       </div>
       <div class="post-meta">
-        <h1>${(data as { title?: string }).title ?? publicId}</h1>
-        <div>Score: ${(data as { score: number }).score ?? 0} · ♥ ${(data as { favorite_count: number }).favorite_count ?? 0} · 💬 ${(data as { comment_count: number }).comment_count ?? 0}</div>
-        <div class="tags">${((data as { tags?: string[] }).tags ?? []).map((t) => `<a href="/?tags=${t}" data-link>#${t}</a>`).join(' ')}</div>
+        <h1>${data.title ?? publicId}</h1>
+        ${renderScore(data.score ?? 0, data.favorite_count ?? 0, data.comment_count ?? 0)}
+        ${renderTagList(data.tags ?? [])}
         <div class="actions">
           <button id="vote-up">+1</button><button id="vote-down">-1</button>
           <button id="fav-btn">Favorito</button>
@@ -38,7 +40,10 @@ export async function renderPost(publicId: string): Promise<string> {
   `;
 }
 export function bindPost(publicId: string): void {
-	const q = (s: string) => document.querySelector(s) as HTMLElement | null;
+	const q = (s: string) => {
+		const el = document.querySelector(s);
+		return el instanceof HTMLElement ? el : null;
+	};
 	q('#vote-up')?.addEventListener('click', async () => {
 		await fetch(`/api/post/${publicId}/rating`, { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ value: 1 }) });
 		location.reload();
@@ -57,18 +62,15 @@ export function bindPost(publicId: string): void {
 		await fetch('/api/moderation/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ targetType: 'post', targetId: 0, reason }) });
 		alert('Reportado');
 	});
-	// Cargar comentarios
-	fetch(`/api/comments/post/${publicId}`)
-		.then((r) => r.json())
-		.then((j: unknown) => {
-			const data = j as { data: { id: number; body: string; author_id: number }[] };
+	getComments(publicId).then((res) => {
 			const el = q('#comments');
 			if (!el) return;
-			if (data.data.length === 0) el.innerHTML = '<p>Sin comentarios. Se el primero.</p>';
-			else el.innerHTML = data.data.map((c) => `<div class="comment"><p>${c.body}</p></div>`).join('') + `<form id="comment-form"><textarea id="c-body" maxlength="2000" placeholder="Comentar..."></textarea><button>Enviar</button></form>`;
+			el.innerHTML = renderCommentList(res.data) + renderCommentForm();
 			q('#comment-form')?.addEventListener('submit', async (e) => {
 				e.preventDefault();
-				const body = (q('#c-body') as HTMLTextAreaElement).value;
+				const bodyEl = q('#c-body');
+				if (!(bodyEl instanceof HTMLTextAreaElement)) return;
+				const body = bodyEl.value;
 				await fetch(`/api/comments/post/${publicId}`, { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ body }) });
 				location.reload();
 			});

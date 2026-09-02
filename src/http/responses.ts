@@ -12,5 +12,5 @@ export function fail(c: Context, message: string, status: ContentfulStatusCode =
 }
 
 export function ok<T>(c: Context, payload: T, status: ContentfulStatusCode = 200) {
-	return c.json(payload as unknown as object, status);
+	return c.json(payload, status);
 }

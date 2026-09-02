@@ -95,7 +95,10 @@ export class AuthService {
 			}),
 		});
 		if (!res.ok) throw new ValidationError(`google token exchange failed: ${res.status}`);
-		return (await res.json()) as { id_token: string; access_token: string };
+		const data = await res.json();
+		if (typeof data !== 'object' || data === null || !('id_token' in data) || !('access_token' in data)) throw new ValidationError('invalid token response');
+		if (typeof data.id_token !== 'string' || typeof data.access_token !== 'string') throw new ValidationError('invalid token response');
+		return { id_token: data.id_token, access_token: data.access_token };
 	}
 
 	decodeIdTokenSub(idToken: string): string {
@@ -103,7 +106,8 @@ export class AuthService {
 		if (parts.length !== 3) throw new ValidationError('invalid id_token');
 		const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
 		if (!payload.sub) throw new ValidationError('id_token without sub');
-		return payload.sub as string;
+		if (typeof payload.sub !== 'string') throw new ValidationError('id_token without sub');
+		return payload.sub;
 	}
 
 	generateUsernameFromSub(sub: string): string {
@@ -143,8 +147,10 @@ export class AuthService {
 	}
 
 	async totpVerify(secretBase32: string, token: string, window = 1): Promise<boolean> {
-		const key = base32Decode(secretBase32);
-		const cryptoKey = await crypto.subtle.importKey('raw', key.buffer as ArrayBuffer, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+		const raw = base32Decode(secretBase32);
+		const key = new Uint8Array(raw.length);
+		key.set(raw);
+		const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
 		const step = 30;
 		const now = Math.floor(Date.now() / 1000 / step);
 		for (let i = -window; i <= window; i++) {

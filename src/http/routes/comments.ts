@@ -26,8 +26,7 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 // =========================================================================================================
 
 router.get('/post/:publicId', async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
-	if (!db) return fail(c, 'DB no configurado', 500);
+	const db = c.env.DB;
 	const publicId = c.req.param('publicId')!;
 	const cursor = c.req.query('cursor');
 	const limit = Math.min(50, parseInt(c.req.query('limit') ?? '20', 10));
@@ -42,7 +41,7 @@ router.get('/post/:publicId', async (c) => {
 // =========================================================================================================
 
 router.post('/post/:publicId', requireAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	let body: unknown;
 	try {
 		body = await c.req.json();
@@ -54,7 +53,7 @@ router.post('/post/:publicId', requireAuth, async (c) => {
 	const publicId = c.req.param('publicId')!;
 	const viewer = c.get('user');
 	const service = new CommentService(db);
-	const result = await service.create(viewer as never, publicId, { body: parsed.data.body, parent_id: parsed.data.parent_id ?? null });
+	const result = await service.create(viewer, publicId, { body: parsed.data.body, parent_id: parsed.data.parent_id ?? null });
 	return c.json(result, 201);
 });
 
@@ -64,12 +63,12 @@ router.post('/post/:publicId', requireAuth, async (c) => {
 // =========================================================================================================
 
 router.delete('/:id', requireAuth, async (c) => {
-	const db = (c.env as unknown as { DB: D1Database }).DB as never;
+	const db = c.env.DB;
 	const id = parseInt(c.req.param('id')!, 10);
 	if (Number.isNaN(id)) return fail(c, 'Invalid id', 400);
 	const viewer = c.get('user');
 	const service = new CommentService(db);
-	await service.remove(viewer as never, id);
+	await service.remove(viewer, id);
 	return c.json({ ok: true });
 });
 
