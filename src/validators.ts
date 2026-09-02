@@ -162,3 +162,17 @@ export const PostResponseSchema = z.object({
 export const CreatePostResponseSchema = z.object({ publicId: z.string(), postId: z.number(), status: z.string().optional() });
 export const CommentItemSchema = z.object({ id: z.number(), body: z.string(), author_id: z.number() });
 export const CommentListResponseSchema = z.object({ data: z.array(CommentItemSchema) });
+
+// =========================================================================================================
+// Inferred input types — single source for service signatures (never inline anonymous)
+// =========================================================================================================
+
+export type ReportInput = z.infer<typeof ReportSchema>;
+export type ModerationActionInput = z.infer<typeof ModerationActionSchema>;
+export type CreatePostInput = z.infer<typeof CreatePostSchema>;
+export type CommentInput = z.infer<typeof CommentSchema>;
+export type RatingInput = z.infer<typeof RatingSchema>;
+export type SearchQueryInput = z.infer<typeof SearchQuerySchema>;
+export type PostFilterInput = z.infer<typeof PostFilterSchema>;
+export type PaginationInput = z.infer<typeof PaginationSchema>;
+export type TotpVerifyInput = z.infer<typeof TotpVerifySchema>;

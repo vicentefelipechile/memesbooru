@@ -39,6 +39,19 @@ export async function findById(db: DB, id: number): Promise<CommentRow | null> {
 // Builders
 // =========================================================================================================
 
+// =========================================================================================================
+// Repository input types — derived from Row (Pick/Omit + indexed access)
+// =========================================================================================================
+
+export type CreateCommentData = {
+	postId: CommentRow['post_id'];
+	authorId: CommentRow['author_id'];
+	body: CommentRow['body'];
+	parentId: CommentRow['parent_id'];
+};
+
+export type InsertCommentRow = Pick<CommentRow, 'id' | 'post_id' | 'author_id' | 'parent_id' | 'body' | 'status' | 'created_at' | 'updated_at'>;
+
 export function buildInsertCommentStatement(db: DB, row: { id: number; postId: number; authorId: number; parentId: number | null; body: string; status: string; createdAt: number; updatedAt: number }): D1PreparedStatement {
 	return db
 		.prepare('INSERT INTO comments (id, post_id, author_id, parent_id, body, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
@@ -49,7 +62,7 @@ export function buildInsertCommentStatement(db: DB, row: { id: number; postId: n
 // Commands
 // =========================================================================================================
 
-export async function create(db: DB, data: { postId: number; authorId: number; body: string; parentId?: number | null }): Promise<number> {
+export async function create(db: DB, data: CreateCommentData): Promise<CommentRow['id']> {
 	const now = Date.now();
 	if (data.parentId) {
 		const parent = await queryOne<{ id: number; parent_id: number | null }>(db, 'SELECT id, parent_id FROM comments WHERE id = ?', [data.parentId]);

@@ -12,8 +12,17 @@ import type { DB } from '../db/client';
 import * as postRepo from '../repositories/post-repository';
 import * as tagRepo from '../repositories/tag-repository';
 import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors';
-import type { AuthUser } from '../types';
+import type { AuthUser, CreatedPostResult } from '../types';
 import type { PostCursor } from '../helpers/cursor';
+import type { CreatePostInput, SearchQueryInput } from '../validators';
+import type { PostRow } from '../db/schema';
+
+// Service input derived via Pick/Omit — never inline anonymous
+export type CreatePostServiceInput = Pick<CreatePostInput, 'tags'> & {
+	title: CreatePostInput['title'];
+	mediaType: CreatePostInput['media_type'];
+};
+export type SearchParams = Pick<SearchQueryInput, 'tags' | 'cursor' | 'limit'> & { sort: SearchQueryInput['sort'] };
 
 // =========================================================================================================
 // Service
@@ -22,7 +31,7 @@ import type { PostCursor } from '../helpers/cursor';
 export class PostService {
 	constructor(private readonly db: DB) {}
 
-	async search(params: { tags?: string; sort: 'recent' | 'popular'; cursor?: string; limit: number }): Promise<{ data: unknown[]; nextCursor: string | null; hasMore: boolean }> {
+	async search(params: SearchParams): Promise<{ data: unknown[]; nextCursor: string | null; hasMore: boolean }> {
 		const tagNames = params.tags ? params.tags.split(/\s+/).filter(Boolean) : [];
 		const tagIds = tagNames.length ? await tagRepo.resolveTagIds(this.db, tagNames) : [];
 		if (tagNames.length > 0 && tagIds.length === 0) return { data: [], nextCursor: null, hasMore: false };
@@ -52,7 +61,7 @@ export class PostService {
 		return { ...row, tags: tags.map((t) => t.normalized_name) };
 	}
 
-	async create(viewer: AuthUser, input: { title?: string | null; tags: string[]; mediaType: 'image' | 'gif' | 'video' }, queue?: Queue): Promise<{ publicId: string; postId: number }> {
+	async create(viewer: AuthUser, input: CreatePostServiceInput, queue?: Queue): Promise<CreatedPostResult> {
 		if (viewer.status !== 'active') throw new ForbiddenError('cuenta restringida');
 		if (input.mediaType === 'video' && viewer.rank !== 'trusted') throw new ForbiddenError('videos solo para trusted');
 		// ranking cooldown check

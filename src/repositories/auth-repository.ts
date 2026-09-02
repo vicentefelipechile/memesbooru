@@ -11,8 +11,10 @@ export async function findUserById(db: DB, id: number): Promise<UserRow | null> 
 	return queryOne<UserRow>(db, 'SELECT * FROM users WHERE id = ?', [id]);
 }
 
-export async function findUserPublicById(db: DB, id: number): Promise<{ id: number; username: string; display_name: string | null; rank: string; status: string } | null> {
-	return queryOne(db, 'SELECT id, username, display_name, rank, status FROM users WHERE id = ?', [id]);
+export type UserPublic = Pick<UserRow, 'id' | 'username' | 'display_name' | 'rank' | 'status'>;
+
+export async function findUserPublicById(db: DB, id: number): Promise<UserPublic | null> {
+	return queryOne<UserPublic>(db, 'SELECT id, username, display_name, rank, status FROM users WHERE id = ?', [id]);
 }
 
 export async function upsertTotpSecret(db: DB, userId: number, secretEncrypted: Uint8Array): Promise<void> {

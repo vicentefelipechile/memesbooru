@@ -10,6 +10,9 @@
 
 import type { DB } from '../db/client';
 import * as activityRepo from '../repositories/activity-repository';
+import type { UserRow } from '../db/schema';
+
+export type CooldownResult = { allowed: boolean; retryAfter?: number };
 
 // =========================================================================================================
 // Service
@@ -18,7 +21,7 @@ import * as activityRepo from '../repositories/activity-repository';
 export class RankingService {
 	constructor(private readonly db: DB) {}
 
-	async checkUploadCooldown(userId: number, rank: string): Promise<{ allowed: boolean; retryAfter?: number }> {
+	async checkUploadCooldown(userId: number, rank: UserRow['rank']): Promise<CooldownResult> {
 		if (rank !== 'new') return { allowed: true };
 		const last = (await activityRepo.getLastUploadAt(this.db, userId)) ?? 0;
 		const elapsed = Date.now() - last;

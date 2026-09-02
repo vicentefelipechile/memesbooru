@@ -78,7 +78,9 @@ export async function findRecentlyRatedPostIds(db: DB, limit = 100): Promise<num
 export async function upsertRating(db: DB, postId: number, userId: number, value: number): Promise<void> {
 	const now = Date.now();
 	await batch(db, [
-		db.prepare('INSERT INTO post_ratings (post_id, user_id, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(post_id, user_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').bind(postId, userId, value, now, now),
+		db
+			.prepare('INSERT INTO post_ratings (post_id, user_id, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(post_id, user_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
+			.bind(postId, userId, value, now, now),
 		db.prepare('INSERT INTO jobs (job_type, entity_id, status, available_at, created_at) VALUES (?, ?, ?, ?, ?)').bind('recalculate_post_score', postId, 'pending', now + 60_000, now),
 	]);
 }
@@ -101,9 +103,8 @@ export async function removeFavorite(db: DB, postId: number, userId: number): Pr
 	]);
 }
 
-export async function listFavoritesByUser(db: DB, userId: number, limit = 50): Promise<unknown[]> {
-	const rows = await queryAll(db, 'SELECT pl.* FROM post_listing pl JOIN post_favorites pf ON pf.post_id = pl.post_id WHERE pf.user_id = ? ORDER BY pf.created_at DESC LIMIT ?', [userId, limit]);
-	return rows;
+export async function listFavoritesByUser(db: DB, userId: number, limit = 50): Promise<PostListingRow[]> {
+	return queryAll<PostListingRow>(db, 'SELECT pl.* FROM post_listing pl JOIN post_favorites pf ON pf.post_id = pl.post_id WHERE pf.user_id = ? ORDER BY pf.created_at DESC LIMIT ?', [userId, limit]);
 }
 
 export async function searchByTags(db: DB, tagIds: number[], opts: { sort: 'recent' | 'popular'; cursor?: string; limit: number }): Promise<PostListingRow[]> {
@@ -182,10 +183,24 @@ export function buildInsertMediaAssetStatement(db: DB, row: { id: number; postId
 }
 
 // =========================================================================================================
+// Repository input types — derive field types from Row / PostRow via indexed access
+// =========================================================================================================
+
+export type CreatePostData = {
+	publicId: PostRow['public_id'];
+	authorId: PostRow['author_id'];
+	mediaType: PostRow['media_type'];
+	tags: string[];
+	title: PostRow['title'];
+	checksum: MediaAssetRow['checksum'];
+	originalKey: MediaAssetRow['original_object_key'];
+};
+
+// =========================================================================================================
 // Commands
 // =========================================================================================================
 
-export async function createPost(db: DB, data: { publicId: string; authorId: number; mediaType: string; tags: string[]; title?: string | null; checksum: ArrayBuffer; originalKey: string }): Promise<number> {
+export async function createPost(db: DB, data: CreatePostData): Promise<PostRow['id']> {
 	const normalized = data.tags.map(normalizeTag).filter(Boolean);
 	const now = Date.now();
 	const postId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM posts', []))?.v ?? 1;

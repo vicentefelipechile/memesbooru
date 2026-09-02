@@ -4,6 +4,8 @@
 // API contracts (not DB rows). Frontend has its own copy — never import backend types there.
 // =========================================================================================================
 
+import type { ReportRow, CommentRow } from './db/schema';
+
 export type UserRank = 'new' | 'normal' | 'trusted' | 'restricted' | 'banned';
 export type UserStatus = 'active' | 'restricted' | 'banned';
 export type PostStatus = 'uploading' | 'processing' | 'available' | 'duplicate' | 'rejected' | 'hidden';
@@ -68,3 +70,18 @@ export interface AuthUser {
 	status: UserStatus;
 	isAdmin: boolean;
 }
+
+// =========================================================================================================
+// Utility-derived entity results (never inline { id: number })
+// =========================================================================================================
+
+export type EntityId = Pick<ReportRow, 'id'>;
+export type CreatedReportResult = Pick<ReportRow, 'id'>;
+export type CreatedCommentResult = Pick<CommentRow, 'id'>;
+export type CreatedPostResult = { publicId: string; postId: number };
+
+// =========================================================================================================
+// Service input helpers — reuse validator inferences + Row field types via indexed access
+// =========================================================================================================
+
+export type { ReportInput, ModerationActionInput, CreatePostInput, CommentInput } from './validators';

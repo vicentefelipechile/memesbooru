@@ -184,6 +184,16 @@ export interface JobRow {
 	created_at: number;
 }
 
+export interface ModerationActionRow {
+	id: number;
+	target_type: string;
+	target_id: number;
+	moderator_id: number;
+	action: string;
+	reason: string | null;
+	created_at: number;
+}
+
 // Shared predicates
 
 export const VISIBLE_COMMENT_PREDICATE = "status = 'visible'" as const;
