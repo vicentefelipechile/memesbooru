@@ -1,0 +1,122 @@
+/* =========================================================================================================
+ * FORMS (v2)
+ * Flat, underline-style inputs. Plain buttons (2px radius, bordered) — no pills, no gradients.
+ * ========================================================================================================= */
+
+input,
+select,
+textarea {
+	font-family: inherit;
+	font-size: 0.95rem;
+	color: var(--fg);
+	background: var(--bg-raise);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius);
+	padding: 0.45rem 0.55rem;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+	border-color: var(--focus-ring);
+	outline: none;
+}
+
+textarea {
+	resize: vertical;
+}
+
+button,
+.button {
+	display: inline-block;
+	font-weight: 600;
+	font-size: 0.9rem;
+	color: var(--fg);
+	background: var(--bg-raise);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius);
+	padding: 0.4rem 0.75rem;
+	text-decoration: none;
+}
+
+button:hover,
+.button:hover {
+	background: var(--bg-alt);
+	text-decoration: none;
+}
+
+button:active,
+.button:active {
+	background: var(--border);
+}
+
+button.primary,
+.button.primary {
+	background: var(--link);
+	border-color: var(--link);
+	color: #fff;
+}
+
+button.primary:hover,
+.button.primary:hover {
+	background: var(--link-hover);
+	border-color: var(--link-hover);
+}
+
+button.danger,
+.button.danger {
+	color: var(--err);
+}
+
+.form-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 0.9rem;
+	max-width: 560px;
+}
+
+.form-stack label {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--fg-muted);
+}
+
+.form-stack .field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.form-stack .hint {
+	font-size: 0.78rem;
+	color: var(--fg-faint);
+}
+
+.form-msg {
+	margin-top: 0.5rem;
+	font-size: 0.85rem;
+}
+
+.form-msg.ok {
+	color: var(--ok);
+}
+
+.form-msg.err {
+	color: var(--err);
+}
+
+/* Fieldset grouping for settings */
+.settings-section {
+	border: 1px solid var(--border);
+	background: var(--bg-raise);
+	padding: 1rem 1.1rem;
+	margin-bottom: 1rem;
+}
+
+.settings-section h2 {
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--fg-muted);
+	margin-bottom: 0.8rem;
+}

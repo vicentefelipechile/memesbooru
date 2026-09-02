@@ -53,6 +53,13 @@ export interface CommentDTO {
 	status: string;
 }
 
+// Post detail tag — enriched with category + usage count for the booru sidebar.
+export interface PostTagResult {
+	name: string;
+	category: string;
+	count: number;
+}
+
 export interface PaginatedResponse<T> {
 	data: T[];
 	pagination: { page: number; limit: number; total: number };
@@ -111,13 +118,19 @@ export type AwaitedReturn<T extends (...args: never[]) => Promise<unknown>> = Aw
 export type PostSearchResult = import('./db/schema').PostListingRow;
 export type PostDetailResult = import('./db/schema').PostListingRow & {
 	author_id: UserId;
+	author_username: string | null;
 	title: string | null;
 	description: string | null;
 	canonical_post_id: PostId | null;
-	tags: string[];
+	tags: PostTagResult[];
 	restricted?: boolean;
 	lowVariantKey?: string | null;
 	mediumVariantKey?: string | null;
+};
+
+// Comment with author username joined (for the booru comment list).
+export type CommentResult = import('./db/schema').CommentRow & {
+	author_username: string | null;
 };
 
 // =========================================================================================================

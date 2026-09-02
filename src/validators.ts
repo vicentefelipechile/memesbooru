@@ -144,23 +144,33 @@ export const PaginationSchema = z.object({
 // =========================================================================================================
 
 export const HealthResponseSchema = z.object({ status: z.string(), version: z.string(), db: z.string() });
-export const UserResponseSchema = z.object({ user: z.object({ id: z.number(), username: z.string(), rank: z.string() }).nullable() });
+export const UserResponseSchema = z.object({ user: z.object({ id: z.number(), username: z.string(), rank: z.string(), display_name: z.string().nullable().optional(), status: z.string().optional() }).nullable() });
 export const AutocompleteResponseSchema = z.object({ tags: z.array(z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number().optional() })) });
 export const GridItemSchema = z.object({ public_id: z.string(), low_variant_key: z.string().nullable().optional(), score: z.number(), favorite_count: z.number(), tags: z.array(z.string()).optional() });
 export const SearchResponseSchema = z.object({ data: z.array(GridItemSchema), nextCursor: z.string().nullable(), hasMore: z.boolean().optional(), warning: z.string().optional() });
+export const PostTagSchema = z.object({ name: z.string(), category: z.string(), count: z.number() });
 export const PostResponseSchema = z.object({
 	public_id: z.string().optional(),
 	publicId: z.string().optional(),
 	title: z.string().nullable().optional(),
+	description: z.string().nullable().optional(),
 	score: z.number().optional(),
 	favorite_count: z.number().optional(),
 	comment_count: z.number().optional(),
-	tags: z.array(z.string()).optional(),
+	tags: z.array(PostTagSchema).optional(),
+	author_username: z.string().nullable().optional(),
+	media_type: z.string().optional(),
+	rating_count: z.number().optional(),
+	published_at: z.number().optional(),
+	post_id: z.number().optional(),
 	restricted: z.boolean().optional(),
 	redirectTo: z.string().optional(),
 });
 export const CreatePostResponseSchema = z.object({ publicId: z.string(), postId: z.number(), status: z.string().optional() });
-export const CommentItemSchema = z.object({ id: z.number(), body: z.string(), author_id: z.number() });
+export const FavoritesResponseSchema = z.object({ data: z.array(GridItemSchema) });
+export const TotpSetupResponseSchema = z.object({ secret: z.string(), uri: z.string() });
+export const TotpVerifyResponseSchema = z.object({ ok: z.boolean(), recoveryCodes: z.array(z.string()).optional() });
+export const CommentItemSchema = z.object({ id: z.number(), body: z.string(), author_id: z.number(), author_username: z.string().nullable().optional(), created_at: z.number().optional() });
 export const CommentListResponseSchema = z.object({ data: z.array(CommentItemSchema) });
 
 // =========================================================================================================

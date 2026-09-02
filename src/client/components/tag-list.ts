@@ -1,8 +1,11 @@
-export function renderTagList(tags: string[]): string {
-	if (tags.length === 0) return '';
-	return `<div class="tags">${tags.map((t) => `<a href="/?tags=${t}" data-link>#${t}</a>`).join(' ')}</div>`;
-}
+// =========================================================================================================
+// TAG LIST (v2)
+// Plain-text tag links. Simple flat list for the grid context.
+// =========================================================================================================
 
-export function renderSelectedTags(tags: string[]): string {
-	return `<div class="selected-tags">${tags.map((t) => `<span class="tag">${t} <button data-remove="${t}">x</button></span>`).join('')}</div>`;
+export type TagItem = { name: string; category: string; count: number };
+
+export function renderTagList(tags: TagItem[]): string {
+	if (tags.length === 0) return '';
+	return `<div class="tag-list">${tags.map((t) => `<a href="/?tags=${encodeURIComponent(t.name)}" data-link>${t.name}</a>`).join(' ')}</div>`;
 }

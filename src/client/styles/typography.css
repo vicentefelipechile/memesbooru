@@ -1,0 +1,50 @@
+/* =========================================================================================================
+ * TYPOGRAPHY (v2)
+ * Flat hierarchy: 400 body, 500 sub-heads, 600 buttons/labels, 700 headings. No tracking-tight.
+ * ========================================================================================================= */
+
+h1 {
+	font-size: 1.4rem;
+	font-weight: 700;
+	line-height: 1.25;
+}
+
+h2 {
+	font-size: 1.1rem;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+h3 {
+	font-size: 1rem;
+	font-weight: 600;
+}
+
+.small {
+	font-size: 0.82rem;
+}
+
+.muted {
+	color: var(--fg-muted);
+}
+
+.faint {
+	color: var(--fg-faint);
+}
+
+/* Definition-list statistics — the booru "Statistics" block */
+.stat-grid {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0.15rem 0.75rem;
+	font-size: 0.85rem;
+}
+
+.stat-grid dt {
+	color: var(--fg-muted);
+}
+
+.stat-grid dd {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}

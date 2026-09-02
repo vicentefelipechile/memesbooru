@@ -1,0 +1,60 @@
+/* =========================================================================================================
+ * COMMENTS (v2)
+ * Plain list, separated by top borders — no cards.
+ * ========================================================================================================= */
+
+.comments {
+	margin-top: 1.4rem;
+}
+
+.comments h2 {
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--fg-muted);
+	margin-bottom: 0.6rem;
+}
+
+.comment {
+	border-top: 1px solid var(--border);
+	padding: 0.6rem 0;
+}
+
+.comment .byline {
+	font-size: 0.78rem;
+	color: var(--fg-muted);
+	margin-bottom: 0.25rem;
+}
+
+.comment .byline .author {
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.comment .body {
+	font-size: 0.92rem;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.comments .none {
+	padding: 1rem 0;
+	color: var(--fg-muted);
+	font-size: 0.88rem;
+}
+
+.comment-form {
+	margin-top: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	max-width: 560px;
+}
+
+.comment-form textarea {
+	min-height: 84px;
+}
+
+.comment-form button {
+	align-self: flex-start;
+}

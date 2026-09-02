@@ -1,0 +1,187 @@
+/* =========================================================================================================
+ * LAYOUT (v2)
+ * Shell: compact header, main container, footer. Flat nav, no glass, no sticky blur.
+ * ========================================================================================================= */
+
+.site-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	border-bottom: 1px solid var(--border);
+	background: var(--bg-alt);
+	padding: 0.5rem 1rem;
+}
+
+.brand {
+	font-size: 1rem;
+	font-weight: 700;
+	color: var(--fg);
+	letter-spacing: normal;
+}
+
+.brand:hover {
+	text-decoration: none;
+}
+
+.brand .brand-accent {
+	color: var(--accent-dark);
+}
+
+.site-nav {
+	display: flex;
+	align-items: center;
+	gap: 0.9rem;
+	flex-wrap: wrap;
+	font-size: 0.9rem;
+}
+
+.site-nav a {
+	color: var(--fg);
+}
+
+.site-nav a:hover {
+	color: var(--link-hover);
+	text-decoration: none;
+}
+
+.site-nav .rank {
+	font-size: 0.75rem;
+	color: var(--fg-muted);
+}
+
+.site-main {
+	max-width: 1180px;
+	margin: 0 auto;
+	padding: 1rem 1rem 2rem;
+}
+
+.site-footer {
+	border-top: 1px solid var(--border);
+	padding: 0.75rem 1rem;
+	font-size: 0.75rem;
+	color: var(--fg-faint);
+	text-align: center;
+}
+
+.site-footer .counts {
+	margin-bottom: 0.25rem;
+}
+
+.page-head {
+	margin-bottom: 0.9rem;
+}
+
+.page-head h1 {
+	display: inline;
+}
+
+.status-line {
+	margin-top: 0.6rem;
+	font-size: 0.85rem;
+}
+
+/* Search bar + sort — booru style, flat */
+.search-bar {
+	margin-bottom: 0.9rem;
+}
+
+.search-bar .field {
+	display: block;
+	width: 100%;
+}
+
+.sort-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 0.35rem;
+	font-size: 0.85rem;
+}
+
+.sort-row .sep {
+	color: var(--fg-faint);
+}
+
+.sort-row a {
+	color: var(--fg-muted);
+}
+
+.sort-row a.on {
+	color: var(--fg);
+	font-weight: 600;
+}
+
+.selected-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem;
+	margin-top: 0.45rem;
+}
+
+.selected-tags .tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	font-size: 0.82rem;
+}
+
+.selected-tags .tag a {
+	color: var(--link);
+}
+
+.selected-tags .tag .remove {
+	border: 0;
+	background: none;
+	color: var(--fg-muted);
+	padding: 0 0.1rem;
+	font-size: 0.85rem;
+	line-height: 1;
+}
+
+.selected-tags .tag .remove:hover {
+	color: var(--err);
+}
+
+.autocomplete {
+	margin-top: 0.25rem;
+}
+
+.autocomplete ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border: 1px solid var(--border);
+	background: var(--bg-raise);
+}
+
+.autocomplete li a {
+	display: block;
+	padding: 0.3rem 0.6rem;
+	font-size: 0.85rem;
+}
+
+.autocomplete li a:hover {
+	background: var(--bg-alt);
+	text-decoration: none;
+}
+
+.autocomplete li .usage {
+	float: right;
+	color: var(--fg-faint);
+}
+
+/* Empty / error states */
+.empty,
+.error {
+	padding: 2rem 1rem;
+	text-align: center;
+	color: var(--fg-muted);
+}
+
+.empty .detail,
+.error .detail {
+	margin-top: 0.4rem;
+	font-size: 0.82rem;
+	color: var(--fg-faint);
+}

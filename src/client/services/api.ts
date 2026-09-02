@@ -1,4 +1,4 @@
-import { HealthResponseSchema, SearchResponseSchema, PostResponseSchema, AutocompleteResponseSchema, UserResponseSchema, CreatePostResponseSchema, CommentListResponseSchema } from '../../validators';
+import { HealthResponseSchema, SearchResponseSchema, PostResponseSchema, AutocompleteResponseSchema, UserResponseSchema, CreatePostResponseSchema, CommentListResponseSchema, FavoritesResponseSchema, TotpSetupResponseSchema, TotpVerifyResponseSchema } from '../../validators';
 import type { JsonValue } from '../../types';
 
 export async function apiGet(path: string): Promise<JsonValue> {
@@ -57,5 +57,26 @@ export async function getComments(publicId: string) {
 	const raw = await apiGet(`/api/comments/post/${publicId}`);
 	const parsed = CommentListResponseSchema.safeParse(raw);
 	if (!parsed.success) return { data: [] };
+	return parsed.data;
+}
+
+export async function getFavorites() {
+	const raw = await apiGet('/api/favorites');
+	const parsed = FavoritesResponseSchema.safeParse(raw);
+	if (!parsed.success) return { data: [] };
+	return parsed.data;
+}
+
+export async function totpSetup() {
+	const raw = await apiPost('/api/auth/totp/setup', {});
+	const parsed = TotpSetupResponseSchema.safeParse(raw);
+	if (!parsed.success) return null;
+	return parsed.data;
+}
+
+export async function totpVerify(code: string) {
+	const raw = await apiPost('/api/auth/totp/verify', { code });
+	const parsed = TotpVerifyResponseSchema.safeParse(raw);
+	if (!parsed.success) return null;
 	return parsed.data;
 }

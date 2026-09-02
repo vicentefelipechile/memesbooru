@@ -11,6 +11,7 @@
 import type { DB } from '../db/client';
 import * as postRepo from '../repositories/post-repository';
 import * as tagRepo from '../repositories/tag-repository';
+import * as userRepo from '../repositories/user-repository';
 import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors';
 import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult } from '../types';
 import { toPostId, toPublicId, toUserId } from '../types';
@@ -59,19 +60,22 @@ export class PostService {
 			return {
 				...row,
 				author_id: toUserId(row.author_id),
+				author_username: null,
 				canonical_post_id: row.canonical_post_id ? toPostId(row.canonical_post_id) : null,
 				lowVariantKey: null,
 				mediumVariantKey: null,
 				restricted: true,
-				tags: [] as string[],
+				tags: [] as PostDetailResult['tags'],
 			} satisfies PostDetailResult;
 		}
 		const tags = await tagRepo.findByPostId(this.db, row.post_id);
+		const author = await userRepo.findById(this.db, row.author_id);
 		return {
 			...row,
 			author_id: toUserId(row.author_id),
+			author_username: author?.username ?? null,
 			canonical_post_id: row.canonical_post_id ? toPostId(row.canonical_post_id) : null,
-			tags: tags.map((t) => t.normalized_name),
+			tags: tags.map((t) => ({ name: t.normalized_name, category: t.category, count: t.usage_count })),
 		} satisfies PostDetailResult;
 	}
 

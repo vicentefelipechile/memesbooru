@@ -1,23 +1,39 @@
-import { renderHeader } from '../components/header.js';
-import { getMe } from '../services/api.js';
+import { store } from '../state/store.js';
+
 export async function renderUpload(): Promise<string> {
-	const { user } = await getMe().catch(() => ({ user: null }));
-	if (!user) return `${renderHeader(null)}<main class="page"><p>Necesitas login con Google para subir.</p><a href="/api/auth/google">Login</a></main>`;
+	const user = store.get().user;
+	if (!user) return `<div class="empty">Necesitas entrar con Google para subir.<div class="detail"><a href="/api/auth/google">Entrar con Google</a></div></div>`;
 	return `
-    ${renderHeader(user)}
-    <main class="page">
-      <h1>Subir meme</h1>
-      <form id="upload-form">
-        <input type="file" id="file" accept="image/*,video/mp4,video/webm,image/gif" required />
-        <input id="title" placeholder="Titulo (opcional)" maxlength="120" />
-        <input id="tags" placeholder="tags separados por espacio: pepe doge reaccion" required />
-        <select id="mediaType"><option value="image">Imagen</option><option value="gif">GIF</option><option value="video">Video (solo trusted)</option></select>
-        <button>Subir</button>
-      </form>
-      <div id="upload-status"></div>
-      <p class="hint">Cooldownd: cuentas nuevas 1 subida/hora. Videos solo trusted. Original se conserva, se generan variantes low/medium.</p>
-    </main>`;
+    <div class="page-head"><h1>Subir meme</h1></div>
+    <form id="upload-form" class="form-stack">
+      <div class="field">
+        <label for="file">Archivo</label>
+        <input type="file" id="file" name="file" accept="image/*,video/mp4,video/webm,image/gif" required />
+      </div>
+      <div class="field">
+        <label for="title">Título (opcional)</label>
+        <input id="title" name="title" placeholder="Titulo" maxlength="120" />
+      </div>
+      <div class="field">
+        <label for="tags">Tags</label>
+        <input id="tags" name="tags" placeholder="pepe doge reaccion" required />
+        <span class="hint">Separados por espacio, en minusculas.</span>
+      </div>
+      <div class="field">
+        <label for="mediaType">Tipo</label>
+        <select id="mediaType" name="mediaType">
+          <option value="image">Imagen</option>
+          <option value="gif">GIF</option>
+          <option value="video">Video (solo trusted)</option>
+        </select>
+      </div>
+      <button type="submit" class="primary">Subir</button>
+    </form>
+    <div id="upload-status" class="form-msg" aria-live="polite"></div>
+    <p class="hint" style="margin-top:1rem">Cuentas nuevas: 1 subida por hora. Los videos requieren rango trusted. Se generan variantes low/medium automaticamente.</p>
+  `;
 }
+
 export function bindUpload(): void {
 	const form = document.getElementById('upload-form');
 	if (!(form instanceof HTMLFormElement)) return;
@@ -28,18 +44,35 @@ export function bindUpload(): void {
 		const titleEl = document.getElementById('title');
 		const status = document.getElementById('upload-status');
 		if (!(tagsEl instanceof HTMLInputElement) || !(mediaTypeEl instanceof HTMLSelectElement) || !(titleEl instanceof HTMLInputElement) || !(status instanceof HTMLElement)) return;
-		const tags = tagsEl.value.trim().split(/\s+/);
+		const tags = tagsEl.value.trim().split(/\s+/).filter(Boolean);
+		if (tags.length === 0) {
+			status.textContent = 'Escribe al menos un tag.';
+			return;
+		}
 		const mediaType = mediaTypeEl.value;
-		const title = titleEl.value;
+		const title = titleEl.value.trim() || null;
 		status.textContent = 'Subiendo...';
-		const res = await fetch('/api/posts', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ title, tags, mediaType }) });
-		if (!res.ok) status.textContent = `Error: ${await res.text()}`;
-		else {
-			const raw = await res.json();
-			let publicId = '';
-			if (typeof raw === 'object' && raw !== null && 'publicId' in raw && typeof raw.publicId === 'string') publicId = raw.publicId;
-			status.textContent = `Creado ${publicId} — en procesamiento (variant low). Redirigiendo...`;
-			setTimeout(() => location.assign(`/post/${publicId}`), 800);
+		const res = await fetch('/api/posts', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			credentials: 'include',
+			body: JSON.stringify({ title, tags, media_type: mediaType }),
+		});
+		if (!res.ok) {
+			const body = await res.text().catch(() => '');
+			status.textContent = `Error: ${body}`;
+			return;
+		}
+		const raw = (await res.json().catch(() => null)) as { publicId?: string } | null;
+		const publicId = raw?.publicId;
+		if (publicId) {
+			status.textContent = 'Publicacion creada — redirigiendo...';
+			setTimeout(() => {
+				history.pushState(null, '', `/post/${publicId}`);
+				window.dispatchEvent(new PopStateEvent('popstate'));
+			}, 600);
+		} else {
+			status.textContent = 'Respuesta invalida del servidor.';
 		}
 	});
 }

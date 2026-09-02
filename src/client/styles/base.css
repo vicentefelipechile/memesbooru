@@ -1,0 +1,92 @@
+/* =========================================================================================================
+ * BASE (v2)
+ * Reset + element defaults. Light utilitarian booru base — no cards, no gradients.
+ * ========================================================================================================= */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	font-family: var(--font-sans);
+	font-size: 15px;
+	line-height: 1.5;
+	background: var(--bg);
+	color: var(--fg);
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+dl,
+dd {
+	margin: 0;
+}
+
+a {
+	color: var(--link);
+	text-decoration: none;
+}
+
+a:hover {
+	color: var(--link-hover);
+	text-decoration: underline;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+button {
+	font-family: inherit;
+	font-size: inherit;
+	line-height: inherit;
+	cursor: pointer;
+}
+
+img {
+	display: block;
+	max-width: 100%;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/* Reduced motion: stillness is the default; respect user preference */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* Skip link for keyboard users */
+.skip-link {
+	position: absolute;
+	left: -9999px;
+	top: 0;
+	background: var(--bg-raise);
+	padding: 0.5rem 0.75rem;
+	z-index: 100;
+}
+
+.skip-link:focus {
+	left: 0;
+}

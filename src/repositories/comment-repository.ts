@@ -12,15 +12,18 @@ import { queryOne, queryAll, batch, type DB } from '../db/client';
 import type { CommentRow } from '../db/schema';
 import { decodeCursor, type CommentCursor } from '../helpers/cursor';
 import { NotFoundError, ForbiddenError } from '../domain/errors';
+import type { CommentResult } from '../types';
 
 // =========================================================================================================
 // Queries
 // =========================================================================================================
 
-export async function listByPost(db: DB, postId: number, cursor?: string, limit = 20): Promise<CommentRow[]> {
+export async function listByPost(db: DB, postId: number, cursor?: string, limit = 20): Promise<CommentResult[]> {
 	const cursorVal = cursor ? decodeCursor<CommentCursor>(cursor) : null;
+	const base =
+		"SELECT c.*, u.username AS author_username FROM comments c LEFT JOIN users u ON u.id = c.author_id WHERE c.post_id = ? AND c.status = 'visible'";
 	if (cursorVal) {
-		return queryAll<CommentRow>(db, "SELECT * FROM comments WHERE post_id = ? AND status = 'visible' AND (created_at > ? OR (created_at = ? AND id > ?)) ORDER BY created_at ASC, id ASC LIMIT ?", [
+		return queryAll<CommentResult>(db, `${base} AND (c.created_at > ? OR (c.created_at = ? AND c.id > ?)) ORDER BY c.created_at ASC, c.id ASC LIMIT ?`, [
 			postId,
 			cursorVal.created_at,
 			cursorVal.created_at,
@@ -28,7 +31,7 @@ export async function listByPost(db: DB, postId: number, cursor?: string, limit 
 			limit,
 		]);
 	}
-	return queryAll<CommentRow>(db, "SELECT * FROM comments WHERE post_id = ? AND status = 'visible' ORDER BY created_at ASC, id ASC LIMIT ?", [postId, limit]);
+	return queryAll<CommentResult>(db, `${base} ORDER BY c.created_at ASC, c.id ASC LIMIT ?`, [postId, limit]);
 }
 
 export async function findById(db: DB, id: number): Promise<CommentRow | null> {

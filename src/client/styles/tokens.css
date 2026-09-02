@@ -1,0 +1,116 @@
+/* =========================================================================================================
+ * TOKENS (v2)
+ * Local font (@fontsource self-hosted) + 4 user-selectable light themes.
+ * Single source of truth for palette. Never hardcode hex in markup/components.
+ * ========================================================================================================= */
+
+/* IBM Plex Sans — self-hosted woff2 (bundled by Vite into dist/, no CDN). Latin + latin-ext only. */
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-600.css';
+@import '@fontsource/ibm-plex-sans/latin-700.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-700.css';
+
+/* Default theme: android (green accent, light utilitarian base) */
+:root {
+	--font-sans: 'IBM Plex Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+	--radius: 2px;
+
+	--bg: #f6f6f6;
+	--bg-alt: #ececec;
+	--bg-raise: #ffffff;
+	--border: #d6d6d6;
+	--border-strong: #b8b8b8;
+
+	--fg: #1f1f1f;
+	--fg-muted: #565656;
+	--fg-faint: #7a7a7a;
+
+	--link: #0f9d58;
+	--link-hover: #0b7a45;
+	--accent: #3ddc84;
+	--accent-dark: #073042;
+
+	--ok: #1a9d4f;
+	--warn: #b8860b;
+	--err: #c62828;
+	--info: #1565c0;
+
+	--focus-ring: #3ddc84;
+}
+
+[data-theme='solarized'] {
+	--bg: #fdf6e3;
+	--bg-alt: #eee8d5;
+	--bg-raise: #fff9e8;
+	--border: #e0d9c2;
+	--border-strong: #c8bfa6;
+
+	--fg: #073642;
+	--fg-muted: #586e75;
+	--fg-faint: #7a8a8a;
+
+	--link: #268bd2;
+	--link-hover: #1e6ea8;
+	--accent: #cb4b16;
+	--accent-dark: #d33682;
+
+	--ok: #859900;
+	--warn: #b58900;
+	--err: #dc322f;
+	--info: #2aa198;
+
+	--focus-ring: #268bd2;
+}
+
+[data-theme='gruvbox'] {
+	--bg: #fbf1c7;
+	--bg-alt: #ebdbb2;
+	--bg-raise: #fffdf0;
+	--border: #d5c4a1;
+	--border-strong: #b8a97f;
+
+	--fg: #3c3836;
+	--fg-muted: #7c6f64;
+	--fg-faint: #928374;
+
+	--link: #af3a03;
+	--link-hover: #9d2f02;
+	--accent: #79740e;
+	--accent-dark: #076678;
+
+	--ok: #79740e;
+	--warn: #b57614;
+	--err: #9d0006;
+	--info: #458588;
+
+	--focus-ring: #af3a03;
+}
+
+[data-theme='nord'] {
+	--bg: #eceff4;
+	--bg-alt: #e5e9f0;
+	--bg-raise: #f4f6fa;
+	--border: #d8dee9;
+	--border-strong: #c3cddd;
+
+	--fg: #2e3440;
+	--fg-muted: #4c566a;
+	--fg-faint: #6b7484;
+
+	--link: #5e81ac;
+	--link-hover: #4c6f96;
+	--accent: #88c0d0;
+	--accent-dark: #4c566a;
+
+	--ok: #8fbcbb;
+	--warn: #d08770;
+	--err: #bf616a;
+	--info: #81a1c1;
+
+	--focus-ring: #5e81ac;
+}
