@@ -13,7 +13,7 @@ export type PostStatus = 'uploading' | 'processing' | 'available' | 'duplicate' 
 export type MediaType = 'image' | 'gif' | 'video';
 
 export interface UserDTO {
-	id: number;
+	id: UserId;
 	username: string;
 	displayName: string | null;
 	rank: UserRank;
@@ -22,22 +22,18 @@ export interface UserDTO {
 	createdAt: number;
 }
 
-export interface PostDTO {
-	id: string;
-	author: UserDTO | null;
-	mediaType: MediaType;
-	status: PostStatus;
-	title: string | null;
-	score: number;
-	favoriteCount: number;
-	commentCount: number;
-	lowVariantKey: string | null;
-	mediumVariantKey: string | null;
-	createdAt: number;
-	publishedAt: number | null;
-	canonicalPostId: number | null;
-	tags: string[];
-}
+export type PostDTO = DeepReadonly<
+	CamelCased<Omit<import('./db/schema').PostRow, 'author_id' | 'public_id' | 'canonical_post_id'>> & {
+		id: PublicId;
+		author: UserDTO | null;
+		mediaType: MediaType;
+		status: PostStatus;
+		canonicalPostId: PostId | null;
+		tags: string[];
+		lowVariantKey: string | null;
+		mediumVariantKey: string | null;
+	}
+>;
 
 export interface TagDTO {
 	id: number;
@@ -48,11 +44,11 @@ export interface TagDTO {
 }
 
 export interface CommentDTO {
-	id: number;
-	postId: number;
+	id: CommentId;
+	postId: PostId;
 	author: UserDTO;
 	body: string;
-	parentId: number | null;
+	parentId: CommentId | null;
 	createdAt: number;
 	status: string;
 }
@@ -65,7 +61,7 @@ export interface PaginatedResponse<T> {
 }
 
 export interface AuthUser {
-	id: number;
+	id: UserId;
 	username: string;
 	rank: UserRank;
 	status: UserStatus;
@@ -81,18 +77,43 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type ErrorDetails = JsonValue | ZodIssue[] | readonly ZodIssue[] | ({ redirectTo?: string; retryAfter?: number } & Record<string, JsonValue>);
 
+// Branded IDs — nominal typing to prevent mixing number ids
+declare const Brand: unique symbol;
+export type Brand<T, B extends string> = T & { readonly [Brand]: B };
+export type UserId = Brand<number, 'UserId'>;
+export type PostId = Brand<number, 'PostId'>;
+export type PublicId = Brand<string, 'PublicId'>;
+export type TagId = Brand<number, 'TagId'>;
+export type CommentId = Brand<number, 'CommentId'>;
+
+export const toUserId = (n: number): UserId => n as UserId;
+export const toPostId = (n: number): PostId => n as PostId;
+export const toPublicId = (s: string): PublicId => s as PublicId;
+export const toTagId = (n: number): TagId => n as TagId;
+export const toCommentId = (n: number): CommentId => n as CommentId;
+
 export type QueueMessage =
-	| { type: 'process_media'; postId: number }
-	| { type: 'recalculate_post_score'; postId: number }
+	| { type: 'process_media'; postId: PostId }
+	| { type: 'recalculate_post_score'; postId: PostId }
 	| { type: 'update_tag_usage' }
 	| { type: 'cleanup_expired_sessions' };
 
+// Snake -> camel mapped type + helpers
+type SnakeToCamel<S extends string> = S extends `${infer H}_${infer T}` ? `${H}${Capitalize<SnakeToCamel<T>>}` : S;
+export type CamelCased<T> = { [K in keyof T as SnakeToCamel<K & string>]: T[K] };
+export type DeepReadonly<T> = T extends (...args: unknown[]) => unknown ? T : { readonly [K in keyof T]: DeepReadonly<T[K]> };
+export type NoInfer<T> = [T][T extends unknown ? 0 : never];
+
+// Variadic tuple helper — preserves args tuple for typed wrappers
+export type VariadicFn<Args extends readonly unknown[], R> = (...args: Args) => R;
+export type AwaitedReturn<T extends (...args: never[]) => Promise<unknown>> = Awaited<ReturnType<T>>;
+
 export type PostSearchResult = import('./db/schema').PostListingRow;
 export type PostDetailResult = import('./db/schema').PostListingRow & {
-	author_id: number;
+	author_id: UserId;
 	title: string | null;
 	description: string | null;
-	canonical_post_id: number | null;
+	canonical_post_id: PostId | null;
 	tags: string[];
 	restricted?: boolean;
 	lowVariantKey?: string | null;
@@ -106,7 +127,7 @@ export type PostDetailResult = import('./db/schema').PostListingRow & {
 export type EntityId = Pick<ReportRow, 'id'>;
 export type CreatedReportResult = Pick<ReportRow, 'id'>;
 export type CreatedCommentResult = Pick<CommentRow, 'id'>;
-export type CreatedPostResult = { publicId: string; postId: number };
+export type CreatedPostResult = { publicId: PublicId; postId: PostId };
 
 // =========================================================================================================
 // Service input helpers — reuse validator inferences + Row field types via indexed access

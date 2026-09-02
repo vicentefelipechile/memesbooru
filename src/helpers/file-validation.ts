@@ -13,17 +13,21 @@ export function detectMime(bytes: Uint8Array): string | null {
 	return null;
 }
 
-export const MAX_FILE_SIZES: Record<string, number> = {
+export const MAX_FILE_SIZES = {
 	'image/jpeg': 10 * 1024 * 1024,
 	'image/png': 10 * 1024 * 1024,
 	'image/webp': 10 * 1024 * 1024,
 	'image/gif': 20 * 1024 * 1024,
 	'video/mp4': 100 * 1024 * 1024,
 	'video/webm': 100 * 1024 * 1024,
-};
+} as const satisfies Record<string, number>;
 
 export function validateFileSize(mime: string, size: number): boolean {
-	const max = MAX_FILE_SIZES[mime];
+	const max = (MAX_FILE_SIZES as Record<string, number>)[mime];
 	if (!max) return false;
 	return size <= max;
+}
+
+export function assertValidMime(mime: string): asserts mime is keyof typeof MAX_FILE_SIZES {
+	if (!(mime in MAX_FILE_SIZES)) throw new Error(`Unsupported mime: ${mime}`);
 }

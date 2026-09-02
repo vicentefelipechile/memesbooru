@@ -25,11 +25,11 @@ export const decodeCursor = decodeCursorHelper;
 // Sorting whitelist (never interpolate user input)
 // =========================================================================================================
 
-const SORT_COLUMNS: Record<string, string> = {
+const SORT_COLUMNS = {
 	score: 'pl.score',
 	published_at: 'pl.published_at',
 	created_at: 'p.created_at',
-};
+} as const satisfies Record<string, string>;
 
 // =========================================================================================================
 // Queries
@@ -199,6 +199,13 @@ export type CreatePostData = {
 // =========================================================================================================
 // Commands
 // =========================================================================================================
+
+export function assertPostId(id: number): asserts id is import('../types').PostId {
+	if (!Number.isInteger(id) || id < 1) throw new Error(`Invalid PostId: ${id}`);
+}
+export function isPostId(id: number): id is import('../types').PostId {
+	return Number.isInteger(id) && id >= 1;
+}
 
 export async function createPost(db: DB, data: CreatePostData): Promise<PostRow['id']> {
 	const normalized = data.tags.map(normalizeTag).filter(Boolean);

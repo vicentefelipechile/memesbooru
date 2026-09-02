@@ -50,10 +50,10 @@ export { parseQueryWithArrays };
 // Enums
 // =========================================================================================================
 
-export const USER_RANKS = ['new', 'normal', 'trusted', 'restricted', 'banned'] as const;
-export const POST_STATUSES = ['uploading', 'processing', 'available', 'duplicate', 'rejected', 'hidden'] as const;
-export const MEDIA_TYPES = ['image', 'gif', 'video'] as const;
-export const TAG_CATEGORIES = ['general', 'artist', 'character', 'series', 'meta', 'copyright'] as const;
+export const USER_RANKS = ['new', 'normal', 'trusted', 'restricted', 'banned'] as const satisfies readonly string[];
+export const POST_STATUSES = ['uploading', 'processing', 'available', 'duplicate', 'rejected', 'hidden'] as const satisfies readonly string[];
+export const MEDIA_TYPES = ['image', 'gif', 'video'] as const satisfies readonly string[];
+export const TAG_CATEGORIES = ['general', 'artist', 'character', 'series', 'meta', 'copyright'] as const satisfies readonly string[];
 
 // =========================================================================================================
 // Schemas

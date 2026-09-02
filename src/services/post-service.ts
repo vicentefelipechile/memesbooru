@@ -13,6 +13,7 @@ import * as postRepo from '../repositories/post-repository';
 import * as tagRepo from '../repositories/tag-repository';
 import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors';
 import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult } from '../types';
+import { toPostId, toPublicId, toUserId } from '../types';
 import type { PostCursor } from '../helpers/cursor';
 import type { CreatePostInput, SearchQueryInput } from '../validators';
 import type { PostRow } from '../db/schema';
@@ -55,10 +56,23 @@ export class PostService {
 		}
 		const canSeeVideo = viewer?.rank === 'trusted';
 		if (row.media_type === 'video' && !canSeeVideo) {
-			return { ...row, lowVariantKey: null, mediumVariantKey: null, restricted: true, tags: [] };
+			return {
+				...row,
+				author_id: toUserId(row.author_id),
+				canonical_post_id: row.canonical_post_id ? toPostId(row.canonical_post_id) : null,
+				lowVariantKey: null,
+				mediumVariantKey: null,
+				restricted: true,
+				tags: [] as string[],
+			} satisfies PostDetailResult;
 		}
 		const tags = await tagRepo.findByPostId(this.db, row.post_id);
-		return { ...row, tags: tags.map((t) => t.normalized_name) };
+		return {
+			...row,
+			author_id: toUserId(row.author_id),
+			canonical_post_id: row.canonical_post_id ? toPostId(row.canonical_post_id) : null,
+			tags: tags.map((t) => t.normalized_name),
+		} satisfies PostDetailResult;
 	}
 
 	async create(viewer: AuthUser, input: CreatePostServiceInput, queue?: Queue): Promise<CreatedPostResult> {
@@ -69,10 +83,10 @@ export class PostService {
 			const last = (await postRepo.getLastUploadAt(this.db, viewer.id)) ?? 0;
 			if (Date.now() - last < 3600 * 1000) throw new ValidationError('cooldown 1h para cuentas nuevas', { retryAfter: 3600 * 1000 - (Date.now() - last) });
 		}
-		const publicId = crypto.randomUUID().slice(0, 8);
+		const publicId = toPublicId(crypto.randomUUID().slice(0, 8));
 		const checksum = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(publicId + Date.now()));
-		const originalKey = `media/${publicId}/original`;
-		const postId = await postRepo.createPost(this.db, { publicId, authorId: viewer.id, mediaType: input.mediaType, tags: input.tags, title: input.title ?? null, checksum, originalKey });
+		const originalKey = `media/${publicId}/original` as const satisfies `media/${string}/original`;
+		const postId = toPostId(await postRepo.createPost(this.db, { publicId, authorId: viewer.id, mediaType: input.mediaType, tags: input.tags, title: input.title ?? null, checksum, originalKey }));
 		await postRepo.updateUserActivityOnUpload(this.db, viewer.id);
 		if (queue) await queue.send({ type: 'process_media', postId });
 		return { publicId, postId };

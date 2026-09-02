@@ -21,3 +21,7 @@ export function decodeCursor<T>(c: string): T | null {
 		return null;
 	}
 }
+
+export function assertValidCursor<T>(value: T | null): asserts value is T {
+	if (value === null) throw new Error('Invalid cursor');
+}

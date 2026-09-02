@@ -4,7 +4,7 @@
 // Client IP and origin allowlist. Single source for rate-limits and security middleware.
 // =========================================================================================================
 
-export const ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'] as const;
+export const ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'] as const satisfies readonly string[];
 
 export function isLocalRequest(c: { req: { header: (name: string) => string | undefined; url?: string } }): boolean {
 	const host = c.req.header('host') ?? '';
