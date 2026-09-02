@@ -122,9 +122,9 @@ router.post('/totp/setup', requireAuth, async (c) => {
 // =========================================================================================================
 
 router.post('/totp/verify', requireAuth, async (c) => {
-	let body: unknown;
+	let body: import('../../types').JsonValue;
 	try {
-		body = await c.req.json();
+		body = (await c.req.json()) as import('../../types').JsonValue;
 	} catch {
 		return fail(c, 'Invalid JSON', 400);
 	}

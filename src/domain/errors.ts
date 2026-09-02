@@ -4,10 +4,12 @@
 // Generic error hierarchy — services throw these, routes let them bubble to app.onError.
 // =========================================================================================================
 
+import type { ErrorDetails } from '../types';
+
 export class DomainError extends Error {
 	readonly status: number;
-	readonly details?: unknown;
-	constructor(message: string, status: number, details?: unknown) {
+	readonly details?: ErrorDetails;
+	constructor(message: string, status: number, details?: ErrorDetails) {
 		super(message);
 		this.name = this.constructor.name;
 		this.status = status;
@@ -34,7 +36,7 @@ export class ForbiddenError extends DomainError {
 }
 
 export class ValidationError extends DomainError {
-	constructor(msg = 'Invalid input', details?: unknown) {
+	constructor(msg = 'Invalid input', details?: ErrorDetails) {
 		super(msg, 400, details);
 	}
 }

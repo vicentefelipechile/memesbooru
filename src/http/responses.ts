@@ -6,8 +6,9 @@
 
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import type { ErrorDetails } from '../types';
 
-export function fail(c: Context, message: string, status: ContentfulStatusCode = 400, details?: unknown) {
+export function fail(c: Context, message: string, status: ContentfulStatusCode = 400, details?: ErrorDetails) {
 	return c.json(details === undefined ? { error: message } : { error: message, details }, status);
 }
 

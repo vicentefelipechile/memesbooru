@@ -1,14 +1,15 @@
 import { HealthResponseSchema, SearchResponseSchema, PostResponseSchema, AutocompleteResponseSchema, UserResponseSchema, CreatePostResponseSchema, CommentListResponseSchema } from '../../validators';
+import type { JsonValue } from '../../types';
 
-export async function apiGet(path: string): Promise<unknown> {
+export async function apiGet(path: string): Promise<JsonValue> {
 	const res = await fetch(path, { credentials: 'include' });
 	if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-	return await res.json();
+	return (await res.json()) as JsonValue;
 }
-export async function apiPost(path: string, body: unknown): Promise<unknown> {
+export async function apiPost(path: string, body: JsonValue): Promise<JsonValue> {
 	const res = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
 	if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-	return await res.json();
+	return (await res.json()) as JsonValue;
 }
 
 export async function getHealth() {

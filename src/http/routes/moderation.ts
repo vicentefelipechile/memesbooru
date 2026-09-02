@@ -28,7 +28,7 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
 router.post('/reports', requireAuth, async (c) => {
 	const db = c.env.DB;
-	const parsedBody = await parseJsonBody<unknown>(c);
+	const parsedBody = await parseJsonBody(c);
 	if (!parsedBody.ok) return parsedBody.response;
 	const parsed = ReportSchema.safeParse(parsedBody.data);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
@@ -45,7 +45,7 @@ router.post('/reports', requireAuth, async (c) => {
 
 router.post('/actions', requireAuth, async (c) => {
 	const db = c.env.DB;
-	const parsedBody = await parseJsonBody<unknown>(c);
+	const parsedBody = await parseJsonBody(c);
 	if (!parsedBody.ok) return parsedBody.response;
 	const parsed = ModerationActionSchema.safeParse(parsedBody.data);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);

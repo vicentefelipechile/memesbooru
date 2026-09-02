@@ -10,7 +10,7 @@ import type { CommentRow, PostListingRow } from '../db/schema';
 export type CommentCursor = Pick<CommentRow, 'created_at' | 'id'>;
 export type PostCursor = { id: PostListingRow['post_id'] } & Partial<Pick<PostListingRow, 'score' | 'published_at'>>;
 
-export function encodeCursor(obj: Record<string, unknown>): string {
+export function encodeCursor<T extends object>(obj: T): string {
 	return btoa(JSON.stringify(obj));
 }
 

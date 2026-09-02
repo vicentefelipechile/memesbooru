@@ -6,8 +6,9 @@
 
 import type { Context } from 'hono';
 import { fail } from '../http/responses';
+import type { JsonValue } from '../types';
 
-export async function parseJsonBody<T>(c: Context): Promise<{ ok: true; data: T } | { ok: false; response: Response }> {
+export async function parseJsonBody<T extends JsonValue = JsonValue>(c: Context): Promise<{ ok: true; data: T } | { ok: false; response: Response }> {
 	try {
 		const data = (await c.req.json()) as T;
 		return { ok: true, data };

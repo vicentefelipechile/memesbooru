@@ -5,6 +5,7 @@
 // =========================================================================================================
 
 import type { ReportRow, CommentRow } from './db/schema';
+import type { ZodIssue } from 'zod';
 
 export type UserRank = 'new' | 'normal' | 'trusted' | 'restricted' | 'banned';
 export type UserStatus = 'active' | 'restricted' | 'banned';
@@ -70,6 +71,33 @@ export interface AuthUser {
 	status: UserStatus;
 	isAdmin: boolean;
 }
+
+// =========================================================================================================
+// Primitive helpers — zero unknown
+// =========================================================================================================
+
+export type SqlParam = string | number | boolean | null | ArrayBuffer | Uint8Array;
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+export type ErrorDetails = JsonValue | ZodIssue[] | readonly ZodIssue[] | ({ redirectTo?: string; retryAfter?: number } & Record<string, JsonValue>);
+
+export type QueueMessage =
+	| { type: 'process_media'; postId: number }
+	| { type: 'recalculate_post_score'; postId: number }
+	| { type: 'update_tag_usage' }
+	| { type: 'cleanup_expired_sessions' };
+
+export type PostSearchResult = import('./db/schema').PostListingRow;
+export type PostDetailResult = import('./db/schema').PostListingRow & {
+	author_id: number;
+	title: string | null;
+	description: string | null;
+	canonical_post_id: number | null;
+	tags: string[];
+	restricted?: boolean;
+	lowVariantKey?: string | null;
+	mediumVariantKey?: string | null;
+};
 
 // =========================================================================================================
 // Utility-derived entity results (never inline { id: number })

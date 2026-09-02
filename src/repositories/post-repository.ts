@@ -8,7 +8,7 @@
 // Imports
 // =========================================================================================================
 
-import { queryOne, queryAll, batch, type DB } from '../db/client';
+import { queryOne, queryAll, batch, type DB, type SqlParam } from '../db/client';
 import type { PostRow, PostListingRow, MediaAssetRow } from '../db/schema';
 import { encodeCursor as encodeCursorHelper, decodeCursor as decodeCursorHelper, type PostCursor } from '../helpers/cursor';
 import { normalizeTag } from '../validators';
@@ -139,7 +139,7 @@ export async function searchByTags(db: DB, tagIds: number[], opts: { sort: 'rece
 	const idPlaceholders = ids.map(() => '?').join(',');
 	const orderColumn = opts.sort === 'popular' ? 'score DESC, post_id DESC' : 'published_at DESC, post_id DESC';
 	let sql = `SELECT * FROM post_listing WHERE status = 'available' AND post_id IN (${idPlaceholders})`;
-	const params: unknown[] = [...ids];
+	const params: SqlParam[] = [...ids];
 	if (cursor) {
 		if (opts.sort === 'popular' && cursor.score !== undefined) {
 			sql += ` AND (score < ? OR (score = ? AND post_id < ?))`;

@@ -5,8 +5,9 @@
 // =========================================================================================================
 
 export type DB = D1Database;
+export type SqlParam = string | number | boolean | null | ArrayBuffer | Uint8Array;
 
-export async function queryOne<T>(db: DB, sql: string, params: unknown[]): Promise<T | null> {
+export async function queryOne<T>(db: DB, sql: string, params: SqlParam[]): Promise<T | null> {
 	return (
 		(await db
 			.prepare(sql)
@@ -15,7 +16,7 @@ export async function queryOne<T>(db: DB, sql: string, params: unknown[]): Promi
 	);
 }
 
-export async function queryAll<T>(db: DB, sql: string, params: unknown[]): Promise<T[]> {
+export async function queryAll<T>(db: DB, sql: string, params: SqlParam[]): Promise<T[]> {
 	const { results } = await db
 		.prepare(sql)
 		.bind(...params)
@@ -23,7 +24,7 @@ export async function queryAll<T>(db: DB, sql: string, params: unknown[]): Promi
 	return results ?? [];
 }
 
-export async function execute(db: DB, sql: string, params: unknown[]): Promise<D1Result> {
+export async function execute(db: DB, sql: string, params: SqlParam[]): Promise<D1Result> {
 	return db
 		.prepare(sql)
 		.bind(...params)

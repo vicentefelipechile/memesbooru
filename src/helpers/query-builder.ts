@@ -4,20 +4,22 @@
 // Fluent builder keeping clauses and params atomic. Use whereIf for optional filters.
 // =========================================================================================================
 
+import type { SqlParam } from '../db/client';
+
 export class QueryBuilder {
 	private clauses: string[] = [];
-	private params: unknown[] = [];
+	private params: SqlParam[] = [];
 	private orderClause = '';
 	private limitClause = '';
 	private offsetClause = '';
 
-	where(sql: string, ...params: unknown[]): this {
+	where(sql: string, ...params: SqlParam[]): this {
 		this.clauses.push(sql);
 		this.params.push(...params);
 		return this;
 	}
 
-	whereIf(condition: boolean, sql: string, ...params: unknown[]): this {
+	whereIf(condition: boolean, sql: string, ...params: SqlParam[]): this {
 		if (condition) this.where(sql, ...params);
 		return this;
 	}
@@ -37,7 +39,7 @@ export class QueryBuilder {
 		return this;
 	}
 
-	build(baseSql: string): { sql: string; params: unknown[] } {
+	build(baseSql: string): { sql: string; params: SqlParam[] } {
 		let sql = baseSql;
 		if (this.clauses.length) sql += ` WHERE ${this.clauses.join(' AND ')}`;
 		if (this.orderClause) sql += ` ${this.orderClause}`;

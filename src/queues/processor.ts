@@ -4,10 +4,15 @@
 
 import * as mediaRepo from '../repositories/media-repository';
 import * as sessionRepo from '../repositories/session-repository';
+import type { QueueMessage } from '../types';
 
-export async function handleQueue(batch: MessageBatch<unknown>, env: Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket; QUARANTINE_BUCKET: R2Bucket }): Promise<void> {
+function toBytes(checksum: ArrayBuffer | Uint8Array): Uint8Array {
+	return checksum instanceof Uint8Array ? checksum : new Uint8Array(checksum);
+}
+
+export async function handleQueue(batch: MessageBatch<QueueMessage>, env: Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket; QUARANTINE_BUCKET: R2Bucket }): Promise<void> {
 	for (const msg of batch.messages) {
-		const body = msg.body as { type: string; postId?: number; entityId?: number };
+		const body = msg.body;
 		try {
 			if (body.type === 'process_media' && body.postId) {
 				await processMedia(env, body.postId);
@@ -37,7 +42,7 @@ async function processMedia(env: Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET
 	}
 	const lowKey = `media/${
 		asset.checksum
-			? Array.from(new Uint8Array((asset.checksum as unknown as Uint8Array).slice(0, 4)))
+			? Array.from(toBytes(asset.checksum).slice(0, 4))
 					.map((b) => b.toString(16).padStart(2, '0'))
 					.join('')
 			: postId

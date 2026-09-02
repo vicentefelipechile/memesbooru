@@ -12,7 +12,7 @@ import type { DB } from '../db/client';
 import * as postRepo from '../repositories/post-repository';
 import * as tagRepo from '../repositories/tag-repository';
 import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors';
-import type { AuthUser, CreatedPostResult } from '../types';
+import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult } from '../types';
 import type { PostCursor } from '../helpers/cursor';
 import type { CreatePostInput, SearchQueryInput } from '../validators';
 import type { PostRow } from '../db/schema';
@@ -31,7 +31,7 @@ export type SearchParams = Pick<SearchQueryInput, 'tags' | 'cursor' | 'limit'> &
 export class PostService {
 	constructor(private readonly db: DB) {}
 
-	async search(params: SearchParams): Promise<{ data: unknown[]; nextCursor: string | null; hasMore: boolean }> {
+	async search(params: SearchParams): Promise<{ data: PostSearchResult[]; nextCursor: string | null; hasMore: boolean }> {
 		const tagNames = params.tags ? params.tags.split(/\s+/).filter(Boolean) : [];
 		const tagIds = tagNames.length ? await tagRepo.resolveTagIds(this.db, tagNames) : [];
 		if (tagNames.length > 0 && tagIds.length === 0) return { data: [], nextCursor: null, hasMore: false };
@@ -46,7 +46,7 @@ export class PostService {
 		return { data: rows, nextCursor, hasMore: !!nextCursor };
 	}
 
-	async detail(publicId: string, viewer: AuthUser | null): Promise<unknown> {
+	async detail(publicId: string, viewer: AuthUser | null): Promise<PostDetailResult> {
 		const row = await postRepo.findByPublicId(this.db, publicId);
 		if (!row) throw new NotFoundError('Post not found');
 		if (row.canonical_post_id) {

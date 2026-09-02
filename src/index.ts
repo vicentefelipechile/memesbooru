@@ -23,6 +23,7 @@ import commentRoutes from './http/routes/comments';
 import interactionRoutes from './http/routes/interactions';
 import moderationRoutes from './http/routes/moderation';
 import { handleQueue } from './queues/processor';
+import type { QueueMessage } from './types';
 
 // =========================================================================================================
 // App
@@ -71,7 +72,7 @@ app.notFound((c) => {
 
 export default {
 	fetch: app.fetch,
-	async queue(batch: MessageBatch<unknown>, env: Env) {
+	async queue(batch: MessageBatch<QueueMessage>, env: Env) {
 		await handleQueue(batch, env);
 	},
 	async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
