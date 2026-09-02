@@ -1,0 +1,5 @@
+# Copiar a .dev.vars (no commitear) — wrangler secret put para prod
+GOOGLE_CLIENT_ID="TU_CLIENT_ID.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="TU_CLIENT_SECRET"
+GOOGLE_REDIRECT_URI="http://localhost:5173/api/auth/google/callback"
+SESSION_SECRET="32+_bytes_random_base64"

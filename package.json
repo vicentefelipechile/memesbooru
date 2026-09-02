@@ -1,0 +1,38 @@
+{
+  "name": "memesbooru",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "wrangler deploy",
+    "deploy:dry": "wrangler deploy --dry-run",
+    "cf-typegen": "wrangler types",
+    "cf-typegen:check": "wrangler types --check",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed:scale": "node scripts/seed-scale.mjs",
+    "benchmark": "node scripts/benchmark.mjs",
+    "db:migrate": "wrangler d1 execute memesbooru-db --file=migrations/0001_initial.sql",
+    "db:seed": "wrangler d1 execute memesbooru-db --file=migrations/0002_seed_test_data.sql"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.9.1",
+    "hono": "^4.7.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.4.0",
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@types/node": "^26.4.1",
+    "typescript": "^5.8.0",
+    "unenv": "^2.0.0-rc.24",
+    "vite": "^6.3.0",
+    "vitest": "^3.1.0",
+    "wrangler": "^4.20.0"
+  }
+}
