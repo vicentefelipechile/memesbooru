@@ -13,6 +13,8 @@
     "cf-typegen:check": "wrangler types --check",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx src/tools/seed.ts",

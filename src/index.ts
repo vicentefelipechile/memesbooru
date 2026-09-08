@@ -38,10 +38,13 @@ app.onError((err, c) => {
 	if (err instanceof DomainError) {
 		return c.json(err.details === undefined ? { error: err.message } : { error: err.message, details: err.details }, err.status as 400 | 401 | 403 | 404 | 409 | 410 | 429);
 	}
+
 	if (err instanceof z.ZodError) {
 		return c.json({ error: 'Validation error', details: err.issues }, 400);
 	}
+
 	console.error('Unhandled error:', err instanceof Error ? (err.stack ?? err.message) : String(err));
+
 	return c.json({ error: 'Internal Server Error' }, 500);
 });
 
@@ -63,6 +66,7 @@ app.route('/api/moderation', moderationRoutes);
 
 app.notFound((c) => {
 	if (c.req.path.startsWith('/api/')) return c.json({ error: 'Not found', path: c.req.path }, 404);
+
 	return c.text('Not found', 404);
 });
 
@@ -77,8 +81,11 @@ export default {
 	},
 	async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
 		const db = env.DB;
+
 		await sessionRepo.cleanupExpired(db);
+
 		const recent = await postRepo.findRecentlyRatedPostIds(db, 100);
+
 		await postRepo.recalcScoreForPosts(db, recent);
 	},
 };

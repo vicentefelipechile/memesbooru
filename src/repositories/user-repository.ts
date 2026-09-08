@@ -60,18 +60,23 @@ export function buildInsertUserActivityStatement(db: DB, row: { userId: number; 
 export async function createFromGoogle(db: DB, sub: string, username: string): Promise<UserRow> {
 	const now = Date.now();
 	const nextId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM users', []))?.v ?? 1;
+
 	await batch(db, [
 		buildInsertUserStatement(db, { id: nextId, username, rank: 'new', status: 'active', trustScore: 0, createdAt: now }),
 		buildInsertGoogleIdentityStatement(db, { userId: nextId, googleSubject: sub, createdAt: now }),
 		buildInsertUserActivityStatement(db, { userId: nextId, updatedAt: now }),
 	]);
+
 	const created = await findById(db, nextId);
+
 	if (!created) throw new Error('create user failed');
+
 	return created;
 }
 
 export async function updateLastLogin(db: DB, userId: number): Promise<void> {
 	const now = Date.now();
+
 	await batch(db, [db.prepare('UPDATE users SET last_login_at = ?, last_activity_at = ? WHERE id = ?').bind(now, now, userId), db.prepare('UPDATE google_identities SET last_login_at = ? WHERE user_id = ?').bind(now, userId)]);
 }
 

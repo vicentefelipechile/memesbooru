@@ -24,20 +24,27 @@ export class InteractionService {
 
 	async rate(viewer: AuthUser, publicId: string, value: RatingInput['value'], queue?: Queue): Promise<void> {
 		const postId = await postRepo.findPostIdByPublicId(this.db, publicId);
+
 		if (!postId) throw new NotFoundError('post not found');
+
 		await postRepo.upsertRating(this.db, postId, viewer.id, value);
+
 		if (queue) await queue.send({ type: 'recalculate_post_score', postId });
 	}
 
 	async favorite(viewer: AuthUser, publicId: string): Promise<void> {
 		const postId = await postRepo.findPostIdByPublicId(this.db, publicId);
+
 		if (!postId) throw new NotFoundError('post not found');
+
 		await postRepo.addFavorite(this.db, postId, viewer.id);
 	}
 
 	async unfavorite(viewer: AuthUser, publicId: string): Promise<void> {
 		const postId = await postRepo.findPostIdByPublicId(this.db, publicId);
+
 		if (!postId) throw new NotFoundError('post not found');
+
 		await postRepo.removeFavorite(this.db, postId, viewer.id);
 	}
 

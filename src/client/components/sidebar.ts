@@ -18,6 +18,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
 
 export function renderSidebar(groups: Record<string, SidebarTag[]>): string {
 	const cats = CATEGORY_ORDER.filter((c) => (groups[c] ?? []).length > 0 || true); // show all even empty
+
 	return `
   <div class="sidebar">
     <div class="sidebar-search">
@@ -29,20 +30,21 @@ export function renderSidebar(groups: Record<string, SidebarTag[]>): string {
         <span class="tiny">próximamente</span>
       </div>
     </div>
-    ${cats
-			.map((cat) => {
-				const list = groups[cat] ?? [];
-				const items = list
-					.map(
-						(t) =>
-							`<a href="/?tags=${encodeURIComponent(t.name)}" data-link data-ac="${escapeAttr(t.name)}">${escapeHtml(t.display ?? t.name)} ${typeof t.usage === 'number' ? `<span class="count">${formatCount(t.usage)}</span>` : ''}</a>`,
-					)
-					.join('');
-				return `<details class="sidebar-cat" data-cat="${cat}" open>
+     ${cats
+				.map((cat) => {
+					const list = groups[cat] ?? [];
+					const items = list
+						.map(
+							(t) =>
+								`<a href="/?tags=${encodeURIComponent(t.name)}" data-link data-ac="${escapeAttr(t.name)}">${escapeHtml(t.display ?? t.name)} ${typeof t.usage === 'number' ? `<span class="count">${formatCount(t.usage)}</span>` : ''}</a>`,
+						)
+						.join('');
+
+					return `<details class="sidebar-cat" data-cat="${cat}" open>
           <summary>${CATEGORY_LABELS[cat] ?? cat}</summary>
           <div class="tag-links">${items || '<span class="tiny">sin tags</span>'}</div>
         </details>`;
-			})
-			.join('')}
+				})
+				.join('')}
   </div>`;
 }

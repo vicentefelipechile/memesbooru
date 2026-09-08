@@ -113,6 +113,7 @@ Rules:
 - **Imports:** absolute `src/*` via `paths: @/*`, but prefer relative. Group: external → internal → type.
 - **Naming:** `camelCase` vars/fns, `PascalCase` types/classes, `snake_case` DB columns only in `schema.ts`, `UPPER_SNAKE` for `MAX_FILE_SIZES`/`ALLOWED_ORIGINS`.
 - **Functions:** small, explicit return types on exports. Use `encodeCursor<T extends object>(obj:T)` generic (`src/helpers/cursor.ts:13`), `decodeCursor<T>(c:string):T|null`.
+- **Vertical whitespace (anti-density):** one blank line between logical steps, one after every guard-clause/`early-return`, one before the final `return`. No more than ~8 consecutive non-blank lines inside a function body except SQL/`batch()` literals. Split into a same-file helper only when a function exceeds ~30 lines or 3 branches.
 - **Error handling:** `DomainError` with `status` + `ErrorDetails` (`src/domain/errors.ts:9`). `fail(c,msg,status,details)` (`src/http/responses.ts:9`) for pre-service 400s. `app.onError` maps `DomainError`/`ZodError`.
 - **Security:** `securityMiddleware` (`src/http/middleware/security.ts`), `isAllowedOrigin`/`isLocalRequest` (`src/helpers/net.ts`), `hashToken` (`src/helpers/crypto.ts`), `HttpOnly/Secure/SameSite` cookies.
 - **Rate limiting:** native `RL_*` bindings (`wrangler.jsonc:40`), `registerRateLimits` (`src/http/rate-limits.ts`), skip for `isLocalRequest`.

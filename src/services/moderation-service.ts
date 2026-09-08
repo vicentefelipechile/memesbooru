@@ -27,20 +27,37 @@ export class ModerationService {
 	}
 
 	async report(viewer: AuthUser, input: ReportInput): Promise<CreatedReportResult> {
-		const id = await moderationRepo.createReport(this.db, { reporterId: viewer.id, targetType: input.target_type, targetId: input.target_id, reason: input.reason });
+		const id = await moderationRepo.createReport(this.db, {
+			reporterId: viewer.id,
+			targetType: input.target_type,
+			targetId: input.target_id,
+			reason: input.reason,
+		});
+
 		return { id };
 	}
 
 	async act(viewer: AuthUser, input: ModerationActionInput): Promise<Pick<ModerationActionRow, 'id'>> {
 		this.assertTrusted(viewer);
+
 		const allowed = ['hide', 'reject', 'ban', 'restrict', 'approve'] as const;
+
 		if (!(allowed as readonly string[]).includes(input.action)) throw new ForbiddenError('accion no permitida');
-		const id = await moderationRepo.createAction(this.db, { targetType: input.target_type, targetId: input.target_id, moderatorId: viewer.id, action: input.action, reason: input.reason ?? null });
+
+		const id = await moderationRepo.createAction(this.db, {
+			targetType: input.target_type,
+			targetId: input.target_id,
+			moderatorId: viewer.id,
+			action: input.action,
+			reason: input.reason ?? null,
+		});
+
 		return { id };
 	}
 
 	async listReports(viewer: AuthUser): Promise<ReportRow[]> {
 		this.assertTrusted(viewer);
+
 		return moderationRepo.listOpenReports(this.db);
 	}
 }

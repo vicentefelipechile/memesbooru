@@ -66,17 +66,20 @@ export async function recalcScoreForPosts(db: DB, postIds: number[]): Promise<vo
 	for (const postId of postIds) {
 		const vals = await queryAll<{ value: number }>(db, 'SELECT value FROM post_ratings WHERE post_id = ?', [postId]);
 		const score = vals.reduce((s, x) => s + x.value, 0);
+
 		await batch(db, [db.prepare('UPDATE posts SET score = ? WHERE id = ?').bind(score, postId), db.prepare('UPDATE post_listing SET score = ? WHERE post_id = ?').bind(score, postId)]);
 	}
 }
 
 export async function findRecentlyRatedPostIds(db: DB, limit = 100): Promise<number[]> {
 	const rows = await queryAll<{ post_id: number }>(db, 'SELECT DISTINCT post_id FROM post_ratings WHERE updated_at > ? LIMIT ?', [Date.now() - 3600_000, limit]);
+
 	return rows.map((r) => r.post_id);
 }
 
 export async function upsertRating(db: DB, postId: number, userId: number, value: number): Promise<void> {
 	const now = Date.now();
+
 	await batch(db, [
 		db
 			.prepare('INSERT INTO post_ratings (post_id, user_id, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(post_id, user_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
@@ -87,6 +90,7 @@ export async function upsertRating(db: DB, postId: number, userId: number, value
 
 export async function addFavorite(db: DB, postId: number, userId: number): Promise<void> {
 	const now = Date.now();
+
 	await batch(db, [
 		db.prepare('INSERT OR IGNORE INTO post_favorites (post_id, user_id, created_at) VALUES (?, ?, ?)').bind(postId, userId, now),
 		db.prepare('UPDATE posts SET favorite_count = (SELECT COUNT(*) FROM post_favorites WHERE post_id = ?), updated_at = ? WHERE id = ?').bind(postId, now, postId),
@@ -96,6 +100,7 @@ export async function addFavorite(db: DB, postId: number, userId: number): Promi
 
 export async function removeFavorite(db: DB, postId: number, userId: number): Promise<void> {
 	const now = Date.now();
+
 	await batch(db, [
 		db.prepare('DELETE FROM post_favorites WHERE post_id = ? AND user_id = ?').bind(postId, userId),
 		db.prepare('UPDATE posts SET favorite_count = (SELECT COUNT(*) FROM post_favorites WHERE post_id = ?), updated_at = ? WHERE id = ?').bind(postId, now, postId),
@@ -108,40 +113,58 @@ export async function listFavoritesByUser(db: DB, userId: number, limit = 50): P
 }
 
 export async function searchByTags(db: DB, tagIds: number[], opts: { sort: 'recent' | 'popular'; cursor?: string; limit: number }): Promise<PostListingRow[]> {
-	const limit = opts.limit;
 	const cursor = opts.cursor ? decodeCursor<PostCursor>(opts.cursor) : null;
 
-	if (tagIds.length === 0) {
-		if (opts.sort === 'popular') {
-			if (cursor?.score !== undefined) {
-				return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' AND (score < ? OR (score = ? AND post_id < ?)) ORDER BY score DESC, post_id DESC LIMIT ?`, [cursor.score, cursor.score, cursor.id, limit]);
-			}
-			return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' ORDER BY score DESC, post_id DESC LIMIT ?`, [limit]);
+	if (tagIds.length === 0) return searchWithoutTags(db, opts.sort, cursor, opts.limit);
+
+	const ids = await fetchCandidateIds(db, tagIds);
+
+	if (ids.length === 0) return [];
+
+	return searchWithTags(db, ids, opts.sort, cursor, opts.limit);
+}
+
+async function searchWithoutTags(db: DB, sort: 'recent' | 'popular', cursor: PostCursor | null, limit: number): Promise<PostListingRow[]> {
+	if (sort === 'popular') {
+		if (cursor?.score !== undefined) {
+			return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' AND (score < ? OR (score = ? AND post_id < ?)) ORDER BY score DESC, post_id DESC LIMIT ?`, [cursor.score, cursor.score, cursor.id, limit]);
 		}
-		if (cursor?.published_at !== undefined) {
-			return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' AND (published_at < ? OR (published_at = ? AND post_id < ?)) ORDER BY published_at DESC, post_id DESC LIMIT ?`, [
-				cursor.published_at,
-				cursor.published_at,
-				cursor.id,
-				limit,
-			]);
-		}
-		return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' ORDER BY published_at DESC, post_id DESC LIMIT ?`, [limit]);
+
+		return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' ORDER BY score DESC, post_id DESC LIMIT ?`, [limit]);
 	}
 
+	if (cursor?.published_at !== undefined) {
+		return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' AND (published_at < ? OR (published_at = ? AND post_id < ?)) ORDER BY published_at DESC, post_id DESC LIMIT ?`, [
+			cursor.published_at,
+			cursor.published_at,
+			cursor.id,
+			limit,
+		]);
+	}
+
+	return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' ORDER BY published_at DESC, post_id DESC LIMIT ?`, [limit]);
+}
+
+async function fetchCandidateIds(db: DB, tagIds: number[]): Promise<number[]> {
 	const placeholders = tagIds.map(() => '?').join(',');
+
 	const candidateRows = await queryAll<{ post_id: number }>(db, `SELECT post_id FROM post_tags WHERE tag_id IN (${placeholders}) GROUP BY post_id HAVING COUNT(DISTINCT tag_id) = ? ORDER BY post_id DESC LIMIT 500`, [
 		...tagIds,
 		tagIds.length,
 	]);
-	const ids = candidateRows.map((r) => r.post_id);
-	if (ids.length === 0) return [];
+
+	return candidateRows.map((r) => r.post_id);
+}
+
+async function searchWithTags(db: DB, ids: number[], sort: 'recent' | 'popular', cursor: PostCursor | null, limit: number): Promise<PostListingRow[]> {
 	const idPlaceholders = ids.map(() => '?').join(',');
-	const orderColumn = opts.sort === 'popular' ? 'score DESC, post_id DESC' : 'published_at DESC, post_id DESC';
+	const orderColumn = sort === 'popular' ? 'score DESC, post_id DESC' : 'published_at DESC, post_id DESC';
+
 	let sql = `SELECT * FROM post_listing WHERE status = 'available' AND post_id IN (${idPlaceholders})`;
 	const params: SqlParam[] = [...ids];
+
 	if (cursor) {
-		if (opts.sort === 'popular' && cursor.score !== undefined) {
+		if (sort === 'popular' && cursor.score !== undefined) {
 			sql += ` AND (score < ? OR (score = ? AND post_id < ?))`;
 			params.push(cursor.score, cursor.score, cursor.id);
 		} else if (cursor.published_at !== undefined) {
@@ -149,17 +172,22 @@ export async function searchByTags(db: DB, tagIds: number[], opts: { sort: 'rece
 			params.push(cursor.published_at, cursor.published_at, cursor.id);
 		}
 	}
+
 	sql += ` ORDER BY ${orderColumn} LIMIT ?`;
 	params.push(limit);
+
 	return queryAll<PostListingRow>(db, sql, params);
 }
 
 export async function count(db: DB, filters?: { status?: string }): Promise<number> {
 	if (filters?.status) {
 		const row = await queryOne<{ c: number }>(db, 'SELECT COUNT(*) as c FROM posts WHERE status = ?', [filters.status]);
+
 		return row?.c ?? 0;
 	}
+
 	const row = await queryOne<{ c: number }>(db, 'SELECT COUNT(*) as c FROM posts', []);
+
 	return row?.c ?? 0;
 }
 
@@ -175,14 +203,36 @@ export async function findRandomPublicId(db: DB): Promise<string | null> {
 
 export function buildInsertPostStatement(
 	db: DB,
-	row: { id: number; publicId: string; authorId: number; canonicalPostId: number | null; mediaType: string; status: string; title: string | null; createdAt: number; updatedAt: number },
+	row: {
+		id: number;
+		publicId: string;
+		authorId: number;
+		canonicalPostId: number | null;
+		mediaType: string;
+		status: string;
+		title: string | null;
+		createdAt: number;
+		updatedAt: number;
+	},
 ): D1PreparedStatement {
 	return db
 		.prepare('INSERT INTO posts (id, public_id, author_id, canonical_post_id, media_type, status, title, score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
 		.bind(row.id, row.publicId, row.authorId, row.canonicalPostId, row.mediaType, row.status, row.title, 0, row.createdAt, row.updatedAt);
 }
 
-export function buildInsertMediaAssetStatement(db: DB, row: { id: number; postId: number; mediaType: string; originalKey: string; mimeType: string; checksum: ArrayBuffer; processingStatus: string; createdAt: number }): D1PreparedStatement {
+export function buildInsertMediaAssetStatement(
+	db: DB,
+	row: {
+		id: number;
+		postId: number;
+		mediaType: string;
+		originalKey: string;
+		mimeType: string;
+		checksum: ArrayBuffer;
+		processingStatus: string;
+		createdAt: number;
+	},
+): D1PreparedStatement {
 	return db
 		.prepare('INSERT INTO media_assets (id, post_id, media_type, original_object_key, mime_type, byte_size, checksum, processing_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
 		.bind(row.id, row.postId, row.mediaType, row.originalKey, row.mimeType, 0, row.checksum, row.processingStatus, row.createdAt);
@@ -216,8 +266,10 @@ export function isPostId(id: number): id is import('../types').PostId {
 export async function createPost(db: DB, data: CreatePostData): Promise<PostRow['id']> {
 	const normalized = data.tags.map(normalizeTag).filter(Boolean);
 	const now = Date.now();
+
 	const postId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM posts', []))?.v ?? 1;
 	const mediaAssetId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM media_assets', []))?.v ?? 1;
+
 	const dup = await queryOne<{ post_id: number }>(db, 'SELECT post_id FROM media_assets WHERE checksum = ?', [data.checksum]);
 	const isDuplicate = !!dup;
 	const status = isDuplicate ? 'duplicate' : 'processing';
@@ -226,7 +278,17 @@ export async function createPost(db: DB, data: CreatePostData): Promise<PostRow[
 	const tagIds = await tagRepo.ensureTags(db, normalized, data.authorId);
 
 	const stmts: D1PreparedStatement[] = [
-		buildInsertPostStatement(db, { id: postId, publicId: data.publicId, authorId: data.authorId, canonicalPostId: canonical, mediaType: data.mediaType, status, title: data.title ?? null, createdAt: now, updatedAt: now }),
+		buildInsertPostStatement(db, {
+			id: postId,
+			publicId: data.publicId,
+			authorId: data.authorId,
+			canonicalPostId: canonical,
+			mediaType: data.mediaType,
+			status,
+			title: data.title ?? null,
+			createdAt: now,
+			updatedAt: now,
+		}),
 		buildInsertMediaAssetStatement(db, {
 			id: mediaAssetId,
 			postId,
@@ -238,8 +300,16 @@ export async function createPost(db: DB, data: CreatePostData): Promise<PostRow[
 			createdAt: now,
 		}),
 	];
-	for (const tid of tagIds) stmts.push(db.prepare('INSERT INTO post_tags (post_id, tag_id, added_by, created_at) VALUES (?, ?, ?, ?)').bind(postId, tid, data.authorId, now));
-	if (!isDuplicate) stmts.push(db.prepare('INSERT INTO jobs (job_type, entity_id, status, available_at, created_at) VALUES (?, ?, ?, ?, ?)').bind('process_media', postId, 'pending', now, now));
+
+	for (const tid of tagIds) {
+		stmts.push(db.prepare('INSERT INTO post_tags (post_id, tag_id, added_by, created_at) VALUES (?, ?, ?, ?)').bind(postId, tid, data.authorId, now));
+	}
+
+	if (!isDuplicate) {
+		stmts.push(db.prepare('INSERT INTO jobs (job_type, entity_id, status, available_at, created_at) VALUES (?, ?, ?, ?, ?)').bind('process_media', postId, 'pending', now, now));
+	}
+
 	await batch(db, stmts);
+
 	return postId;
 }

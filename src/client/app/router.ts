@@ -28,14 +28,20 @@ const routes: Route[] = [
 
 async function renderRoute(path: string): Promise<void> {
 	const page = document.getElementById('page');
+
 	if (!page) return;
+
 	const match = routes.find((r) => r.pattern.test(path));
+
 	if (!match) {
 		page.innerHTML = `<div class="empty">404 — Página no encontrada<div class="detail"><a href="/" data-link>Volver al inicio</a></div></div>`;
+
 		return;
 	}
+
 	const m = path.match(match.pattern)!;
 	page.innerHTML = await match.render(m);
+
 	match.bind?.(m);
 }
 
@@ -46,24 +52,34 @@ export function navigate(path: string): void {
 
 export function initApp(): void {
 	const app = document.getElementById('app');
+
 	if (!app) return;
+
 	renderShell();
 	bindHomeGlobal();
+
 	document.addEventListener('click', onDocLinkClick);
 	window.addEventListener('popstate', () => void renderRoute(location.pathname + location.search));
+
 	void renderRoute(location.pathname + location.search);
 }
 
 // Persistent shell: header rendered once, only main#page swaps on navigation.
 function renderShell(): void {
 	const app = document.getElementById('app');
+
 	if (!app) return;
+
 	const user = store.get().user;
+
 	app.innerHTML = `${renderHeader(user)}<main id="page" class="site-main" tabindex="-1"></main>`;
+
 	document.getElementById('logout-btn')?.addEventListener('click', async () => {
 		await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined);
+
 		store.set({ user: null });
 		renderShell();
+
 		void renderRoute(location.pathname + location.search);
 	});
 }
@@ -71,9 +87,14 @@ function renderShell(): void {
 // Delegated link handling so re-rendered content keeps working without re-binding.
 function onDocLinkClick(e: MouseEvent): void {
 	if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
 	const el = (e.target as Element | null)?.closest?.('a[data-link]');
+
 	if (!el) return;
+
 	e.preventDefault();
+
 	const href = el.getAttribute('href');
+
 	if (href) navigate(href);
 }

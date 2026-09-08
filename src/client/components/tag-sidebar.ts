@@ -18,17 +18,21 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function renderStatistics(rows: [string, string][]): string {
 	if (rows.length === 0) return '';
+
 	return `<dl class="stat-grid">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
 }
 
 export function renderTagged(tags: SidebarTag[]): string {
 	if (tags.length === 0) return '<p class="small muted">Sin tags.</p>';
+
 	const groups = new Map<string, SidebarTag[]>();
+
 	for (const t of tags) {
 		const arr = groups.get(t.category) ?? [];
 		arr.push(t);
 		groups.set(t.category, arr);
 	}
+
 	return [...groups.entries()]
 		.map(
 			([cat, list]) => `<div class="tag-category">

@@ -29,12 +29,17 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 router.post('/reports', requireAuth, async (c) => {
 	const db = c.env.DB;
 	const parsedBody = await parseJsonBody(c);
+
 	if (!parsedBody.ok) return parsedBody.response;
+
 	const parsed = ReportSchema.safeParse(parsedBody.data);
+
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+
 	const viewer = c.get('user');
 	const service = new ModerationService(db);
 	const result = await service.report(viewer, parsed.data);
+
 	return c.json(result, 201);
 });
 
@@ -46,12 +51,17 @@ router.post('/reports', requireAuth, async (c) => {
 router.post('/actions', requireAuth, async (c) => {
 	const db = c.env.DB;
 	const parsedBody = await parseJsonBody(c);
+
 	if (!parsedBody.ok) return parsedBody.response;
+
 	const parsed = ModerationActionSchema.safeParse(parsedBody.data);
+
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+
 	const viewer = c.get('user');
 	const service = new ModerationService(db);
 	const result = await service.act(viewer, parsed.data);
+
 	return c.json(result);
 });
 
@@ -65,6 +75,7 @@ router.get('/reports', requireAuth, async (c) => {
 	const viewer = c.get('user');
 	const service = new ModerationService(db);
 	const data = await service.listReports(viewer);
+
 	return c.json({ data });
 });
 

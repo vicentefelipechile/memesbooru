@@ -22,6 +22,8 @@ export function b64urlDecodeToBytes(str: string): Uint8Array {
 	const padded = str.replace(/-/g, '+').replace(/_/g, '/');
 	const bin = atob(padded);
 	const out = new Uint8Array(bin.length);
+
 	for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+
 	return out;
 }

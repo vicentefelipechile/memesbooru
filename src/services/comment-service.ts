@@ -24,14 +24,19 @@ export class CommentService {
 
 	async listByPost(publicId: string, cursor?: string, limit = 20) {
 		const postId = await postRepo.findPostIdByPublicId(this.db, publicId);
+
 		if (!postId) throw new NotFoundError('post not found');
+
 		return commentRepo.listByPost(this.db, postId, cursor, limit);
 	}
 
 	async create(viewer: AuthUser, publicId: string, input: CommentInput): Promise<CreatedCommentResult> {
 		const postId = await postRepo.findPostIdByPublicId(this.db, publicId);
+
 		if (!postId) throw new NotFoundError('post not found');
+
 		const id = await commentRepo.create(this.db, { postId, authorId: viewer.id, body: input.body, parentId: input.parent_id ?? null });
+
 		return { id };
 	}
 
