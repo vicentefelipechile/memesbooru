@@ -13,7 +13,7 @@ import * as postRepo from '../repositories/post-repository';
 import * as tagRepo from '../repositories/tag-repository';
 import * as userRepo from '../repositories/user-repository';
 import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors';
-import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult } from '../types';
+import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult, SearchResult } from '../types';
 import { toPostId, toPublicId, toUserId } from '../types';
 import type { PostCursor } from '../helpers/cursor';
 import type { CreatePostInput, SearchQueryInput } from '../validators';
@@ -33,7 +33,7 @@ export type SearchParams = Pick<SearchQueryInput, 'tags' | 'cursor' | 'limit'> &
 export class PostService {
 	constructor(private readonly db: DB) {}
 
-	async search(params: SearchParams): Promise<{ data: PostSearchResult[]; nextCursor: string | null; hasMore: boolean }> {
+	async search(params: SearchParams): Promise<SearchResult> {
 		const tagNames = params.tags ? params.tags.split(/\s+/).filter(Boolean) : [];
 		const tagIds = tagNames.length ? await tagRepo.resolveTagIds(this.db, tagNames) : [];
 

@@ -52,6 +52,7 @@ Planned `server/` / `shared/` layout in `PLAN.md:248` does not exist — do not 
 
 ### 4.1 `src/db/schema.ts` — Row types
 One `interface` per table, exact snake_case DB columns. Shared predicates `VISIBLE_COMMENT_PREDICATE` / `AVAILABLE_POST_PREDICATE`. No DTOs here.
+Central query projections (never inline `{ v: number }` / `{ c: number }`): `NextIdRow { v: number }` (7× `MAX(id)+1`), `CountRow { c: number }` (COUNT), `PostDetailRow = PostListingRow & Pick<PostRow,'author_id'|'title'|'description'|'canonical_post_id'>` (for `findByPublicId`). Unique projections use `Pick<Row,'col'>` directly (`Pick<TagAliasRow,'tag_id'|'alias_normalized'>`, `Pick<UserTotpRow,'secret_encrypted'>`). `UserTotpRow` mirrors `user_totp` (`migrations/0001`). No branded ids here — canonical `Brand<T,B>` lives only in `src/types.ts`.
 
 ### 4.2 `src/types.ts` — API contracts & type helpers
 **Do NOT duplicate types elsewhere.** Frontend has its own copy (`src/client` never imports `src/types`).
@@ -61,10 +62,11 @@ Contains:
 - DTOs: `UserDTO`, `PostDTO` (`DeepReadonly<CamelCased<Omit<PostRow>>>`), `TagDTO`, `CommentDTO` (`CommentId`/`PostId` branded)
 - `AuthUser { id: UserId }`, `PaginatedResponse<T>`
 - Branded ids: `Brand<T,B>`, `UserId/PostId/PublicId/TagId/CommentId` + constructors `toUserId(n)` etc. (`src/types.ts:89`). Use at boundaries, never mix raw `number`.
-- Helpers: `SqlParam`, `JsonValue/JsonPrimitive`, `ErrorDetails`, `QueueMessage` (discriminated union), `CamelCased<T>` (`SnakeToCamel`), `DeepReadonly<T>`, `NoInfer<T>`, `VariadicFn`, `AwaitedReturn`, `PostSearchResult`, `PostDetailResult`
+- Helpers: `SqlParam` (canonical in `src/db/client.ts`, re-exported from `src/types.ts`), `JsonValue/JsonPrimitive`, `ErrorDetails`, `QueueMessage` (discriminated union), `CamelCased<T>` (`SnakeToCamel`), `DeepReadonly<T>`, `NoInfer<T>`, `VariadicFn`, `AwaitedReturn`, `PostSearchResult`, `PostDetailResult`
 - `PostDetailResult` = `PostListingRow` + `author_id/author_username/title/description/canonical_post_id/tags` (tags are `PostTagResult[]` = `{name,category,count}`, enriched for the booru sidebar)
 - `CommentResult` = `CommentRow` + `author_username` (joined in `comment-repository.listByPost`)
 - Derived: `EntityId = Pick<ReportRow,'id'>`, `CreatedPostResult = { publicId: PublicId; postId: PostId }`
+- Service results (never inline `Promise<{...}>`): `SearchResult { data: PostSearchResult[]; nextCursor; hasMore }`, `TagItem { name; display; usage }`, `TagItemsResult { tags: TagItem[] }`, `BrowseParams { perCategoryLimit? }`, `BrowseCategoryParams { limit?; offset? }`, `SessionTokenPair { token; hash }`, `GoogleTokens { id_token; access_token }`, `AuthUserBrief { id; username; rank }`, `SessionVerification { userId }`
 - Re-exports: `ReportInput`, `CreatePostInput` etc. from `validators.ts` — never inline anonymous `{id:number}`
 
 ### 4.3 `src/validators.ts` — Zod is the only validator
@@ -74,12 +76,16 @@ Every route `safeParse` before service. Helpers: `sanitizeHtml`, `normalizeTag`,
 
 **Philosophy: if you need `unknown`, you missed a type.**
 
-- `unknown[]` hides `D1` bind types → use `SqlParam = string|number|boolean|null|ArrayBuffer|Uint8Array` (`src/types.ts:75`, `src/db/client.ts:8`, `src/helpers/query-builder.ts:7`). `0× unknown` in `src` is now enforced (`tsc` + grep).
-- `Promise<unknown>` / `Record<string,unknown>` hides domain → use `PostSearchResult[]`, `PostDetailResult`, `JsonValue`, `ErrorDetails` (`ZodIssue[] | JsonValue`), `QueueMessage`.
-- `as unknown as X` hides branded mismatches → use `toUserId/toPostId/toPublicId` + `satisfies` (`src/services/post-service.ts:59`).
-- Pre-Zod JSON body `unknown` → use `JsonValue` default `parseJsonBody<T extends JsonValue = JsonValue>` (`src/helpers/http.ts:9`) then `Schema.safeParse`.
+Backend scope is `src/db|domain|helpers|http|queues|repositories|services` (+ `index.ts`). `src/types.ts` / `src/validators.ts` are exempt monoliths (generic utilities like `DeepReadonly`/`NoInfer`/`VariadicFn` may use `unknown` there). `src/client` / `src/tools` are out of scope.
 
-**Only `unknown` allowed in codebase is the string literal `'unknown'` for IP fallback** (`src/helpers/net.ts:25`, `src/http/rate-limits.ts:20`).
+- `unknown[]` hides `D1` bind types → use `SqlParam` (canonical in `src/db/client.ts:8`, re-exported from `src/types.ts`). `0× unknown` type / `0× any` in backend is enforced (`tsc` + `Select-String`).
+- `Promise<unknown>` / `Record<string,unknown>` hides domain → use `PostSearchResult[]`, `PostDetailResult`, `JsonValue`, `ErrorDetails` (`ZodIssue[] | JsonValue`), `QueueMessage`. Example fix: `routes/tags.ts:64` used `Record<string,unknown>` → now `parseQueryWithArrays(c.req.url)` (`Record<string,string|string[]>`).
+- `as unknown as X` hides branded mismatches → use `toUserId/toPostId/toPublicId` + `satisfies` (`src/services/post-service.ts:59`).
+- Pre-Zod JSON body `unknown` → use `JsonValue` default `parseJsonBody<T extends JsonValue = JsonValue>` (`src/helpers/http.ts:9`) then `Schema.safeParse`. `parseJsonBody` returns named `ParseJsonResult<T>`, never inline union.
+- `UPDATE`/`INSERT` without `RETURNING` → use `execute`, never `queryOne` without generic (untyped `queryOne` infers `unknown`). 8 sites migrated (`post/media/auth/activity` repos).
+- DB `rank`/`status` strings → fail-closed guards `toUserRank/toUserStatus` (`src/http/middleware/auth.ts`), never bare `as UserRank`.
+
+**Only `unknown` allowed in backend is the string literal `'unknown'` for IP fallback** (`src/helpers/net.ts:30`, `src/http/rate-limits.ts:20,29,37`).
 
 Rules:
 - Enable `strict` (`tsconfig.json:7`), never `any`. `any` only exists in `worker-configuration.d.ts` generated.
@@ -105,6 +111,8 @@ Rules:
 **Conventions:**
 - Derive service inputs via `Pick<SearchQueryInput,'tags'|'cursor'|'limit'> & {sort:...}` (`src/services/post-service.ts:25`), never inline.
 - Derive cursor `PostCursor = {id: PostListingRow['post_id']} & Partial<Pick<PostListingRow,'score'|'published_at'>>` (`src/helpers/cursor.ts:11`).
+- Derive statement inputs via indexed access: `InsertPostStatementData { id: PostRow['id']; publicId: PostRow['public_id']; ... }`, `InsertPostTagStatementData { postId: PostTagRow['post_id']; ... }` (`tag-repository.ts:215` was the `argMalHecho` example — never `row: { postId: number; ... }` inline). Same for `InsertMediaAssetStatementData`, `InsertCommentStatementData`, `InsertUserStatementData`, `InsertSessionStatementData`, `InsertVariantStatementData`.
+- Name every signature shape: `SearchResult`, `TagItemsResult`, `ResolveAliasesResult`, `BuiltQuery { sql; params }`, `ParseJsonResult<T>`, `QueueEnv`, `HeaderReader/BareHeaderReader`, `SearchByTagsOpts`, `PostCountFilter`, `ListByCategoryOpts`, `ListUsersParams`.
 - Use `satisfies` for literals, `toXId()` for branded conversions, `DeepReadonly` for DTOs.
 
 ## 7. Code Style & Quality
@@ -130,10 +138,10 @@ const data = await service.search({tags: parsed.data.tags, sort: parsed.data.sor
 return c.json(data)
 
 // Service (src/services/post-service.ts) — no Hono, throws DomainError
-async search(params: SearchParams): Promise<{data: PostSearchResult[]; nextCursor: string|null}> { ... }
+async search(params: SearchParams): Promise<SearchResult> { ... }
 
 // Repository (src/repositories/post-repository.ts) — only SQL
-export async function searchByTags(db: DB, tagIds: TagId[], opts:{sort:'recent'|'popular'; cursor?:string; limit:number}): Promise<PostListingRow[]> { return queryAll<PostListingRow>(db, sql, params as SqlParam[]) }
+export async function searchByTags(db: DB, tagIds: TagId[], opts: SearchByTagsOpts): Promise<PostListingRow[]> { return queryAll<PostListingRow>(db, sql, params) }
 ```
 
 - Use `zValidator('json', CreatePostSchema)` where Hono can, otherwise `parseJsonBody<T extends JsonValue>` + `safeParse`.
@@ -150,7 +158,7 @@ export async function searchByTags(db: DB, tagIds: TagId[], opts:{sort:'recent'|
 ## 10. Cursor & Query Building
 
 - Single source: `src/helpers/cursor.ts` (`encodeCursor<T extends object>`, `decodeCursor<T>`, `assertValidCursor`). Re-exported by `post-repository.ts:21`.
-- `QueryBuilder` (`src/helpers/query-builder.ts`) with `where(sql,...SqlParam[]) / whereIf / orderBy(allowed?) / paginate / build():{sql,params:SqlParam[]}` — use `allowed` whitelist, regex `/^[a-zA-Z0-9_.]+$/` for columns.
+- `QueryBuilder` (`src/helpers/query-builder.ts`) with `where(sql,...SqlParam[]) / whereIf / orderBy(allowed?) / paginate / build(): BuiltQuery` — use `allowed` whitelist, regex `/^[a-zA-Z0-9_.]+$/` for columns.
 
 ## 11. Frontend Vanilla
 
@@ -220,7 +228,7 @@ Verified facts: `wrangler.jsonc` recommended, `wrangler types` generates `Env`, 
 ## 13. Testing & Typecheck
 
 ```bash
-npm run typecheck        # tsc --noEmit (strict, 0 unknown, 0 any in src)
+npm run typecheck        # tsc --noEmit (strict, 0 unknown, 0 any in backend)
 npm test                 # vitest run (pool @cloudflare/vitest-pool-workers, miniflare D1/R2/Queue)
 npm run test:watch
 wrangler types --check
@@ -244,7 +252,7 @@ Conventional Commits, English, imperative: `refactor: ...` / `feat: ...` / `fix:
 ## 16. Anti-Patterns — DO NOT
 
 - `unknown` / `any` / `as unknown as` — use `SqlParam/JsonValue/ErrorDetails/QueueMessage/PostSearchResult`
-- Inline anonymous `{id:number}` — use `Pick<ReportRow,'id'>` / `CreatedPostResult`
+- Inline anonymous `{id:number}` — use `Pick<ReportRow,'id'>` / `CreatedPostResult` / `NextIdRow` / `CountRow` / `InsertPostTagStatementData` (never `row: { postId: number; ... }` inline)
 - SQL outside `src/repositories/*` or `c.env.DB` outside routes/`index.ts`
 - Business logic in `src/http/routes/*` or Hono in `src/services/*`
 - `SELECT *` on public endpoints, JSON columns for filterable data, `OFFSET` pagination, `ORDER BY RANDOM()`

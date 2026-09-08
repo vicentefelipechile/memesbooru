@@ -11,7 +11,7 @@
 import { Hono } from 'hono';
 import * as tagRepo from '../../repositories/tag-repository';
 import { TagService } from '../../services/tag-service';
-import { BrowseTagsQuerySchema } from '../../validators';
+import { BrowseTagsQuerySchema, parseQueryWithArrays } from '../../validators';
 import { fail } from '../responses';
 
 // =========================================================================================================
@@ -61,10 +61,10 @@ router.get('/:name', async (c) => {
 
 router.get('/browse', async (c) => {
 	const db = c.env.DB;
-	const input: Record<string, unknown> = {};
+	const input = parseQueryWithArrays(c.req.url);
 	const per = c.req.query('per');
 
-	if (per) input.limit = per;
+	if (per) input['limit'] = per;
 
 	const parsed = BrowseTagsQuerySchema.safeParse(input);
 
