@@ -4,9 +4,29 @@
 // Client IP and origin allowlist. Single source for rate-limits and security middleware.
 // =========================================================================================================
 
+// =========================================================================================================
+// Types
+// =========================================================================================================
+
+export type HeaderReader = {
+	req: { header: (name: string) => string | undefined; url?: string };
+};
+
+export type BareHeaderReader = {
+	req: { header: (name: string) => string | undefined };
+};
+
+// =========================================================================================================
+// Consts
+// =========================================================================================================
+
 export const ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'] as const satisfies readonly string[];
 
-export function isLocalRequest(c: { req: { header: (name: string) => string | undefined; url?: string } }): boolean {
+// =========================================================================================================
+// Helpers
+// =========================================================================================================
+
+export function isLocalRequest(c: HeaderReader): boolean {
 	const host = c.req.header('host') ?? '';
 	const hostname = host.split(':')[0];
 
@@ -26,7 +46,7 @@ export function isLocalRequest(c: { req: { header: (name: string) => string | un
 	return false;
 }
 
-export function getClientIp(c: { req: { header: (name: string) => string | undefined } }): string {
+export function getClientIp(c: BareHeaderReader): string {
 	return c.req.header('cf-connecting-ip') ?? 'unknown';
 }
 

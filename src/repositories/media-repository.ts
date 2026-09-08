@@ -8,8 +8,23 @@
 // Imports
 // =========================================================================================================
 
-import { queryOne, queryAll, batch, type DB } from '../db/client';
-import type { MediaAssetRow, MediaVariantRow } from '../db/schema';
+import { queryOne, queryAll, batch, execute, type DB } from '../db/client';
+import type { MediaAssetRow, MediaVariantRow, PostRow, PostRatingRow } from '../db/schema';
+
+// =========================================================================================================
+// Types
+// =========================================================================================================
+
+export type InsertVariantStatementData = {
+	mediaAssetId: MediaVariantRow['media_asset_id'];
+	variantName: MediaVariantRow['variant_name'];
+	objectKey: MediaVariantRow['object_key'];
+	mimeType: MediaVariantRow['mime_type'];
+	byteSize: MediaVariantRow['byte_size'];
+	qualityClass: MediaVariantRow['quality_class'];
+	visibility: MediaVariantRow['visibility'];
+	createdAt: MediaVariantRow['created_at'];
+};
 
 // =========================================================================================================
 // Queries
@@ -35,26 +50,18 @@ export async function listVariantsByPostId(db: DB, postId: number): Promise<Medi
 // Builders
 // =========================================================================================================
 
-export function buildInsertVariantStatement(
-	db: DB,
-	row: {
-		mediaAssetId: number;
-		variantName: string;
-		objectKey: string;
-		mimeType: string;
-		byteSize: number;
-		qualityClass: string;
-		visibility: string;
-		createdAt: number;
-	},
-): D1PreparedStatement {
+export function buildInsertVariantStatement(db: DB, row: InsertVariantStatementData): D1PreparedStatement {
 	return db
 		.prepare('INSERT INTO media_variants (media_asset_id, variant_name, object_key, mime_type, byte_size, quality_class, visibility, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
 		.bind(row.mediaAssetId, row.variantName, row.objectKey, row.mimeType, row.byteSize, row.qualityClass, row.visibility, row.createdAt);
 }
 
+// =========================================================================================================
+// Commands
+// =========================================================================================================
+
 export async function markAssetDone(db: DB, assetId: number): Promise<void> {
-	await queryOne(db, "UPDATE media_assets SET processing_status='done' WHERE id=?", [assetId]);
+	await execute(db, "UPDATE media_assets SET processing_status='done' WHERE id=?", [assetId]);
 }
 
 export async function publishPost(db: DB, postId: number, lowKey: string | null, medKey: string | null, now = Date.now()): Promise<void> {
@@ -108,11 +115,11 @@ export async function insertVariantsAndPublish(db: DB, assetId: number, postId: 
 }
 
 export async function recalcScoreWithDecay(db: DB, postId: number): Promise<void> {
-	const rows = await queryAll<{ value: number }>(db, 'SELECT value, created_at FROM post_ratings WHERE post_id = ?', [postId]);
+	const rows = await queryAll<Pick<PostRatingRow, 'value'>>(db, 'SELECT value, created_at FROM post_ratings WHERE post_id = ?', [postId]);
 
-	let score = rows.reduce((s, r) => s + (r as { value: number }).value, 0);
+	let score = rows.reduce((s, r) => s + r.value, 0);
 
-	const post = await queryOne<{ created_at: number }>(db, 'SELECT created_at FROM posts WHERE id = ?', [postId]);
+	const post = await queryOne<Pick<PostRow, 'created_at'>>(db, 'SELECT created_at FROM posts WHERE id = ?', [postId]);
 
 	if (post) {
 		const hours = (Date.now() - post.created_at) / 3600000;
@@ -128,5 +135,5 @@ export async function recalcScoreWithDecay(db: DB, postId: number): Promise<void
 }
 
 export async function recalcAllTagUsage(db: DB): Promise<void> {
-	await queryOne(db, 'UPDATE tags SET usage_count = (SELECT COUNT(*) FROM post_tags WHERE tag_id = tags.id), updated_at = ?', [Date.now()]);
+	await execute(db, 'UPDATE tags SET usage_count = (SELECT COUNT(*) FROM post_tags WHERE tag_id = tags.id), updated_at = ?', [Date.now()]);
 }

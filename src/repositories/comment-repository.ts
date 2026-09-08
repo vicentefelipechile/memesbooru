@@ -9,10 +9,34 @@
 // =========================================================================================================
 
 import { queryOne, queryAll, batch, type DB } from '../db/client';
-import type { CommentRow } from '../db/schema';
+import type { CommentRow, NextIdRow } from '../db/schema';
 import { decodeCursor, type CommentCursor } from '../helpers/cursor';
 import { NotFoundError, ForbiddenError } from '../domain/errors';
 import type { CommentResult } from '../types';
+
+// =========================================================================================================
+// Types
+// =========================================================================================================
+
+export type CreateCommentData = {
+	postId: CommentRow['post_id'];
+	authorId: CommentRow['author_id'];
+	body: CommentRow['body'];
+	parentId: CommentRow['parent_id'];
+};
+
+export type InsertCommentRow = Pick<CommentRow, 'id' | 'post_id' | 'author_id' | 'parent_id' | 'body' | 'status' | 'created_at' | 'updated_at'>;
+
+export type InsertCommentStatementData = {
+	id: CommentRow['id'];
+	postId: CommentRow['post_id'];
+	authorId: CommentRow['author_id'];
+	parentId: CommentRow['parent_id'];
+	body: CommentRow['body'];
+	status: CommentRow['status'];
+	createdAt: CommentRow['created_at'];
+	updatedAt: CommentRow['updated_at'];
+};
 
 // =========================================================================================================
 // Queries
@@ -37,32 +61,7 @@ export async function findById(db: DB, id: number): Promise<CommentRow | null> {
 // Builders
 // =========================================================================================================
 
-// =========================================================================================================
-// Repository input types — derived from Row (Pick/Omit + indexed access)
-// =========================================================================================================
-
-export type CreateCommentData = {
-	postId: CommentRow['post_id'];
-	authorId: CommentRow['author_id'];
-	body: CommentRow['body'];
-	parentId: CommentRow['parent_id'];
-};
-
-export type InsertCommentRow = Pick<CommentRow, 'id' | 'post_id' | 'author_id' | 'parent_id' | 'body' | 'status' | 'created_at' | 'updated_at'>;
-
-export function buildInsertCommentStatement(
-	db: DB,
-	row: {
-		id: number;
-		postId: number;
-		authorId: number;
-		parentId: number | null;
-		body: string;
-		status: string;
-		createdAt: number;
-		updatedAt: number;
-	},
-): D1PreparedStatement {
+export function buildInsertCommentStatement(db: DB, row: InsertCommentStatementData): D1PreparedStatement {
 	return db
 		.prepare('INSERT INTO comments (id, post_id, author_id, parent_id, body, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
 		.bind(row.id, row.postId, row.authorId, row.parentId, row.body, row.status, row.createdAt, row.updatedAt);
@@ -79,7 +78,7 @@ export async function create(db: DB, data: CreateCommentData): Promise<CommentRo
 		await assertReplyDepth(db, data.parentId);
 	}
 
-	const nextId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM comments', []))?.v ?? 1;
+	const nextId = (await queryOne<NextIdRow>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM comments', []))?.v ?? 1;
 
 	await batch(db, [
 		buildInsertCommentStatement(db, {
@@ -101,7 +100,7 @@ export async function create(db: DB, data: CreateCommentData): Promise<CommentRo
 }
 
 async function assertReplyDepth(db: DB, parentId: number): Promise<void> {
-	const parent = await queryOne<{ id: number; parent_id: number | null }>(db, 'SELECT id, parent_id FROM comments WHERE id = ?', [parentId]);
+	const parent = await queryOne<Pick<CommentRow, 'id' | 'parent_id'>>(db, 'SELECT id, parent_id FROM comments WHERE id = ?', [parentId]);
 
 	if (!parent) throw new NotFoundError('parent not found');
 
@@ -109,7 +108,7 @@ async function assertReplyDepth(db: DB, parentId: number): Promise<void> {
 	let cur: number | null = parentId;
 
 	while (cur) {
-		const row: { parent_id: number | null } | null = await queryOne<{ parent_id: number | null }>(db, 'SELECT parent_id FROM comments WHERE id = ?', [cur]);
+		const row: Pick<CommentRow, 'parent_id'> | null = await queryOne<Pick<CommentRow, 'parent_id'>>(db, 'SELECT parent_id FROM comments WHERE id = ?', [cur]);
 
 		if (!row?.parent_id) break;
 
@@ -121,7 +120,7 @@ async function assertReplyDepth(db: DB, parentId: number): Promise<void> {
 }
 
 export async function softDelete(db: DB, commentId: number, requesterId: number, isModerator: boolean): Promise<void> {
-	const c = await queryOne<{ author_id: number }>(db, 'SELECT author_id FROM comments WHERE id = ?', [commentId]);
+	const c = await queryOne<Pick<CommentRow, 'author_id'>>(db, 'SELECT author_id FROM comments WHERE id = ?', [commentId]);
 
 	if (!c) throw new NotFoundError('comment not found');
 

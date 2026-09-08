@@ -1,16 +1,26 @@
 // =========================================================================================================
-// TAG SERVICE
+// TAG SERVICE (v2)
 // =========================================================================================================
 // Business rules for tag browsing / grouping. No Hono. Throws DomainError if needed.
+// =========================================================================================================
+
+// =========================================================================================================
+// Imports
+// =========================================================================================================
 
 import type { DB } from '../db/client';
 import * as tagRepo from '../repositories/tag-repository';
 import type { BrowseTagsResponse } from '../validators';
+import type { BrowseCategoryParams, BrowseParams, TagItemsResult } from '../types';
+
+// =========================================================================================================
+// Service
+// =========================================================================================================
 
 export class TagService {
 	constructor(private readonly db: DB) {}
 
-	async browse(params: { perCategoryLimit?: number } = {}): Promise<BrowseTagsResponse> {
+	async browse(params: BrowseParams = {}): Promise<BrowseTagsResponse> {
 		const limit = params.perCategoryLimit ?? 25;
 		const groups = await tagRepo.listGroupedByCategory(this.db, limit);
 
@@ -25,7 +35,7 @@ export class TagService {
 		return result;
 	}
 
-	async browseCategory(category: string, params: { limit?: number; offset?: number } = {}): Promise<{ tags: Array<{ name: string; display: string | null; usage: number }> }> {
+	async browseCategory(category: string, params: BrowseCategoryParams = {}): Promise<TagItemsResult> {
 		const limit = params.limit ?? 50;
 		const offset = params.offset ?? 0;
 

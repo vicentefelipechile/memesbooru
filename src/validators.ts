@@ -8,10 +8,19 @@ import { z } from 'zod';
 import { ValidationError } from './domain/errors';
 
 // =========================================================================================================
-// Helpers
+// Consts
 // =========================================================================================================
 
 const MAX_SANITIZE_LENGTH = 100_000;
+
+export const USER_RANKS = ['new', 'normal', 'trusted', 'restricted', 'banned'] as const satisfies readonly string[];
+export const POST_STATUSES = ['uploading', 'processing', 'available', 'duplicate', 'rejected', 'hidden'] as const satisfies readonly string[];
+export const MEDIA_TYPES = ['image', 'gif', 'video'] as const satisfies readonly string[];
+export const TAG_CATEGORIES = ['reaction', 'source', 'people', 'character', 'meta'] as const satisfies readonly string[];
+
+// =========================================================================================================
+// Helpers
+// =========================================================================================================
 
 export function sanitizeHtml(str: string): string {
 	if (str.length > MAX_SANITIZE_LENGTH) throw new ValidationError('Input too large');
@@ -45,15 +54,6 @@ function parseQueryWithArrays(url: string): Record<string, string | string[]> {
 }
 
 export { parseQueryWithArrays };
-
-// =========================================================================================================
-// Enums
-// =========================================================================================================
-
-export const USER_RANKS = ['new', 'normal', 'trusted', 'restricted', 'banned'] as const satisfies readonly string[];
-export const POST_STATUSES = ['uploading', 'processing', 'available', 'duplicate', 'rejected', 'hidden'] as const satisfies readonly string[];
-export const MEDIA_TYPES = ['image', 'gif', 'video'] as const satisfies readonly string[];
-export const TAG_CATEGORIES = ['reaction', 'source', 'people', 'character', 'meta'] as const satisfies readonly string[];
 
 // =========================================================================================================
 // Schemas

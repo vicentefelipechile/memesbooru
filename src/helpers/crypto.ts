@@ -4,12 +4,13 @@
 // Single source for token hashing and base64url helpers. No crypto logic elsewhere.
 // =========================================================================================================
 
+// =========================================================================================================
+// Helpers
+// =========================================================================================================
+
 export async function hashToken(token: string): Promise<ArrayBuffer> {
 	return crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
 }
-
-// Backwards compat alias — use hashToken
-export const hashTokenSync = hashToken;
 
 export function b64url(bytes: Uint8Array): string {
 	return btoa(String.fromCharCode(...bytes))
@@ -27,3 +28,9 @@ export function b64urlDecodeToBytes(str: string): Uint8Array {
 
 	return out;
 }
+
+// =========================================================================================================
+// Export (backwards compat alias — use hashToken)
+// =========================================================================================================
+
+export const hashTokenSync = hashToken;

@@ -1,16 +1,29 @@
-// Queue processor — idempotente (PLAN 14)
-// Jobs: process_media, recalculate_post_score, update_tag_usage, cleanup_expired_sessions
-// Zero SQL inline — delega a repositories.
+// =========================================================================================================
+// QUEUE PROCESSOR
+// =========================================================================================================
+// Idempotent jobs: process_media, recalculate_post_score, update_tag_usage, cleanup_expired_sessions.
+// Zero SQL inline — delegates to repositories.
+// =========================================================================================================
+
+// =========================================================================================================
+// Imports
+// =========================================================================================================
 
 import * as mediaRepo from '../repositories/media-repository';
 import * as sessionRepo from '../repositories/session-repository';
 import type { QueueMessage } from '../types';
 
-function toBytes(checksum: ArrayBuffer | Uint8Array): Uint8Array {
-	return checksum instanceof Uint8Array ? checksum : new Uint8Array(checksum);
-}
+// =========================================================================================================
+// Types
+// =========================================================================================================
 
-export async function handleQueue(batch: MessageBatch<QueueMessage>, env: Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket; QUARANTINE_BUCKET: R2Bucket }): Promise<void> {
+export type QueueEnv = Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket; QUARANTINE_BUCKET: R2Bucket };
+
+// =========================================================================================================
+// Handler
+// =========================================================================================================
+
+export async function handleQueue(batch: MessageBatch<QueueMessage>, env: QueueEnv): Promise<void> {
 	for (const msg of batch.messages) {
 		const body = msg.body;
 
@@ -34,7 +47,15 @@ export async function handleQueue(batch: MessageBatch<QueueMessage>, env: Cloudf
 	}
 }
 
-async function processMedia(env: Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket; QUARANTINE_BUCKET: R2Bucket }, postId: number): Promise<void> {
+// =========================================================================================================
+// Helpers
+// =========================================================================================================
+
+function toBytes(checksum: ArrayBuffer | Uint8Array): Uint8Array {
+	return checksum instanceof Uint8Array ? checksum : new Uint8Array(checksum);
+}
+
+async function processMedia(env: QueueEnv, postId: number): Promise<void> {
 	const db = env.DB;
 	const asset = await mediaRepo.findAssetByPostId(db, postId);
 

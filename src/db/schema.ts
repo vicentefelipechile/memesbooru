@@ -4,6 +4,10 @@
 // Mirror exact DB columns in snake_case. One interface per table. Shared SQL fragments here.
 // =========================================================================================================
 
+// =========================================================================================================
+// Types
+// =========================================================================================================
+
 export interface UserRow {
 	id: number;
 	username: string;
@@ -194,13 +198,9 @@ export interface ModerationActionRow {
 	created_at: number;
 }
 
-// Shared predicates
+// =========================================================================================================
+// Export — central projections live in ./projections (single source, re-exported here for compat)
+// =========================================================================================================
 
-export const VISIBLE_COMMENT_PREDICATE = "status = 'visible'" as const;
-export const AVAILABLE_POST_PREDICATE = "status = 'available'" as const;
-
-// Branded helpers — re-export for schema usage without circular import
-export type UserId = number & { readonly __brand: 'UserId' };
-export type PostId = number & { readonly __brand: 'PostId' };
-export type PublicId = string & { readonly __brand: 'PublicId' };
-export type TagId = number & { readonly __brand: 'TagId' };
+export type { NextIdRow, CountRow, PostDetailRow, UserTotpRow } from './projections';
+export { VISIBLE_COMMENT_PREDICATE, AVAILABLE_POST_PREDICATE } from './projections';

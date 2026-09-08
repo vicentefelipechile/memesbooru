@@ -4,13 +4,26 @@
 // Prefer Cloudflare native RL bindings. Register global then per-route overrides.
 // =========================================================================================================
 
-import type { Hono } from 'hono';
+// =========================================================================================================
+// Imports
+// =========================================================================================================
 
-function isLocalRequest(c: { req: { header: (name: string) => string | undefined } }): boolean {
+import type { Hono } from 'hono';
+import type { BareHeaderReader } from '../helpers/net';
+
+// =========================================================================================================
+// Helpers
+// =========================================================================================================
+
+function isLocalRequest(c: BareHeaderReader): boolean {
 	const host = c.req.header('host') ?? '';
 	const hostname = host.split(':')[0];
 	return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 }
+
+// =========================================================================================================
+// Middleware
+// =========================================================================================================
 
 export function registerRateLimits(app: Hono<{ Bindings: Env }>) {
 	// Docs verificadas 2026-09-02: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/

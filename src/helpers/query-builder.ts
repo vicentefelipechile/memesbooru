@@ -4,7 +4,24 @@
 // Fluent builder keeping clauses and params atomic. Use whereIf for optional filters.
 // =========================================================================================================
 
+// =========================================================================================================
+// Imports
+// =========================================================================================================
+
 import type { SqlParam } from '../db/client';
+
+// =========================================================================================================
+// Types
+// =========================================================================================================
+
+export type BuiltQuery = {
+	sql: string;
+	params: SqlParam[];
+};
+
+// =========================================================================================================
+// Builder
+// =========================================================================================================
 
 export class QueryBuilder {
 	private clauses: string[] = [];
@@ -39,7 +56,7 @@ export class QueryBuilder {
 		return this;
 	}
 
-	build(baseSql: string): { sql: string; params: SqlParam[] } {
+	build(baseSql: string): BuiltQuery {
 		let sql = baseSql;
 		if (this.clauses.length) sql += ` WHERE ${this.clauses.join(' AND ')}`;
 		if (this.orderClause) sql += ` ${this.orderClause}`;

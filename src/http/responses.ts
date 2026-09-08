@@ -4,9 +4,17 @@
 // Generic helpers — fail() for pre-service rejections, ok() for success.
 // =========================================================================================================
 
+// =========================================================================================================
+// Imports
+// =========================================================================================================
+
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { ErrorDetails } from '../types';
+
+// =========================================================================================================
+// Helpers
+// =========================================================================================================
 
 export function fail(c: Context, message: string, status: ContentfulStatusCode = 400, details?: ErrorDetails) {
 	return c.json(details === undefined ? { error: message } : { error: message, details }, status);

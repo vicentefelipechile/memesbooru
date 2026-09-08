@@ -12,6 +12,10 @@ import type { DB } from '../db/client';
 import * as activityRepo from '../repositories/activity-repository';
 import type { UserRow } from '../db/schema';
 
+// =========================================================================================================
+// Types
+// =========================================================================================================
+
 export type CooldownResult = { allowed: boolean; retryAfter?: number };
 
 // =========================================================================================================

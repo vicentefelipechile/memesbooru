@@ -4,11 +4,19 @@
 // secureHeaders + cors + csrf with explicit allowlist. No * except public docs.
 // =========================================================================================================
 
+// =========================================================================================================
+// Imports
+// =========================================================================================================
+
 import type { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { cors } from 'hono/cors';
 import { csrf } from 'hono/csrf';
 import { ALLOWED_ORIGINS } from '../../helpers/net';
+
+// =========================================================================================================
+// Middleware
+// =========================================================================================================
 
 export function securityMiddleware(app: Hono<{ Bindings: Env }>) {
 	app.use(

@@ -4,8 +4,12 @@
 // ONLY place with SQL for reports + moderation_actions.
 // =========================================================================================================
 
+// =========================================================================================================
+// Imports
+// =========================================================================================================
+
 import { queryAll, queryOne, batch, type DB } from '../db/client';
-import type { ReportRow, ModerationActionRow } from '../db/schema';
+import type { ReportRow, ModerationActionRow, NextIdRow } from '../db/schema';
 
 // =========================================================================================================
 // Repository input types — derived from Row via indexed access / Omit (never re-declare primitives)
@@ -26,9 +30,21 @@ export type CreateActionData = {
 	reason?: ModerationActionRow['reason'];
 };
 
+// =========================================================================================================
+// Queries
+// =========================================================================================================
+
+export async function listOpenReports(db: DB, limit = 50): Promise<ReportRow[]> {
+	return queryAll<ReportRow>(db, "SELECT * FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT ?", [limit]);
+}
+
+// =========================================================================================================
+// Commands
+// =========================================================================================================
+
 export async function createReport(db: DB, data: CreateReportData): Promise<ReportRow['id']> {
 	const now = Date.now();
-	const nextId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM reports', []))?.v ?? 1;
+	const nextId = (await queryOne<NextIdRow>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM reports', []))?.v ?? 1;
 
 	await batch(db, [
 		db.prepare('INSERT INTO reports (id, reporter_id, target_type, target_id, reason, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(nextId, data.reporterId, data.targetType, data.targetId, data.reason, 'open', now),
@@ -39,7 +55,7 @@ export async function createReport(db: DB, data: CreateReportData): Promise<Repo
 
 export async function createAction(db: DB, data: CreateActionData): Promise<ModerationActionRow['id']> {
 	const now = Date.now();
-	const nextId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM moderation_actions', []))?.v ?? 1;
+	const nextId = (await queryOne<NextIdRow>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM moderation_actions', []))?.v ?? 1;
 
 	const stmts: D1PreparedStatement[] = [
 		db
@@ -63,8 +79,4 @@ export async function createAction(db: DB, data: CreateActionData): Promise<Mode
 	await batch(db, stmts);
 
 	return nextId;
-}
-
-export async function listOpenReports(db: DB, limit = 50): Promise<ReportRow[]> {
-	return queryAll<ReportRow>(db, "SELECT * FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT ?", [limit]);
 }

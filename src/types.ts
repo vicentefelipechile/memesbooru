@@ -4,8 +4,14 @@
 // API contracts (not DB rows). Frontend has its own copy — never import backend types there.
 // =========================================================================================================
 
-import type { ReportRow, CommentRow } from './db/schema';
+// =========================================================================================================
+// Imports
+// =========================================================================================================
+
+import type { ReportRow, CommentRow, PostRow, PostListingRow } from './db/schema';
 import type { ZodIssue } from 'zod';
+
+export type { SqlParam } from './db/client';
 
 export type UserRank = 'new' | 'normal' | 'trusted' | 'restricted' | 'banned';
 export type UserStatus = 'active' | 'restricted' | 'banned';
@@ -23,7 +29,7 @@ export interface UserDTO {
 }
 
 export type PostDTO = DeepReadonly<
-	CamelCased<Omit<import('./db/schema').PostRow, 'author_id' | 'public_id' | 'canonical_post_id'>> & {
+	CamelCased<Omit<PostRow, 'author_id' | 'public_id' | 'canonical_post_id'>> & {
 		id: PublicId;
 		author: UserDTO | null;
 		mediaType: MediaType;
@@ -79,7 +85,6 @@ export interface AuthUser {
 // Primitive helpers — zero unknown
 // =========================================================================================================
 
-export type SqlParam = string | number | boolean | null | ArrayBuffer | Uint8Array;
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type ErrorDetails = JsonValue | ZodIssue[] | readonly ZodIssue[] | ({ redirectTo?: string; retryAfter?: number } & Record<string, JsonValue>);
@@ -115,8 +120,8 @@ export type NoInfer<T> = [T][T extends unknown ? 0 : never];
 export type VariadicFn<Args extends readonly unknown[], R> = (...args: Args) => R;
 export type AwaitedReturn<T extends (...args: never[]) => Promise<unknown>> = Awaited<ReturnType<T>>;
 
-export type PostSearchResult = import('./db/schema').PostListingRow;
-export type PostDetailResult = import('./db/schema').PostListingRow & {
+export type PostSearchResult = PostListingRow;
+export type PostDetailResult = PostListingRow & {
 	author_id: UserId;
 	author_username: string | null;
 	title: string | null;
@@ -129,7 +134,7 @@ export type PostDetailResult = import('./db/schema').PostListingRow & {
 };
 
 // Comment with author username joined (for the booru comment list).
-export type CommentResult = import('./db/schema').CommentRow & {
+export type CommentResult = CommentRow & {
 	author_username: string | null;
 };
 
@@ -143,7 +148,56 @@ export type CreatedCommentResult = Pick<CommentRow, 'id'>;
 export type CreatedPostResult = { publicId: PublicId; postId: PostId };
 
 // =========================================================================================================
-// Service input helpers — reuse validator inferences + Row field types via indexed access
+// Service result helpers — named results for service signatures (never inline Promise<{...}>)
+// =========================================================================================================
+
+export type SearchResult = {
+	data: PostSearchResult[];
+	nextCursor: string | null;
+	hasMore: boolean;
+};
+
+export type TagItem = {
+	name: string;
+	display: string | null;
+	usage: number;
+};
+
+export type TagItemsResult = {
+	tags: TagItem[];
+};
+
+export type BrowseCategoryParams = {
+	limit?: number;
+	offset?: number;
+};
+
+export type BrowseParams = {
+	perCategoryLimit?: number;
+};
+
+export type SessionTokenPair = {
+	token: string;
+	hash: ArrayBuffer;
+};
+
+export type GoogleTokens = {
+	id_token: string;
+	access_token: string;
+};
+
+export type AuthUserBrief = {
+	id: number;
+	username: string;
+	rank: string;
+};
+
+export type SessionVerification = {
+	userId: number;
+};
+
+// =========================================================================================================
+// Export — reuse validator inferences + Row field types via indexed access
 // =========================================================================================================
 
 export type { ReportInput, ModerationActionInput, CreatePostInput, CommentInput } from './validators';

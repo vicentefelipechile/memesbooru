@@ -4,11 +4,25 @@
 // Shared JSON parsing with uniform 400 handling.
 // =========================================================================================================
 
+// =========================================================================================================
+// Imports
+// =========================================================================================================
+
 import type { Context } from 'hono';
 import { fail } from '../http/responses';
 import type { JsonValue } from '../types';
 
-export async function parseJsonBody<T extends JsonValue = JsonValue>(c: Context): Promise<{ ok: true; data: T } | { ok: false; response: Response }> {
+// =========================================================================================================
+// Types
+// =========================================================================================================
+
+export type ParseJsonResult<T extends JsonValue> = { ok: true; data: T } | { ok: false; response: Response };
+
+// =========================================================================================================
+// Helpers
+// =========================================================================================================
+
+export async function parseJsonBody<T extends JsonValue = JsonValue>(c: Context): Promise<ParseJsonResult<T>> {
 	try {
 		const data = (await c.req.json()) as T;
 		return { ok: true, data };

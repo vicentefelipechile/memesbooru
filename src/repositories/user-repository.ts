@@ -9,13 +9,38 @@
 // =========================================================================================================
 
 import { queryOne, queryAll, execute, batch, type DB } from '../db/client';
-import type { UserRow, GoogleIdentityRow } from '../db/schema';
+import type { UserRow, GoogleIdentityRow, UserActivityRow, NextIdRow, CountRow } from '../db/schema';
 
 // =========================================================================================================
-// Row helpers
+// Types
 // =========================================================================================================
 
 export type { UserRow };
+
+export type InsertUserStatementData = {
+	id: UserRow['id'];
+	username: UserRow['username'];
+	rank: UserRow['rank'];
+	status: UserRow['status'];
+	trustScore: UserRow['trust_score'];
+	createdAt: UserRow['created_at'];
+};
+
+export type InsertGoogleIdentityStatementData = {
+	userId: GoogleIdentityRow['user_id'];
+	googleSubject: GoogleIdentityRow['google_subject'];
+	createdAt: GoogleIdentityRow['created_at'];
+};
+
+export type InsertUserActivityStatementData = {
+	userId: GoogleIdentityRow['user_id'];
+	updatedAt: UserActivityRow['updated_at'];
+};
+
+export type ListUsersParams = {
+	page: number;
+	limit: number;
+};
 
 // =========================================================================================================
 // Queries
@@ -37,19 +62,29 @@ export async function findGoogleIdentity(db: DB, userId: number): Promise<Google
 	return queryOne<GoogleIdentityRow>(db, 'SELECT * FROM google_identities WHERE user_id = ?', [userId]);
 }
 
+export async function count(db: DB): Promise<number> {
+	const row = await queryOne<CountRow>(db, 'SELECT COUNT(*) as c FROM users', []);
+	return row?.c ?? 0;
+}
+
+export async function list(db: DB, params: ListUsersParams): Promise<UserRow[]> {
+	const offset = (params.page - 1) * params.limit;
+	return queryAll<UserRow>(db, 'SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?', [params.limit, offset]);
+}
+
 // =========================================================================================================
-// Builders (for batch composition)
+// Builders
 // =========================================================================================================
 
-export function buildInsertUserStatement(db: DB, row: { id: number; username: string; rank: string; status: string; trustScore: number; createdAt: number }): D1PreparedStatement {
+export function buildInsertUserStatement(db: DB, row: InsertUserStatementData): D1PreparedStatement {
 	return db.prepare('INSERT INTO users (id, username, rank, status, trust_score, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(row.id, row.username, row.rank, row.status, row.trustScore, row.createdAt);
 }
 
-export function buildInsertGoogleIdentityStatement(db: DB, row: { userId: number; googleSubject: string; createdAt: number }): D1PreparedStatement {
+export function buildInsertGoogleIdentityStatement(db: DB, row: InsertGoogleIdentityStatementData): D1PreparedStatement {
 	return db.prepare('INSERT INTO google_identities (user_id, google_subject, created_at) VALUES (?, ?, ?)').bind(row.userId, row.googleSubject, row.createdAt);
 }
 
-export function buildInsertUserActivityStatement(db: DB, row: { userId: number; updatedAt: number }): D1PreparedStatement {
+export function buildInsertUserActivityStatement(db: DB, row: InsertUserActivityStatementData): D1PreparedStatement {
 	return db.prepare('INSERT INTO user_activity (user_id, updated_at) VALUES (?, ?)').bind(row.userId, row.updatedAt);
 }
 
@@ -59,7 +94,7 @@ export function buildInsertUserActivityStatement(db: DB, row: { userId: number; 
 
 export async function createFromGoogle(db: DB, sub: string, username: string): Promise<UserRow> {
 	const now = Date.now();
-	const nextId = (await queryOne<{ v: number }>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM users', []))?.v ?? 1;
+	const nextId = (await queryOne<NextIdRow>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM users', []))?.v ?? 1;
 
 	await batch(db, [
 		buildInsertUserStatement(db, { id: nextId, username, rank: 'new', status: 'active', trustScore: 0, createdAt: now }),
@@ -78,14 +113,4 @@ export async function updateLastLogin(db: DB, userId: number): Promise<void> {
 	const now = Date.now();
 
 	await batch(db, [db.prepare('UPDATE users SET last_login_at = ?, last_activity_at = ? WHERE id = ?').bind(now, now, userId), db.prepare('UPDATE google_identities SET last_login_at = ? WHERE user_id = ?').bind(now, userId)]);
-}
-
-export async function count(db: DB): Promise<number> {
-	const row = await queryOne<{ c: number }>(db, 'SELECT COUNT(*) as c FROM users', []);
-	return row?.c ?? 0;
-}
-
-export async function list(db: DB, params: { page: number; limit: number }): Promise<UserRow[]> {
-	const offset = (params.page - 1) * params.limit;
-	return queryAll<UserRow>(db, 'SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?', [params.limit, offset]);
 }

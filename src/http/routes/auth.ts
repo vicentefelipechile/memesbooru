@@ -18,6 +18,7 @@ import { hashToken } from '../../helpers/crypto';
 import * as sessionRepo from '../../repositories/session-repository';
 import * as authRepo from '../../repositories/auth-repository';
 import { TotpVerifySchema } from '../../validators';
+import type { JsonValue } from '../../types';
 
 // =========================================================================================================
 // Endpoints
@@ -143,10 +144,10 @@ router.post('/totp/setup', requireAuth, async (c) => {
 // =========================================================================================================
 
 router.post('/totp/verify', requireAuth, async (c) => {
-	let body: import('../../types').JsonValue;
+	let body: JsonValue;
 
 	try {
-		body = (await c.req.json()) as import('../../types').JsonValue;
+		body = (await c.req.json()) as JsonValue;
 	} catch {
 		return fail(c, 'Invalid JSON', 400);
 	}
