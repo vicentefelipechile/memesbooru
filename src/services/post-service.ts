@@ -9,13 +9,13 @@
 // =========================================================================================================
 
 import type { DB } from '../db/client';
-import * as postRepo from '../repositories/post-repository';
-import * as tagRepo from '../repositories/tag-repository';
-import * as userRepo from '../repositories/user-repository';
+import { PostRepository } from '../repositories/post-repository';
+import { TagRepository } from '../repositories/tag-repository';
+import { UserRepository } from '../repositories/user-repository';
 import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors';
 import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult, SearchResult, JsonValue } from '../types';
 import { toPostId, toPublicId, toUserId } from '../types';
-import { decodeCursor, type PostCursor } from '../helpers/cursor';
+import { decodeCursor, encodeCursor as encodeCursorHelper, type PostCursor } from '../helpers/cursor';
 import { normalizeTag, SearchCursorSchema } from '../validators';
 import type { CreatePostInput, SearchQueryInput } from '../validators';
 import type { PostRow } from '../db/schema';
@@ -32,25 +32,33 @@ export type SearchParams = Pick<SearchQueryInput, 'tags' | 'cursor' | 'limit'> &
 // =========================================================================================================
 
 export class PostService {
-	constructor(private readonly db: DB) {}
+	private readonly posts: PostRepository;
+	private readonly tags: TagRepository;
+	private readonly users: UserRepository;
+
+	constructor(private readonly db: DB) {
+		this.posts = new PostRepository(db);
+		this.tags = new TagRepository(db);
+		this.users = new UserRepository(db);
+	}
 
 	async search(params: SearchParams): Promise<SearchResult> {
 		this.validateSearchCursor(params);
 		const terms = params.tags?.split(/\s+/).filter(Boolean) ?? [];
 		const included = [...new Set(terms.filter((tag) => !tag.startsWith('-')).map(normalizeTag))];
 		const excluded = terms.filter((tag) => tag.startsWith('-'));
-		const resolved = await tagRepo.resolveTags(this.db, included);
+		const resolved = await this.tags.resolveTags(included);
 
 		if (included.some((tag) => !resolved.known.has(tag))) return { data: [], tags: [], nextCursor: null, hasMore: false };
 
 		const excludedNames = excluded.map((tag) => normalizeTag(tag.slice(1)));
-		const excludedTagIds = await tagRepo.resolveTagIds(this.db, excludedNames);
-		const sortedTagIds = await tagRepo.sortTagIdsByUsage(this.db, resolved.ids);
-		const found = await postRepo.searchByTags(this.db, sortedTagIds, { sort: params.sort, cursor: params.cursor, limit: params.limit + 1, excludedTagIds });
+		const excludedTagIds = await this.tags.resolveTagIds(excludedNames);
+		const sortedTagIds = await this.tags.sortTagIdsByUsage(resolved.ids);
+		const found = await this.posts.searchByTags(sortedTagIds, { sort: params.sort, cursor: params.cursor, limit: params.limit + 1, excludedTagIds });
 		const hasMore = found.length > params.limit;
 		const rows = found.slice(0, params.limit);
 		const postIds = rows.map((row) => toPostId(row.post_id));
-		const pageTags = await tagRepo.findByPostIds(this.db, postIds);
+		const pageTags = await this.tags.findByPostIds(postIds);
 
 		return {
 			data: rows,
@@ -73,22 +81,22 @@ export class PostService {
 	private buildNextCursor(sort: SearchParams['sort'], rows: PostSearchResult[]): string {
 		const last = rows[rows.length - 1];
 
-		if (sort === 'popular') return postRepo.encodeCursor({ score: last.score, id: last.post_id } satisfies PostCursor);
+		if (sort === 'popular') return encodeCursorHelper({ score: last.score, id: last.post_id } satisfies PostCursor);
 
-		return postRepo.encodeCursor({ published_at: last.published_at, id: last.post_id } satisfies PostCursor);
+		return encodeCursorHelper({ published_at: last.published_at, id: last.post_id } satisfies PostCursor);
 	}
 
 	async random(): Promise<string | null> {
-		return postRepo.findRandomPublicId(this.db);
+		return this.posts.findRandomPublicId();
 	}
 
 	async detail(publicId: string, viewer: AuthUser | null): Promise<PostDetailResult> {
-		const row = await postRepo.findByPublicId(this.db, publicId);
+		const row = await this.posts.findByPublicId(publicId);
 
 		if (!row) throw new NotFoundError('Post not found');
 
 		if (row.canonical_post_id) {
-			const canonPublicId = await postRepo.findPublicIdById(this.db, row.canonical_post_id);
+			const canonPublicId = await this.posts.findPublicIdById(row.canonical_post_id);
 
 			if (canonPublicId) throw new ValidationError('Duplicate', { redirectTo: canonPublicId });
 		}
@@ -108,8 +116,8 @@ export class PostService {
 			} satisfies PostDetailResult;
 		}
 
-		const tags = await tagRepo.findByPostId(this.db, row.post_id);
-		const author = await userRepo.findById(this.db, row.author_id);
+		const tags = await this.tags.findByPostId(row.post_id);
+		const author = await this.users.findById(row.author_id);
 
 		return {
 			...row,
@@ -127,7 +135,7 @@ export class PostService {
 
 		// ranking cooldown check
 		if (viewer.rank === 'new') {
-			const last = (await postRepo.getLastUploadAt(this.db, viewer.id)) ?? 0;
+			const last = (await this.posts.getLastUploadAt(viewer.id)) ?? 0;
 
 			if (Date.now() - last < 3600 * 1000) {
 				throw new ValidationError('cooldown 1h para cuentas nuevas', { retryAfter: 3600 * 1000 - (Date.now() - last) });
@@ -139,7 +147,7 @@ export class PostService {
 		const originalKey = `media/${publicId}/original` as const satisfies `media/${string}/original`;
 
 		const postId = toPostId(
-			await postRepo.createPost(this.db, {
+			await this.posts.createPost({
 				publicId,
 				authorId: viewer.id,
 				mediaType: input.mediaType,
@@ -150,7 +158,7 @@ export class PostService {
 			}),
 		);
 
-		await postRepo.updateUserActivityOnUpload(this.db, viewer.id);
+		await this.posts.updateUserActivityOnUpload(viewer.id);
 
 		if (queue) await queue.send({ type: 'process_media', postId });
 

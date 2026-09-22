@@ -13,8 +13,8 @@ import { z } from 'zod';
 import { securityMiddleware } from './http/middleware/security';
 import { registerRateLimits } from './http/rate-limits';
 import { DomainError } from './domain/errors';
-import * as sessionRepo from './repositories/session-repository';
-import * as postRepo from './repositories/post-repository';
+import { SessionRepository } from './repositories/session-repository';
+import { PostRepository } from './repositories/post-repository';
 import healthRoutes from './http/routes/health';
 import authRoutes from './http/routes/auth';
 import postRoutes from './http/routes/posts';
@@ -82,10 +82,11 @@ export default {
 	async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
 		const db = env.DB;
 
-		await sessionRepo.cleanupExpired(db);
+		await new SessionRepository(db).cleanupExpired();
 
-		const recent = await postRepo.findRecentlyRatedPostIds(db, 100);
+		const posts = new PostRepository(db);
+		const recent = await posts.findRecentlyRatedPostIds(100);
 
-		await postRepo.recalcScoreForPosts(db, recent);
+		await posts.recalcScoreForPosts(recent);
 	},
 };

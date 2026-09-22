@@ -13,21 +13,25 @@ import { ForbiddenError } from '../domain/errors';
 import type { AuthUser, CreatedReportResult } from '../types';
 import type { ReportInput, ModerationActionInput } from '../validators';
 import type { ReportRow, ModerationActionRow } from '../db/schema';
-import * as moderationRepo from '../repositories/moderation-repository';
+import { ModerationRepository } from '../repositories/moderation-repository';
 
 // =========================================================================================================
 // Service
 // =========================================================================================================
 
 export class ModerationService {
-	constructor(private readonly db: DB) {}
+	private readonly moderation: ModerationRepository;
+
+	constructor(private readonly db: DB) {
+		this.moderation = new ModerationRepository(db);
+	}
 
 	private assertTrusted(viewer: AuthUser): void {
 		if (!viewer.isAdmin) throw new ForbiddenError('solo trusted');
 	}
 
 	async report(viewer: AuthUser, input: ReportInput): Promise<CreatedReportResult> {
-		const id = await moderationRepo.createReport(this.db, {
+		const id = await this.moderation.createReport({
 			reporterId: viewer.id,
 			targetType: input.target_type,
 			targetId: input.target_id,
@@ -44,7 +48,7 @@ export class ModerationService {
 
 		if (!(allowed as readonly string[]).includes(input.action)) throw new ForbiddenError('accion no permitida');
 
-		const id = await moderationRepo.createAction(this.db, {
+		const id = await this.moderation.createAction({
 			targetType: input.target_type,
 			targetId: input.target_id,
 			moderatorId: viewer.id,
@@ -58,6 +62,6 @@ export class ModerationService {
 	async listReports(viewer: AuthUser): Promise<ReportRow[]> {
 		this.assertTrusted(viewer);
 
-		return moderationRepo.listOpenReports(this.db);
+		return this.moderation.listOpenReports();
 	}
 }

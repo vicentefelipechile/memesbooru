@@ -105,7 +105,10 @@ export function bindPost(publicId: string): void {
 
 		if (!reason) return;
 
-		api.moderation.report({ target_type: 'post', target_id: 0, reason }).then(() => alert('Reportado')).catch(() => alert('No se pudo reportar'));
+		api.moderation
+			.report({ target_type: 'post', target_id: 0, reason })
+			.then(() => alert('Reportado'))
+			.catch(() => alert('No se pudo reportar'));
 	});
 
 	bindCommentForm(publicId);

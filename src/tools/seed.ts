@@ -87,18 +87,183 @@ type MinimalPostSeed = {
 };
 
 const MINIMAL_POSTS: readonly MinimalPostSeed[] = [
-	{ id: 1, public_id: 'aaaa1111', author_id: 2, media_type: 'image', title: 'Pepe programando a las 3am', description: 'Cuando compilas y funciona a la primera', score: 42.5, rating_count: 12, favorite_count: 30, comment_count: 2, tags: [1, 4, 5], published_at_offset_days: 0, width: 800, height: 600 },
-	{ id: 2, public_id: 'bbbb2222', author_id: 2, media_type: 'image', title: 'Doge en la oficina', description: null, score: 35.0, rating_count: 8, favorite_count: 20, comment_count: 1, tags: [2, 5], published_at_offset_days: 1, width: 1024, height: 768 },
-	{ id: 3, public_id: 'cccc3333', author_id: 3, media_type: 'gif', title: null, description: 'gato triste vibes', score: 18.0, rating_count: 5, favorite_count: 10, comment_count: 0, tags: [3, 5], published_at_offset_days: 2, width: 400, height: 400 },
-	{ id: 4, public_id: 'dddd4444', author_id: 4, media_type: 'image', title: 'Drake decidiendo stack', description: 'JS vs TS', score: 27.3, rating_count: 7, favorite_count: 15, comment_count: 1, tags: [6, 4], published_at_offset_days: 3, width: 900, height: 1200 },
-	{ id: 5, public_id: 'eeee5555', author_id: 2, media_type: 'image', title: 'Wojak vs Chad', description: null, score: 55.1, rating_count: 20, favorite_count: 45, comment_count: 3, tags: [7, 8, 5], published_at_offset_days: 4, width: 700, height: 700 },
-	{ id: 6, public_id: 'ffff6666', author_id: 3, media_type: 'video', title: 'Coffin dance remix', description: 'video solo visible para trusted', score: 12.0, rating_count: 3, favorite_count: 5, comment_count: 0, tags: [10, 5], published_at_offset_days: 5, width: 1280, height: 720 },
-	{ id: 7, public_id: 'gggg7777', author_id: 4, media_type: 'image', title: 'This is fine - deploy viernes', description: null, score: 33.8, rating_count: 9, favorite_count: 18, comment_count: 0, tags: [11, 4], published_at_offset_days: 6, width: 600, height: 400 },
-	{ id: 8, public_id: 'hhhh8888', author_id: 2, media_type: 'image', title: 'Surprised Pikachu - code review', description: null, score: 40.0, rating_count: 11, favorite_count: 22, comment_count: 2, tags: [12, 4], published_at_offset_days: 7, width: 800, height: 800 },
-	{ id: 9, public_id: 'iiii9999', author_id: 5, media_type: 'image', title: 'Pepe + Doge fusion', description: 'crossover epico', score: 60.0, rating_count: 25, favorite_count: 60, comment_count: 1, tags: [1, 2, 5], published_at_offset_days: 8, width: 1100, height: 800 },
+	{
+		id: 1,
+		public_id: 'aaaa1111',
+		author_id: 2,
+		media_type: 'image',
+		title: 'Pepe programando a las 3am',
+		description: 'Cuando compilas y funciona a la primera',
+		score: 42.5,
+		rating_count: 12,
+		favorite_count: 30,
+		comment_count: 2,
+		tags: [1, 4, 5],
+		published_at_offset_days: 0,
+		width: 800,
+		height: 600,
+	},
+	{
+		id: 2,
+		public_id: 'bbbb2222',
+		author_id: 2,
+		media_type: 'image',
+		title: 'Doge en la oficina',
+		description: null,
+		score: 35.0,
+		rating_count: 8,
+		favorite_count: 20,
+		comment_count: 1,
+		tags: [2, 5],
+		published_at_offset_days: 1,
+		width: 1024,
+		height: 768,
+	},
+	{
+		id: 3,
+		public_id: 'cccc3333',
+		author_id: 3,
+		media_type: 'gif',
+		title: null,
+		description: 'gato triste vibes',
+		score: 18.0,
+		rating_count: 5,
+		favorite_count: 10,
+		comment_count: 0,
+		tags: [3, 5],
+		published_at_offset_days: 2,
+		width: 400,
+		height: 400,
+	},
+	{
+		id: 4,
+		public_id: 'dddd4444',
+		author_id: 4,
+		media_type: 'image',
+		title: 'Drake decidiendo stack',
+		description: 'JS vs TS',
+		score: 27.3,
+		rating_count: 7,
+		favorite_count: 15,
+		comment_count: 1,
+		tags: [6, 4],
+		published_at_offset_days: 3,
+		width: 900,
+		height: 1200,
+	},
+	{
+		id: 5,
+		public_id: 'eeee5555',
+		author_id: 2,
+		media_type: 'image',
+		title: 'Wojak vs Chad',
+		description: null,
+		score: 55.1,
+		rating_count: 20,
+		favorite_count: 45,
+		comment_count: 3,
+		tags: [7, 8, 5],
+		published_at_offset_days: 4,
+		width: 700,
+		height: 700,
+	},
+	{
+		id: 6,
+		public_id: 'ffff6666',
+		author_id: 3,
+		media_type: 'video',
+		title: 'Coffin dance remix',
+		description: 'video solo visible para trusted',
+		score: 12.0,
+		rating_count: 3,
+		favorite_count: 5,
+		comment_count: 0,
+		tags: [10, 5],
+		published_at_offset_days: 5,
+		width: 1280,
+		height: 720,
+	},
+	{
+		id: 7,
+		public_id: 'gggg7777',
+		author_id: 4,
+		media_type: 'image',
+		title: 'This is fine - deploy viernes',
+		description: null,
+		score: 33.8,
+		rating_count: 9,
+		favorite_count: 18,
+		comment_count: 0,
+		tags: [11, 4],
+		published_at_offset_days: 6,
+		width: 600,
+		height: 400,
+	},
+	{
+		id: 8,
+		public_id: 'hhhh8888',
+		author_id: 2,
+		media_type: 'image',
+		title: 'Surprised Pikachu - code review',
+		description: null,
+		score: 40.0,
+		rating_count: 11,
+		favorite_count: 22,
+		comment_count: 2,
+		tags: [12, 4],
+		published_at_offset_days: 7,
+		width: 800,
+		height: 800,
+	},
+	{
+		id: 9,
+		public_id: 'iiii9999',
+		author_id: 5,
+		media_type: 'image',
+		title: 'Pepe + Doge fusion',
+		description: 'crossover epico',
+		score: 60.0,
+		rating_count: 25,
+		favorite_count: 60,
+		comment_count: 1,
+		tags: [1, 2, 5],
+		published_at_offset_days: 8,
+		width: 1100,
+		height: 800,
+	},
 	{ id: 10, public_id: 'jjjj0000', author_id: 2, media_type: 'image', title: null, description: null, score: 5.0, rating_count: 1, favorite_count: 2, comment_count: 0, tags: [1], published_at_offset_days: 9, width: 500, height: 500 },
-	{ id: 11, public_id: 'kkkk1112', author_id: 3, media_type: 'gif', title: 'Programacion dolor', description: null, score: 22.4, rating_count: 6, favorite_count: 9, comment_count: 0, tags: [4, 9], published_at_offset_days: 10, width: 320, height: 240 },
-	{ id: 12, public_id: 'llll2223', author_id: 4, media_type: 'image', title: 'Gato triste + Pepe', description: null, score: 29.9, rating_count: 7, favorite_count: 13, comment_count: 0, tags: [3, 1], published_at_offset_days: 11, width: 640, height: 640 },
+	{
+		id: 11,
+		public_id: 'kkkk1112',
+		author_id: 3,
+		media_type: 'gif',
+		title: 'Programacion dolor',
+		description: null,
+		score: 22.4,
+		rating_count: 6,
+		favorite_count: 9,
+		comment_count: 0,
+		tags: [4, 9],
+		published_at_offset_days: 10,
+		width: 320,
+		height: 240,
+	},
+	{
+		id: 12,
+		public_id: 'llll2223',
+		author_id: 4,
+		media_type: 'image',
+		title: 'Gato triste + Pepe',
+		description: null,
+		score: 29.9,
+		rating_count: 7,
+		favorite_count: 13,
+		comment_count: 0,
+		tags: [3, 1],
+		published_at_offset_days: 11,
+		width: 640,
+		height: 640,
+	},
 ] as const;
 
 const MINIMAL_COMMENTS = [
@@ -250,7 +415,9 @@ export function generateScaleSql(opts: Partial<ScaleOptions> = {}): string {
 	const startTagId = FIXED_MINIMAL_TAGS.length + 1;
 
 	function randTagName(i: number): string {
-		const suffix = Math.floor(rand() * 0xffff).toString(36).padStart(4, '0');
+		const suffix = Math.floor(rand() * 0xffff)
+			.toString(36)
+			.padStart(4, '0');
 		return `tag_${String(i).padStart(5, '0')}_${suffix}`;
 	}
 
@@ -353,14 +520,18 @@ function parseArgs(argv: readonly string[]): CliArgs {
 		else if (a === '--remote') args.remote = true;
 		else if (a === '--local') args.remote = false;
 		else if (a === '--yes' || a === '-y') args.yes = true;
-		else if (a === '--out' && argv[i + 1]) { args.out = argv[++i] as string; }
-		else if (a.startsWith('--out=')) args.out = a.slice('--out='.length);
-		else if (a === '--db' && argv[i + 1]) { args.db = argv[++i] as string; }
-		else if (a.startsWith('--db=')) args.db = a.slice('--db='.length);
-		else if (a === '--tags' && argv[i + 1]) { args.tagCount = Number(argv[++i]); }
-		else if (a.startsWith('--tags=')) args.tagCount = Number(a.slice('--tags='.length));
-		else if (a === '--posts' && argv[i + 1]) { args.postCount = Number(argv[++i]); }
-		else if (a.startsWith('--posts=')) args.postCount = Number(a.slice('--posts='.length));
+		else if (a === '--out' && argv[i + 1]) {
+			args.out = argv[++i] as string;
+		} else if (a.startsWith('--out=')) args.out = a.slice('--out='.length);
+		else if (a === '--db' && argv[i + 1]) {
+			args.db = argv[++i] as string;
+		} else if (a.startsWith('--db=')) args.db = a.slice('--db='.length);
+		else if (a === '--tags' && argv[i + 1]) {
+			args.tagCount = Number(argv[++i]);
+		} else if (a.startsWith('--tags=')) args.tagCount = Number(a.slice('--tags='.length));
+		else if (a === '--posts' && argv[i + 1]) {
+			args.postCount = Number(argv[++i]);
+		} else if (a.startsWith('--posts=')) args.postCount = Number(a.slice('--posts='.length));
 	}
 	if (!args.minimal && !args.scale) args.minimal = true;
 	return args;

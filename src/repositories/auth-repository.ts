@@ -21,31 +21,35 @@ export type UserPublic = Pick<UserRow, 'id' | 'username' | 'display_name' | 'ran
 // Queries
 // =========================================================================================================
 
-export async function findUserById(db: DB, id: number): Promise<UserRow | null> {
-	return queryOne<UserRow>(db, 'SELECT * FROM users WHERE id = ?', [id]);
-}
+export class AuthRepository {
+	constructor(private readonly db: DB) {}
 
-export async function findUserPublicById(db: DB, id: number): Promise<UserPublic | null> {
-	return queryOne<UserPublic>(db, 'SELECT id, username, display_name, rank, status FROM users WHERE id = ?', [id]);
-}
+	async findUserById(id: number): Promise<UserRow | null> {
+		return queryOne<UserRow>(this.db, 'SELECT * FROM users WHERE id = ?', [id]);
+	}
 
-export async function getTotpSecret(db: DB, userId: number): Promise<Uint8Array | null> {
-	const row = await queryOne<Pick<UserTotpRow, 'secret_encrypted'>>(db, 'SELECT secret_encrypted FROM user_totp WHERE user_id = ?', [userId]);
-	return row?.secret_encrypted ?? null;
-}
+	async findUserPublicById(id: number): Promise<UserPublic | null> {
+		return queryOne<UserPublic>(this.db, 'SELECT id, username, display_name, rank, status FROM users WHERE id = ?', [id]);
+	}
 
-// =========================================================================================================
-// Commands
-// =========================================================================================================
+	async getTotpSecret(userId: number): Promise<Uint8Array | null> {
+		const row = await queryOne<Pick<UserTotpRow, 'secret_encrypted'>>(this.db, 'SELECT secret_encrypted FROM user_totp WHERE user_id = ?', [userId]);
+		return row?.secret_encrypted ?? null;
+	}
 
-export async function upsertTotpSecret(db: DB, userId: number, secretEncrypted: Uint8Array): Promise<void> {
-	await execute(db, 'INSERT OR REPLACE INTO user_totp (user_id, secret_encrypted, is_verified, created_at) VALUES (?, ?, 0, ?)', [userId, secretEncrypted, Date.now()]);
-}
+	// =========================================================================================================
+	// Commands
+	// =========================================================================================================
 
-export async function verifyTotp(db: DB, userId: number): Promise<void> {
-	await execute(db, 'UPDATE user_totp SET is_verified = 1, verified_at = ? WHERE user_id = ?', [Date.now(), userId]);
-}
+	async upsertTotpSecret(userId: number, secretEncrypted: Uint8Array): Promise<void> {
+		await execute(this.db, 'INSERT OR REPLACE INTO user_totp (user_id, secret_encrypted, is_verified, created_at) VALUES (?, ?, 0, ?)', [userId, secretEncrypted, Date.now()]);
+	}
 
-export async function insertRecoveryCode(db: DB, userId: number, codeHash: ArrayBuffer): Promise<void> {
-	await execute(db, 'INSERT INTO totp_recovery_codes (user_id, code_hash, created_at) VALUES (?, ?, ?)', [userId, codeHash, Date.now()]);
+	async verifyTotp(userId: number): Promise<void> {
+		await execute(this.db, 'UPDATE user_totp SET is_verified = 1, verified_at = ? WHERE user_id = ?', [Date.now(), userId]);
+	}
+
+	async insertRecoveryCode(userId: number, codeHash: ArrayBuffer): Promise<void> {
+		await execute(this.db, 'INSERT INTO totp_recovery_codes (user_id, code_hash, created_at) VALUES (?, ?, ?)', [userId, codeHash, Date.now()]);
+	}
 }

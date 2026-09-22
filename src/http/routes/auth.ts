@@ -15,8 +15,8 @@ import { requireAuth, type AuthVariables } from '../middleware/auth';
 import { AuthService } from '../../services/auth-service';
 import { fail } from '../responses';
 import { hashToken } from '../../helpers/crypto';
-import * as sessionRepo from '../../repositories/session-repository';
-import * as authRepo from '../../repositories/auth-repository';
+import { SessionRepository } from '../../repositories/session-repository';
+import { AuthRepository } from '../../repositories/auth-repository';
 import { TotpVerifySchema } from '../../validators';
 import type { JsonValue } from '../../types';
 import { isAllowedOrigin } from '../../helpers/net';
@@ -105,7 +105,7 @@ router.post('/logout', async (c) => {
 		const db = c.env.DB;
 		const hash = await hashToken(token);
 
-		await sessionRepo.revokeSession(db, hash);
+		await new SessionRepository(db).revokeSession(hash);
 	}
 
 	deleteCookie(c, 'session', { path: '/' });
@@ -129,7 +129,7 @@ router.get('/me', async (c) => {
 
 	if (!sess) return c.json({ user: null });
 
-	const row = await authRepo.findUserPublicById(db, sess.userId);
+	const row = await new AuthRepository(db).findUserPublicById(sess.userId);
 
 	return c.json({ user: row });
 });
@@ -146,7 +146,7 @@ router.post('/totp/setup', requireAuth, async (c) => {
 	const secret = service.generateTotpSecret();
 	const enc = new TextEncoder().encode(secret);
 
-	await authRepo.upsertTotpSecret(db, user.id, enc);
+	await new AuthRepository(db).upsertTotpSecret(user.id, enc);
 
 	return c.json({ secret, uri: `otpauth://totp/Memesbooru:${user.id}?secret=${secret}&issuer=Memesbooru` });
 });
@@ -172,7 +172,7 @@ router.post('/totp/verify', requireAuth, async (c) => {
 	const user = c.get('user');
 	const db = c.env.DB;
 	const service = new AuthService(db);
-	const enc = await authRepo.getTotpSecret(db, user.id);
+	const enc = await new AuthRepository(db).getTotpSecret(user.id);
 
 	if (!enc) return fail(c, 'no totp', 400);
 
@@ -181,7 +181,7 @@ router.post('/totp/verify', requireAuth, async (c) => {
 
 	if (!ok) return fail(c, 'invalid code', 400);
 
-	await authRepo.verifyTotp(db, user.id);
+	await new AuthRepository(db).verifyTotp(user.id);
 
 	const codes: string[] = [];
 
@@ -191,7 +191,7 @@ router.post('/totp/verify', requireAuth, async (c) => {
 
 		const hash = await hashToken(rc);
 
-		await authRepo.insertRecoveryCode(db, user.id, hash);
+		await new AuthRepository(db).insertRecoveryCode(user.id, hash);
 	}
 
 	return c.json({ ok: true, recoveryCodes: codes });

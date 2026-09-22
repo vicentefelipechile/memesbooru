@@ -9,7 +9,7 @@
 // =========================================================================================================
 
 import type { DB } from '../db/client';
-import * as tagRepo from '../repositories/tag-repository';
+import { TagRepository } from '../repositories/tag-repository';
 import type { BrowseTagsResponse } from '../validators';
 import type { BrowseCategoryParams, BrowseParams, TagItemsResult } from '../types';
 
@@ -18,11 +18,15 @@ import type { BrowseCategoryParams, BrowseParams, TagItemsResult } from '../type
 // =========================================================================================================
 
 export class TagService {
-	constructor(private readonly db: DB) {}
+	private readonly tags: TagRepository;
+
+	constructor(private readonly db: DB) {
+		this.tags = new TagRepository(db);
+	}
 
 	async browse(params: BrowseParams = {}): Promise<BrowseTagsResponse> {
 		const limit = params.perCategoryLimit ?? 25;
-		const groups = await tagRepo.listGroupedByCategory(this.db, limit);
+		const groups = await this.tags.listGroupedByCategory(limit);
 
 		// Ensure all categories present even if empty (for stable frontend)
 		const allCats = ['reaction', 'source', 'people', 'character', 'meta'] as const;
@@ -39,7 +43,7 @@ export class TagService {
 		const limit = params.limit ?? 50;
 		const offset = params.offset ?? 0;
 
-		const rows = await tagRepo.listByCategory(this.db, category, { limit, offset });
+		const rows = await this.tags.listByCategory(category, { limit, offset });
 
 		return { tags: rows.map((t) => ({ name: t.normalized_name, display: t.display_name, usage: t.usage_count })) };
 	}

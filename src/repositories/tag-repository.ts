@@ -10,6 +10,8 @@
 
 import { queryOne, batch, type DB } from '../db/client';
 import type { TagRow, PostTagRow, NextIdRow } from '../db/schema';
+import type { PostId } from '../types';
+import { resolveTagIds, resolveTags, findByPostIds, findByPostId, listByCategory, listGroupedByCategory, autocomplete, sortTagIdsByUsage, type ResolveAliasesResult, type ListByCategoryOpts } from './tag-lookup';
 
 // =========================================================================================================
 // Types
@@ -60,6 +62,46 @@ export async function ensureTags(db: DB, normalized: string[], authorId: number)
 	}
 
 	return ids;
+}
+
+export class TagRepository {
+	constructor(private readonly db: DB) {}
+
+	async ensureTags(normalized: string[], authorId: number): Promise<number[]> {
+		return ensureTags(this.db, normalized, authorId);
+	}
+
+	async resolveTagIds(inputs: string[]): Promise<number[]> {
+		return resolveTagIds(this.db, inputs);
+	}
+
+	async resolveTags(inputs: string[]): Promise<ResolveAliasesResult> {
+		return resolveTags(this.db, inputs);
+	}
+
+	async sortTagIdsByUsage(tagIds: number[]): Promise<number[]> {
+		return sortTagIdsByUsage(this.db, tagIds);
+	}
+
+	async findByPostIds(postIds: PostId[]): Promise<Pick<TagRow, 'normalized_name' | 'category' | 'usage_count'>[]> {
+		return findByPostIds(this.db, postIds);
+	}
+
+	async findByPostId(postId: number): Promise<TagRow[]> {
+		return findByPostId(this.db, postId);
+	}
+
+	async listByCategory(category: string, opts: ListByCategoryOpts): Promise<TagRow[]> {
+		return listByCategory(this.db, category, opts);
+	}
+
+	async listGroupedByCategory(perCategoryLimit = 25): Promise<Record<string, TagRow[]>> {
+		return listGroupedByCategory(this.db, perCategoryLimit);
+	}
+
+	async autocomplete(prefix: string, limit = 20): Promise<TagRow[]> {
+		return autocomplete(this.db, prefix, limit);
+	}
 }
 
 async function findOrCreateTagId(db: DB, normalized: string, authorId: number, now: number): Promise<number> {

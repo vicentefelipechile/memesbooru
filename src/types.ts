@@ -104,11 +104,7 @@ export const toPublicId = (s: string): PublicId => s as PublicId;
 export const toTagId = (n: number): TagId => n as TagId;
 export const toCommentId = (n: number): CommentId => n as CommentId;
 
-export type QueueMessage =
-	| { type: 'process_media'; postId: PostId }
-	| { type: 'recalculate_post_score'; postId: PostId }
-	| { type: 'update_tag_usage' }
-	| { type: 'cleanup_expired_sessions' };
+export type QueueMessage = { type: 'process_media'; postId: PostId } | { type: 'recalculate_post_score'; postId: PostId } | { type: 'update_tag_usage' } | { type: 'cleanup_expired_sessions' };
 
 // Snake -> camel mapped type + helpers
 type SnakeToCamel<S extends string> = S extends `${infer H}_${infer T}` ? `${H}${Capitalize<SnakeToCamel<T>>}` : S;

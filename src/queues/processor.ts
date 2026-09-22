@@ -9,8 +9,8 @@
 // Imports
 // =========================================================================================================
 
-import * as mediaRepo from '../repositories/media-repository';
-import * as sessionRepo from '../repositories/session-repository';
+import { MediaRepository } from '../repositories/media-repository';
+import { SessionRepository } from '../repositories/session-repository';
 import type { QueueMessage } from '../types';
 
 // =========================================================================================================
@@ -31,11 +31,11 @@ export async function handleQueue(batch: MessageBatch<QueueMessage>, env: QueueE
 			if (body.type === 'process_media' && body.postId) {
 				await processMedia(env, body.postId);
 			} else if (body.type === 'recalculate_post_score' && body.postId) {
-				await mediaRepo.recalcScoreWithDecay(env.DB, body.postId);
+				await new MediaRepository(env.DB).recalcScoreWithDecay(body.postId);
 			} else if (body.type === 'update_tag_usage') {
-				await mediaRepo.recalcAllTagUsage(env.DB);
+				await new MediaRepository(env.DB).recalcAllTagUsage();
 			} else if (body.type === 'cleanup_expired_sessions') {
-				await sessionRepo.cleanupExpired(env.DB);
+				await new SessionRepository(env.DB).cleanupExpired();
 			}
 
 			msg.ack();
@@ -57,14 +57,15 @@ function toBytes(checksum: ArrayBuffer | Uint8Array): Uint8Array {
 
 async function processMedia(env: QueueEnv, postId: number): Promise<void> {
 	const db = env.DB;
-	const asset = await mediaRepo.findAssetByPostId(db, postId);
+	const media = new MediaRepository(db);
+	const asset = await media.findAssetByPostId(postId);
 
 	if (!asset) return;
 
-	const existing = await mediaRepo.findVariant(db, asset.id, 'low');
+	const existing = await media.findVariant(asset.id, 'low');
 
 	if (existing) {
-		await mediaRepo.publishPostWithExistingVariant(db, postId, asset.id);
+		await media.publishPostWithExistingVariant(postId, asset.id);
 
 		return;
 	}
@@ -76,7 +77,7 @@ async function processMedia(env: QueueEnv, postId: number): Promise<void> {
 	await env.MEDIA_BUCKET.put(lowKey, dummy, { httpMetadata: { contentType: 'image/avif' } });
 	await env.MEDIA_BUCKET.put(medKey, dummy, { httpMetadata: { contentType: 'image/avif' } });
 
-	await mediaRepo.insertVariantsAndPublish(db, asset.id, postId, lowKey, medKey, dummy.length);
+	await media.insertVariantsAndPublish(asset.id, postId, lowKey, medKey, dummy.length);
 }
 
 function buildLowKey(checksum: ArrayBuffer | Uint8Array | null, postId: number): string {

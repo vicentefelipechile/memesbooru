@@ -12,7 +12,7 @@ import type { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { UnauthorizedError, ForbiddenError } from '../../domain/errors';
 import { hashToken } from '../../helpers/crypto';
-import * as sessionRepo from '../../repositories/session-repository';
+import { SessionRepository } from '../../repositories/session-repository';
 import type { AuthUser, UserRank, UserStatus } from '../../types';
 import { toUserId } from '../../types';
 import { USER_RANKS } from '../../validators';
@@ -48,7 +48,7 @@ export async function getAuthUser(c: Context<{ Bindings: Env; Variables: AuthVar
 
 	const db = c.env.DB;
 	const hash = await hashToken(token);
-	const row = await sessionRepo.findSessionWithUser(db, hash);
+	const row = await new SessionRepository(db).findSessionWithUser(hash);
 
 	if (!row || row.revoked_at || row.expires_at < Date.now()) return null;
 

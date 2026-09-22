@@ -22,8 +22,8 @@ Hono (src/index.ts / src/http/routes/*)
 
 **Rules (enforced in review):**
 - Routes: zero business logic, zero SQL. `zValidator` or `parseJsonBody` + `Schema.safeParse` before service. `throw` DomainError, let `app.onError` (`src/index.ts:36`) handle it.
-- Services: no Hono, no `c.env.DB` direct. Constructor `new Service(db: DB)`. Use `src/types.ts` branded ids and `src/validators.ts` inferred types.
-- Repositories: only SQL via `queryOne<T> / queryAll<T> / execute / batch` from `src/db/client.ts`. Never import `c.env.DB` outside `index.ts` / routes.
+- Services: every service is a class. No Hono or direct `c.env.DB`; inject `DB` through `constructor(db: DB)`. Use `src/types.ts` branded ids and `src/validators.ts` inferred types.
+- Repositories: every repository is a class with `DB` injected through its constructor. Repository methods are the only place for SQL via `queryOne<T> / queryAll<T> / execute / batch` from `src/db/client.ts`. Never import `c.env.DB` outside `index.ts` / routes.
 - Domain (`src/domain/errors.ts`): pure, no Cloudflare types. Services throw `NotFoundError / ValidationError / ForbiddenError` etc.
 - `src/index.ts` is composition root only: middleware, route mounting, `onError`, `notFound`, `fetch/queue/scheduled` exports.
 
@@ -37,8 +37,8 @@ src/
   helpers/       # cursor.ts, query-builder.ts, file-validation.ts, net.ts, http.ts, crypto.ts (pure, reusable)
   http/          # routes/* (posts, comments, tags, auth, moderation, interactions, health) + middleware/auth,security + responses.ts, rate-limits.ts
   queues/        # processor.ts (typed QueueMessage, idempotent)
-  repositories/  # post, tag, comment, media, user, session, auth, moderation, activity
-  services/      # post, comment, interaction, moderation, ranking, auth
+  repositories/  # class-based post, tag, comment, media, user, session, auth, moderation, activity repositories
+  services/      # class-based post, comment, interaction, moderation, ranking, auth services
   validators.ts  # single Zod validator monolith
   types.ts       # single type monolith (DTOs + branded ids + helpers)
   index.ts       # Hono app
@@ -230,6 +230,8 @@ Verified facts: `wrangler.jsonc` recommended, `wrangler types` generates `Env`, 
 ## 13. Testing & Typecheck
 
 ```bash
+npm run format         # Prettier
+npm run format:check   # verify formatting
 npm run typecheck        # tsc --noEmit (strict, 0 unknown, 0 any in backend)
 npm test                 # vitest run (pool @cloudflare/vitest-pool-workers, miniflare D1/R2/Queue)
 npm run test:watch
@@ -248,12 +250,13 @@ Conventional Commits, English, imperative: `refactor: ...` / `feat: ...` / `fix:
 1. Update `schema.ts` + migration SQL before code.
 2. Update `validators.ts` Zod schema, then `types.ts` inferred type, then repository → service → route.
 3. Run `npm run cf-typegen` if `wrangler.jsonc` changed.
-4. `npm run typecheck && npm test` before push.
+4. Run `npm run format:check && npm run typecheck && npm test` before push.
 5. Keep `PLAN.md` reference but code is truth.
 
 ## 16. Anti-Patterns — DO NOT
 
 - `unknown` / `any` / `as unknown as` — use `SqlParam/JsonValue/ErrorDetails/QueueMessage/PostSearchResult`
+- Functional repository modules or services — use a class with `DB` injected in the constructor.
 - Inline anonymous `{id:number}` — use `Pick<ReportRow,'id'>` / `CreatedPostResult` / `NextIdRow` / `CountRow` / `InsertPostTagStatementData` (never `row: { postId: number; ... }` inline)
 - SQL outside `src/repositories/*` or `c.env.DB` outside routes/`index.ts`
 - Business logic in `src/http/routes/*` or Hono in `src/services/*`

@@ -137,3 +137,26 @@ export async function recalcScoreWithDecay(db: DB, postId: number): Promise<void
 export async function recalcAllTagUsage(db: DB): Promise<void> {
 	await execute(db, 'UPDATE tags SET usage_count = (SELECT COUNT(*) FROM post_tags WHERE tag_id = tags.id), updated_at = ?', [Date.now()]);
 }
+
+export class MediaRepository {
+	constructor(private readonly db: DB) {}
+
+	findAssetByPostId(postId: number) {
+		return findAssetByPostId(this.db, postId);
+	}
+	findVariant(assetId: number, variantName: string) {
+		return findVariant(this.db, assetId, variantName);
+	}
+	publishPostWithExistingVariant(postId: number, assetId: number, now?: number) {
+		return publishPostWithExistingVariant(this.db, postId, assetId, now);
+	}
+	insertVariantsAndPublish(assetId: number, postId: number, lowKey: string, medKey: string, byteSize: number, now?: number) {
+		return insertVariantsAndPublish(this.db, assetId, postId, lowKey, medKey, byteSize, now);
+	}
+	recalcScoreWithDecay(postId: number) {
+		return recalcScoreWithDecay(this.db, postId);
+	}
+	recalcAllTagUsage() {
+		return recalcAllTagUsage(this.db);
+	}
+}

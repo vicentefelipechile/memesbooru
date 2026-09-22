@@ -9,7 +9,7 @@
 // =========================================================================================================
 
 import { Hono } from 'hono';
-import * as tagRepo from '../../repositories/tag-repository';
+import { TagRepository } from '../../repositories/tag-repository';
 import { TagService } from '../../services/tag-service';
 import { BrowseTagsQuerySchema, parseQueryWithArrays } from '../../validators';
 import { fail } from '../responses';
@@ -31,7 +31,7 @@ router.get('/autocomplete', async (c) => {
 
 	if (!q) return c.json({ tags: [] });
 
-	const tags = await tagRepo.autocomplete(db, q, 20);
+	const tags = await new TagRepository(db).autocomplete(q, 20);
 
 	c.header('Cache-Control', 'public, max-age=300');
 
@@ -46,7 +46,7 @@ router.get('/autocomplete', async (c) => {
 router.get('/:name', async (c) => {
 	const db = c.env.DB;
 	const name = c.req.param('name')!;
-	const tags = await tagRepo.autocomplete(db, name, 1);
+	const tags = await new TagRepository(db).autocomplete(name, 1);
 	const t = tags.find((x) => x.normalized_name === name);
 
 	if (!t) return fail(c, 'not found', 404);

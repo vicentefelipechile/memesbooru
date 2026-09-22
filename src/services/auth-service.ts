@@ -9,8 +9,8 @@
 // =========================================================================================================
 
 import type { DB } from '../db/client';
-import * as userRepo from '../repositories/user-repository';
-import * as sessionRepo from '../repositories/session-repository';
+import { UserRepository } from '../repositories/user-repository';
+import { SessionRepository } from '../repositories/session-repository';
 import { normalizeTag } from '../validators';
 import { ValidationError } from '../domain/errors';
 import { b64url, hashToken } from '../helpers/crypto';
@@ -40,7 +40,13 @@ export async function generateSessionToken(): Promise<SessionTokenPair> {
 // =========================================================================================================
 
 export class AuthService {
-	constructor(private readonly db: DB) {}
+	private readonly sessions: SessionRepository;
+	private readonly users: UserRepository;
+
+	constructor(private readonly db: DB) {
+		this.sessions = new SessionRepository(db);
+		this.users = new UserRepository(db);
+	}
 
 	getGoogleAuthUrl(env: GoogleEnv, state: string): string {
 		if (!env.GOOGLE_CLIENT_ID) throw new ValidationError('Google not configured');
@@ -106,10 +112,10 @@ export class AuthService {
 	}
 
 	async findOrCreateUserBySub(sub: string): Promise<AuthUserBrief> {
-		const user = await userRepo.findByGoogleSubject(this.db, sub);
+		const user = await this.users.findByGoogleSubject(sub);
 
 		if (user) {
-			await userRepo.updateLastLogin(this.db, user.id);
+			await this.users.updateLastLogin(user.id);
 
 			return { id: user.id, username: user.username, rank: user.rank };
 		}
@@ -117,14 +123,14 @@ export class AuthService {
 		let username = this.generateUsernameFromSub(sub);
 
 		for (let i = 0; i < 5; i++) {
-			const exists = await userRepo.findByUsername(this.db, username);
+			const exists = await this.users.findByUsername(username);
 
 			if (!exists) break;
 
 			username = `${username}_${Math.random().toString(36).slice(2, 4)}`;
 		}
 
-		const created = await userRepo.createFromGoogle(this.db, sub, username);
+		const created = await this.users.createFromGoogle(sub, username);
 
 		return { id: created.id, username: created.username, rank: created.rank };
 	}
@@ -133,14 +139,14 @@ export class AuthService {
 		const { token, hash } = await generateSessionToken();
 		const expiresAt = Date.now() + 30 * 24 * 3600 * 1000;
 
-		await sessionRepo.createSession(this.db, userId, hash, expiresAt);
+		await this.sessions.createSession(userId, hash, expiresAt);
 
 		return token;
 	}
 
 	async verifySession(token: string): Promise<SessionVerification | null> {
 		const hash = await hashToken(token);
-		const row = await sessionRepo.findByTokenHash(this.db, hash);
+		const row = await this.sessions.findByTokenHash(hash);
 
 		if (!row || row.revoked_at) return null;
 
