@@ -50,6 +50,7 @@ export type InsertMediaAssetStatementData = {
 
 export type SearchByTagsOpts = {
 	sort: 'recent' | 'popular';
+	excludedTagIds?: number[];
 	cursor?: string;
 	limit: number;
 };

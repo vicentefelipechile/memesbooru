@@ -4,22 +4,26 @@
 // =========================================================================================================
 
 import { renderSubNav } from './sub-nav.js';
+import { escapeHtml } from './search.js';
+
+function renderTodo(label: string): string {
+	return `<span class="nav-todo" aria-disabled="true" title="Pendiente de implementar">${label} <small>TODO</small></span>`;
+}
 
 export function renderHeader(user: { username: string; rank: string } | null): string {
 	return `
-  <a href="#contenido" class="skip-link">Saltar al contenido</a>
+   <a href="#page" class="skip-link">Saltar al contenido</a>
   <header class="site-header">
-    <a href="/" data-link class="brand">memes<span class="brand-accent">booru</span></a>
+     <a href="/" data-link class="brand">Memesbooru</a>
     <nav class="site-nav" aria-label="Principal">
-      <a href="/" data-link>Inicio</a>
-      <a href="/upload" data-link>Subir</a>
+       <a href="${user ? '/profile' : '/api/auth/google'}" ${user ? 'data-link' : ''}>Mi cuenta</a>
+       <a href="/" data-link>Posts</a>
+       ${['Comentarios', 'Wiki', 'Alias', 'Artistas', 'Tags', 'Pools', 'Foro', 'Top', 'Ayuda'].map(renderTodo).join('')}
       ${
 				user
-					? `<a href="/favorites" data-link>Favoritos</a>
-         <a href="/profile" data-link>@${user.username}</a>
-         <span class="rank">${user.rank}</span>
+					? `<a href="/profile" data-link>@${escapeHtml(user.username)}</a>
          <button id="logout-btn" class="small">Salir</button>`
-					: `<a href="/api/auth/google">Entrar con Google</a>`
+					: ''
 			}
     </nav>
   </header>

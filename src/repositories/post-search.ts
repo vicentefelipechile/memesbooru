@@ -1,23 +1,18 @@
 // =========================================================================================================
-// POST SEARCH (v2)
-// =========================================================================================================
-// Cursor-paginated search over post_listing. No OFFSET, no ORDER BY RANDOM().
+// Cursor-paginated search. Tag intersection and exclusion happen before ordering and limiting.
 // =========================================================================================================
 
-// =========================================================================================================
-// Imports
-// =========================================================================================================
-
-import { queryOne, queryAll, type DB, type SqlParam } from '../db/client';
-import type { PostRow, PostListingRow, PostTagRow, CountRow } from '../db/schema';
+import { queryOne, queryAll, type DB } from '../db/client';
+import type { PostRow, PostListingRow, CountRow } from '../db/schema';
 import { decodeCursor, type PostCursor } from '../helpers/cursor';
+import { QueryBuilder } from '../helpers/query-builder';
 import type { SearchByTagsOpts, PostCountFilter } from './post-types';
 
-// =========================================================================================================
-// Export — types live in ./post-types (single source, re-exported here for compat)
-// =========================================================================================================
-
 export type { SearchByTagsOpts, PostCountFilter } from './post-types';
+
+const LISTING_COLUMNS = `pl.post_id, pl.public_id, pl.media_type, pl.status, pl.low_variant_key,
+	pl.medium_variant_key, pl.width, pl.height, pl.score, pl.rating_count, pl.favorite_count,
+	pl.comment_count, pl.published_at`;
 
 // =========================================================================================================
 // Queries
@@ -25,69 +20,27 @@ export type { SearchByTagsOpts, PostCountFilter } from './post-types';
 
 export async function searchByTags(db: DB, tagIds: number[], opts: SearchByTagsOpts): Promise<PostListingRow[]> {
 	const cursor = opts.cursor ? decodeCursor<PostCursor>(opts.cursor) : null;
+	const query = new QueryBuilder().where("pl.status = 'available'");
+	const [rarest, ...remaining] = tagIds;
 
-	if (tagIds.length === 0) return searchWithoutTags(db, opts.sort, cursor, opts.limit);
+	if (rarest !== undefined) query.where('pl.post_id IN (SELECT post_id FROM post_tags WHERE tag_id = ?)', rarest);
 
-	const ids = await fetchCandidateIds(db, tagIds);
-
-	if (ids.length === 0) return [];
-
-	return searchWithTags(db, ids, opts.sort, cursor, opts.limit);
-}
-
-async function searchWithoutTags(db: DB, sort: 'recent' | 'popular', cursor: PostCursor | null, limit: number): Promise<PostListingRow[]> {
-	if (sort === 'popular') {
-		if (cursor?.score !== undefined) {
-			return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' AND (score < ? OR (score = ? AND post_id < ?)) ORDER BY score DESC, post_id DESC LIMIT ?`, [cursor.score, cursor.score, cursor.id, limit]);
-		}
-
-		return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' ORDER BY score DESC, post_id DESC LIMIT ?`, [limit]);
+	for (const tagId of remaining) {
+		query.where('EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id = pl.post_id AND pt.tag_id = ?)', tagId);
 	}
 
-	if (cursor?.published_at !== undefined) {
-		return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' AND (published_at < ? OR (published_at = ? AND post_id < ?)) ORDER BY published_at DESC, post_id DESC LIMIT ?`, [
-			cursor.published_at,
-			cursor.published_at,
-			cursor.id,
-			limit,
-		]);
+	for (const tagId of opts.excludedTagIds ?? []) {
+		query.where('NOT EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id = pl.post_id AND pt.tag_id = ?)', tagId);
 	}
 
-	return queryAll<PostListingRow>(db, `SELECT * FROM post_listing WHERE status = 'available' ORDER BY published_at DESC, post_id DESC LIMIT ?`, [limit]);
-}
+	const column = opts.sort === 'popular' ? 'score' : 'published_at';
+	const value = cursor?.[column];
 
-async function fetchCandidateIds(db: DB, tagIds: number[]): Promise<number[]> {
-	const placeholders = tagIds.map(() => '?').join(',');
+	if (cursor && value !== undefined) query.where(`(pl.${column} < ? OR (pl.${column} = ? AND pl.post_id < ?))`, value, value, cursor.id);
 
-	const candidateRows = await queryAll<Pick<PostTagRow, 'post_id'>>(db, `SELECT post_id FROM post_tags WHERE tag_id IN (${placeholders}) GROUP BY post_id HAVING COUNT(DISTINCT tag_id) = ? ORDER BY post_id DESC LIMIT 500`, [
-		...tagIds,
-		tagIds.length,
-	]);
+	const { sql, params } = query.build(`SELECT ${LISTING_COLUMNS} FROM post_listing pl`);
 
-	return candidateRows.map((r) => r.post_id);
-}
-
-async function searchWithTags(db: DB, ids: number[], sort: 'recent' | 'popular', cursor: PostCursor | null, limit: number): Promise<PostListingRow[]> {
-	const idPlaceholders = ids.map(() => '?').join(',');
-	const orderColumn = sort === 'popular' ? 'score DESC, post_id DESC' : 'published_at DESC, post_id DESC';
-
-	let sql = `SELECT * FROM post_listing WHERE status = 'available' AND post_id IN (${idPlaceholders})`;
-	const params: SqlParam[] = [...ids];
-
-	if (cursor) {
-		if (sort === 'popular' && cursor.score !== undefined) {
-			sql += ` AND (score < ? OR (score = ? AND post_id < ?))`;
-			params.push(cursor.score, cursor.score, cursor.id);
-		} else if (cursor.published_at !== undefined) {
-			sql += ` AND (published_at < ? OR (published_at = ? AND post_id < ?))`;
-			params.push(cursor.published_at, cursor.published_at, cursor.id);
-		}
-	}
-
-	sql += ` ORDER BY ${orderColumn} LIMIT ?`;
-	params.push(limit);
-
-	return queryAll<PostListingRow>(db, sql, params);
+	return queryAll<PostListingRow>(db, `${sql} ORDER BY pl.${column} DESC, pl.post_id DESC LIMIT ?`, [...params, opts.limit]);
 }
 
 export async function count(db: DB, filters?: PostCountFilter): Promise<number> {
@@ -105,5 +58,6 @@ export async function count(db: DB, filters?: PostCountFilter): Promise<number> 
 // Deliberate single use of RANDOM() for /random — only ever returns 1 row, planner uses existing status index.
 export async function findRandomPublicId(db: DB): Promise<string | null> {
 	const row = await queryOne<Pick<PostRow, 'public_id'>>(db, `SELECT public_id FROM post_listing WHERE status = 'available' ORDER BY RANDOM() LIMIT 1`, []);
+
 	return row?.public_id ?? null;
 }

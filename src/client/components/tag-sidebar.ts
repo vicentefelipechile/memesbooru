@@ -1,48 +1,26 @@
 // =========================================================================================================
-// TAG SIDEBAR (v2)
-// Booru detail sidebar: Statistics + Tagged (tags grouped by category, with usage counts).
+// Post statistics and categorized tags, using the catalog's category labels.
 // =========================================================================================================
 
-import { formatCount } from './search.js';
+import { escapeHtml } from './search.js';
+import { CATEGORY_ORDER, CATEGORY_LABELS, type SidebarTag } from './sidebar.js';
 
-export type SidebarTag = { name: string; category: string; count: number };
-
-const CATEGORY_LABELS: Record<string, string> = {
-	general: 'General',
-	artist: 'Artista',
-	character: 'Personaje',
-	series: 'Serie',
-	copyright: 'Copyright',
-	meta: 'Meta',
-};
+export type { SidebarTag } from './sidebar.js';
 
 export function renderStatistics(rows: [string, string][]): string {
-	if (rows.length === 0) return '';
-
-	return `<dl class="stat-grid">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
+	return `<dl class="stat-grid">${rows.map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd>`).join('')}</dl>`;
 }
 
 export function renderTagged(tags: SidebarTag[]): string {
-	if (tags.length === 0) return '<p class="small muted">Sin tags.</p>';
+	if (!tags.length) return '<p class="small muted">Sin tags.</p>';
 
-	const groups = new Map<string, SidebarTag[]>();
+	return CATEGORY_ORDER.map((category) => {
+		const items = tags.filter((tag) => tag.category === category).sort((a, b) => a.name.localeCompare(b.name));
 
-	for (const t of tags) {
-		const arr = groups.get(t.category) ?? [];
-		arr.push(t);
-		groups.set(t.category, arr);
-	}
+		if (!items.length) return '';
 
-	return [...groups.entries()]
-		.map(
-			([cat, list]) => `<div class="tag-category">
-      <span class="cat">${CATEGORY_LABELS[cat] ?? cat}</span>
-      <div class="tag-list">${list.map((t) => `<a href="/?tags=${encodeURIComponent(t.name)}" data-link>${t.name}</a> <span class="count">${formatCount(t.count)}</span>`).join(' ')}</div>
-    </div>`,
-		)
-		.join('');
-}
-
-export function renderSideBlock(title: string, inner: string): string {
-	return `<section class="side-block"><h2>${title}</h2>${inner}</section>`;
+		return `<section class="sidebar-cat" data-cat="${category}"><h3>${CATEGORY_LABELS[category]}</h3><ul>${items
+			.map((tag) => `<li><a href="/?tags=${encodeURIComponent(tag.name)}" data-link>${escapeHtml(tag.name.replaceAll('_', ' '))}</a> <span class="count">${tag.count}</span></li>`)
+			.join('')}</ul></section>`;
+	}).join('');
 }

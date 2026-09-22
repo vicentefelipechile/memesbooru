@@ -1,4 +1,5 @@
 import { store } from '../state/store.js';
+import { api } from '../services/api.js';
 
 export async function renderUpload(): Promise<string> {
 	const user = store.get().user;
@@ -66,23 +67,11 @@ export function bindUpload(): void {
 
 		status.textContent = 'Subiendo...';
 
-		const res = await fetch('/api/posts', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			credentials: 'include',
-			body: JSON.stringify({ title, tags, media_type: mediaType }),
+		const result = await api.posts.create({ title, tags, media_type: mediaType }).catch((error: Error) => {
+			status.textContent = `Error: ${error.message}`;
+			return null;
 		});
-
-		if (!res.ok) {
-			const body = await res.text().catch(() => '');
-
-			status.textContent = `Error: ${body}`;
-
-			return;
-		}
-
-		const raw = (await res.json().catch(() => null)) as { publicId?: string } | null;
-		const publicId = raw?.publicId;
+		const publicId = result?.publicId;
 
 		if (publicId) {
 			status.textContent = 'Publicacion creada — redirigiendo...';

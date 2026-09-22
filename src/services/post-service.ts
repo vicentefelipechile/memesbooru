@@ -13,9 +13,10 @@ import * as postRepo from '../repositories/post-repository';
 import * as tagRepo from '../repositories/tag-repository';
 import * as userRepo from '../repositories/user-repository';
 import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors';
-import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult, SearchResult } from '../types';
+import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult, SearchResult, JsonValue } from '../types';
 import { toPostId, toPublicId, toUserId } from '../types';
-import type { PostCursor } from '../helpers/cursor';
+import { decodeCursor, type PostCursor } from '../helpers/cursor';
+import { normalizeTag, SearchCursorSchema } from '../validators';
 import type { CreatePostInput, SearchQueryInput } from '../validators';
 import type { PostRow } from '../db/schema';
 
@@ -34,17 +35,39 @@ export class PostService {
 	constructor(private readonly db: DB) {}
 
 	async search(params: SearchParams): Promise<SearchResult> {
-		const tagNames = params.tags ? params.tags.split(/\s+/).filter(Boolean) : [];
-		const tagIds = tagNames.length ? await tagRepo.resolveTagIds(this.db, tagNames) : [];
+		this.validateSearchCursor(params);
+		const terms = params.tags?.split(/\s+/).filter(Boolean) ?? [];
+		const included = [...new Set(terms.filter((tag) => !tag.startsWith('-')).map(normalizeTag))];
+		const excluded = terms.filter((tag) => tag.startsWith('-'));
+		const resolved = await tagRepo.resolveTags(this.db, included);
 
-		if (tagNames.length > 0 && tagIds.length === 0) return { data: [], nextCursor: null, hasMore: false };
+		if (included.some((tag) => !resolved.known.has(tag))) return { data: [], tags: [], nextCursor: null, hasMore: false };
 
-		const sortedTagIds = await tagRepo.sortTagIdsByUsage(this.db, tagIds);
-		const rows = await postRepo.searchByTags(this.db, sortedTagIds, { sort: params.sort, cursor: params.cursor, limit: params.limit });
+		const excludedNames = excluded.map((tag) => normalizeTag(tag.slice(1)));
+		const excludedTagIds = await tagRepo.resolveTagIds(this.db, excludedNames);
+		const sortedTagIds = await tagRepo.sortTagIdsByUsage(this.db, resolved.ids);
+		const found = await postRepo.searchByTags(this.db, sortedTagIds, { sort: params.sort, cursor: params.cursor, limit: params.limit + 1, excludedTagIds });
+		const hasMore = found.length > params.limit;
+		const rows = found.slice(0, params.limit);
+		const postIds = rows.map((row) => toPostId(row.post_id));
+		const pageTags = await tagRepo.findByPostIds(this.db, postIds);
 
-		const nextCursor = rows.length === params.limit ? this.buildNextCursor(params.sort, rows) : null;
+		return {
+			data: rows,
+			tags: pageTags.map((tag) => ({ name: tag.normalized_name, category: tag.category, count: tag.usage_count })),
+			nextCursor: hasMore ? this.buildNextCursor(params.sort, rows) : null,
+			hasMore,
+		};
+	}
 
-		return { data: rows, nextCursor, hasMore: !!nextCursor };
+	private validateSearchCursor(params: SearchParams): void {
+		if (!params.cursor) return;
+
+		const parsed = SearchCursorSchema.safeParse(decodeCursor<JsonValue>(params.cursor));
+
+		if (!parsed.success || (params.sort === 'popular' ? parsed.data.score === undefined : parsed.data.published_at === undefined)) {
+			throw new ValidationError('Invalid search cursor');
+		}
 	}
 
 	private buildNextCursor(sort: SearchParams['sort'], rows: PostSearchResult[]): string {

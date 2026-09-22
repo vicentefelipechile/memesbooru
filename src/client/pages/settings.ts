@@ -1,8 +1,8 @@
 import { store, THEMES, setTheme, type ThemeName } from '../state/store.js';
-import { totpSetup, totpVerify } from '../services/api.js';
+import { api } from '../services/api.js';
 
 const THEME_LABELS: Record<ThemeName, string> = {
-	android: 'Android (verde)',
+	cyan: 'Memesbooru (azul/cyan)',
 	solarized: 'Solarized (cálido)',
 	gruvbox: 'Gruvbox (retro)',
 	nord: 'Nord (frío)',
@@ -49,7 +49,7 @@ export function bindSettings(): void {
 		setupBtn.addEventListener('click', async () => {
 			const out = document.getElementById('totp-output');
 			if (!out) return;
-			const res = await totpSetup().catch(() => null);
+			const res = await api.auth.totpSetup().catch(() => null);
 			if (!res) {
 				out.textContent = 'No se pudo iniciar la configuración.';
 				out.className = 'form-msg err';
@@ -68,7 +68,7 @@ export function bindSettings(): void {
 					e.preventDefault();
 					const codeEl = document.getElementById('totp-code');
 					if (!(codeEl instanceof HTMLInputElement)) return;
-					const ver = await totpVerify(codeEl.value).catch(() => null);
+					const ver = await api.auth.totpVerify(codeEl.value).catch(() => null);
 					const out2 = document.getElementById('totp-output');
 					if (out2) {
 						if (ver?.ok) {

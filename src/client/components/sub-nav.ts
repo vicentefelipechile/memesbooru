@@ -6,9 +6,12 @@
 export function renderSubNav(): string {
 	return `
   <nav class="site-subnav" aria-label="Secciones">
-    <a href="/" data-link>Posts</a>
-    <a href="/upload" data-link>Upload</a>
-    <a href="/random" data-link>Random</a>
-    <a href="/favorites" data-link>Favorites</a>
+     <a href="/upload" data-link>Subir</a>
+     <span class="nav-todo" aria-disabled="true">Subir vídeo <small>TODO</small></span>
+     <a href="/random" data-link>Aleatorio</a>
+     <a href="/favorites" data-link>Favoritos</a>
+     <a href="/settings" data-link>Configuración</a>
+     <span class="nav-todo" aria-disabled="true">Contacto <small>TODO</small></span>
+     <span class="nav-todo" aria-disabled="true">Acerca de <small>TODO</small></span>
   </nav>`;
 }

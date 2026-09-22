@@ -15,6 +15,7 @@ import { renderFavorites, bindFavorites } from '../pages/favorites.js';
 import { renderSettings, bindSettings } from '../pages/settings.js';
 import { renderProfile, bindProfile } from '../pages/profile.js';
 import { renderRandom, bindRandom } from '../pages/random.js';
+import { api } from '../services/api.js';
 
 const routes: Route[] = [
 	{ pattern: /^\/(\?.*)?$/, render: () => renderHome(), bind: () => bindHome() },
@@ -26,12 +27,17 @@ const routes: Route[] = [
 	{ pattern: /^\/random$/, render: () => renderRandom(), bind: () => bindRandom() },
 ];
 
+let routeVersion = 0;
+
 async function renderRoute(path: string): Promise<void> {
+	const version = ++routeVersion;
 	const page = document.getElementById('page');
 
 	if (!page) return;
 
-	const match = routes.find((r) => r.pattern.test(path));
+	const pathname = new URL(path, location.origin).pathname;
+	const match = routes.find((r) => r.pattern.test(pathname));
+	updateNavigation(pathname);
 
 	if (!match) {
 		page.innerHTML = `<div class="empty">404 — Página no encontrada<div class="detail"><a href="/" data-link>Volver al inicio</a></div></div>`;
@@ -39,10 +45,29 @@ async function renderRoute(path: string): Promise<void> {
 		return;
 	}
 
-	const m = path.match(match.pattern)!;
-	page.innerHTML = await match.render(m);
+	const m = pathname.match(match.pattern)!;
 
-	match.bind?.(m);
+	try {
+		const html = await match.render(m);
+
+		if (version !== routeVersion) return;
+
+		page.innerHTML = html;
+		match.bind?.(m);
+	} catch (error) {
+		console.error('Route failed', error);
+
+		if (version === routeVersion) page.innerHTML = '<div class="error" role="alert">No se pudo cargar la página. <a href="/" data-link>Volver a intentar</a></div>';
+	}
+}
+
+function updateNavigation(pathname: string): void {
+	for (const link of Array.from(document.querySelectorAll<HTMLAnchorElement>('.site-nav a[data-link], .site-subnav a[data-link]'))) {
+		const active = link.pathname === pathname || (link.pathname === '/' && pathname.startsWith('/post/'));
+
+		if (active) link.setAttribute('aria-current', 'page');
+		else link.removeAttribute('aria-current');
+	}
 }
 
 export function navigate(path: string): void {
@@ -75,7 +100,7 @@ function renderShell(): void {
 	app.innerHTML = `${renderHeader(user)}<main id="page" class="site-main" tabindex="-1"></main>`;
 
 	document.getElementById('logout-btn')?.addEventListener('click', async () => {
-		await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined);
+		await api.auth.logout().catch(() => undefined);
 
 		store.set({ user: null });
 		renderShell();

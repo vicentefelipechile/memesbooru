@@ -1,7 +1,9 @@
 // =========================================================================================================
 // GRID (v2)
-// Dense square thumbnail grid (no cards) + booru numeric paginator.
+// Whole-image thumbnails + booru numeric paginator with known cursor links.
 // =========================================================================================================
+
+import { escapeAttr } from './search.js';
 
 export type GridItem = { public_id: string; low_variant_key?: string | null; score: number; favorite_count: number; media_type?: string };
 
@@ -9,9 +11,9 @@ export function renderCard(item: GridItem): string {
 	const isVideo = item.media_type === 'video' || item.media_type === 'gif';
 
 	return `
-  <a href="/post/${item.public_id}" class="thumb" data-link>
-    <img loading="lazy" src="/api/posts/${item.public_id}/variants/low" alt="post ${item.public_id}" onerror="this.style.display='none'" />
-    ${isVideo ? `<span class="scoreline">▶ ${item.score.toFixed(1)} · ♥ ${item.favorite_count}</span>` : ''}
+  <a href="/post/${encodeURIComponent(item.public_id)}" class="thumb" data-link>
+    <img loading="lazy" src="/api/posts/${encodeURIComponent(item.public_id)}/variants/low" alt="Meme ${escapeAttr(item.public_id)}" />
+    ${isVideo ? `<span class="media-label">${item.media_type === 'gif' ? 'GIF' : 'Vídeo'}</span>` : ''}
   </a>`;
 }
 
@@ -21,36 +23,35 @@ export function renderGrid(items: GridItem[]): string {
 	return `<div class="posts">${items.map((c) => renderCard(c)).join('')}</div>`;
 }
 
-export function renderPaginator(current: number, total: number, hasMore: boolean, prefix = '/'): string {
-	if (total <= 1 && !hasMore) return '';
+export function renderPaginator(current: number, knownPages: number[], hasMore: boolean, pageUrl: (page: number) => string): string {
+	if (knownPages.length <= 1 && !hasMore) return '';
 
-	const pages = pageList(current, total, hasMore);
-	const link = (page: number, label: string) => `<a href="${prefix}?page=${page}" data-page="${page}">${label}</a>`;
+	const pages = pageList(current, knownPages);
+	const link = (page: number, label: string) => `<a href="${escapeAttr(pageUrl(page))}" data-page="${page}" aria-label="Página ${page}">${label}</a>`;
 	const parts: string[] = [];
 
-	if (current > 1) parts.push(link(current - 1, '« Anterior'));
+	if (knownPages.includes(current - 1)) parts.push(link(current - 1, '«'));
 
 	for (const p of pages) {
 		if (p === null) parts.push(`<span class="ellipsis">…</span>`);
-		else if (p === current) parts.push(`<span class="current">${p}</span>`);
+		else if (p === current) parts.push(`<span class="current" aria-current="page">${p}</span>`);
 		else parts.push(link(p, String(p)));
 	}
 
-	if (hasMore) parts.push(link(current + 1, 'Siguiente »'));
+	if (hasMore) parts.push(link(current + 1, '»'));
 
 	return `<nav class="paginator" aria-label="Paginación">${parts.join('')}</nav>`;
 }
 
 // Compact page list with ellipsis around the current page.
-function pageList(current: number, total: number, hasMore: boolean): (number | null)[] {
-	if (total === 0) return hasMore ? [current, current + 1] : [];
-
-	const visible = 5;
+function pageList(current: number, knownPages: number[]): (number | null)[] {
 	const out: (number | null)[] = [];
+	const visible = knownPages.filter((page) => page === 1 || page === knownPages.at(-1) || Math.abs(page - current) <= 2);
 
-	for (let p = 1; p <= total; p++) {
-		if (p === 1 || p === total || Math.abs(p - current) <= 1) out.push(p);
-		else if (out[out.length - 1] !== null) out.push(null);
+	for (const [index, page] of visible.entries()) {
+		if (index > 0 && page > visible[index - 1] + 1) out.push(null);
+
+		out.push(page);
 	}
 
 	return out;

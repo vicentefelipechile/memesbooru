@@ -27,7 +27,7 @@ export type InsertPostTagStatementData = {
 // =========================================================================================================
 
 export type { ResolveAliasesResult, ListByCategoryOpts } from './tag-lookup';
-export { resolveTagIds, autocomplete, findByPostId, findById, listByCategory, listGroupedByCategory, getTagUsageCounts, sortTagIdsByUsage } from './tag-lookup';
+export { resolveTagIds, resolveTags, autocomplete, findByPostId, findByPostIds, findById, listByCategory, listGroupedByCategory, getTagUsageCounts, sortTagIdsByUsage } from './tag-lookup';
 
 // =========================================================================================================
 // Builders

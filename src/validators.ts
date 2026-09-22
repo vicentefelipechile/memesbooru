@@ -107,11 +107,26 @@ export const ModerationActionSchema = z.object({
 
 export const TotpVerifySchema = z.object({ code: z.string().length(6) });
 
+export const SearchCursorSchema = z.object({ id: z.number().int().positive(), score: z.number().optional(), published_at: z.number().optional() });
+
 export const SearchQuerySchema = z.object({
-	tags: z.string().max(500).optional().catch(undefined),
+	tags: z
+		.union([z.string(), z.array(z.string())])
+		.transform((value) => (Array.isArray(value) ? value.join(' ') : value))
+		.pipe(z.string().max(500))
+		.refine((value) => value.trim().split(/\s+/).filter(Boolean).length <= 40, 'Too many search tags')
+		.refine(
+			(value) =>
+				value
+					.split(/\s+/)
+					.filter(Boolean)
+					.every((tag) => normalizeTag(tag.replace(/^-/, '')).length > 0),
+			'Invalid search tag',
+		)
+		.optional(),
 	q: z.string().trim().min(1).max(100).optional().catch(undefined),
 	sort: z.enum(['recent', 'popular']).catch('recent').default('recent'),
-	cursor: z.string().max(200).optional().catch(undefined),
+	cursor: z.string().max(200).optional(),
 	limit: z.coerce.number().int().min(1).max(60).catch(20).default(20),
 	page: z.coerce.number().int().min(1).catch(1).default(1),
 	sort_by: z.enum(['created_at', 'title', 'published_at', 'score']).catch('created_at').default('created_at'),
@@ -155,9 +170,9 @@ export const BrowseTagsQuerySchema = z.object({
 export const BrowseTagsResponseSchema = z.object({
 	groups: z.record(z.enum(TAG_CATEGORIES), z.object({ tags: z.array(TagItemSchema) })),
 });
-export const GridItemSchema = z.object({ public_id: z.string(), low_variant_key: z.string().nullable().optional(), score: z.number(), favorite_count: z.number(), tags: z.array(z.string()).optional() });
-export const SearchResponseSchema = z.object({ data: z.array(GridItemSchema), nextCursor: z.string().nullable(), hasMore: z.boolean().optional(), warning: z.string().optional() });
+export const GridItemSchema = z.object({ public_id: z.string(), low_variant_key: z.string().nullable().optional(), score: z.number(), favorite_count: z.number(), media_type: z.string().optional(), tags: z.array(z.string()).optional() });
 export const PostTagSchema = z.object({ name: z.string(), category: z.string(), count: z.number() });
+export const SearchResponseSchema = z.object({ data: z.array(GridItemSchema), tags: z.array(PostTagSchema), nextCursor: z.string().nullable(), hasMore: z.boolean(), warning: z.string().optional() });
 export const PostResponseSchema = z.object({
 	public_id: z.string().optional(),
 	publicId: z.string().optional(),

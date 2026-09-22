@@ -1,270 +1,189 @@
-import { renderAutocomplete, renderSelectedTags, renderSortLinks } from '../components/search.js';
-import { renderGrid, renderPaginator, type GridItem } from '../components/grid.js';
-import { renderSidebar } from '../components/sidebar.js';
-import { store, resetPagination, cursorForPage, recordPage, setCurrentPage, setHasMore } from '../state/store.js';
-import { searchPosts, autocompleteTags, browseTags } from '../services/api.js';
-
-type SearchResult = { data: GridItem[]; nextCursor: string | null; hasMore?: boolean };
-
 // =========================================================================================================
-// Render — only the main content (header lives in the persistent shell).
+// Booru catalog: persistent search input, atomic results/tags updates and explicit form submission.
 // =========================================================================================================
+
+import { renderAutocomplete, renderSortLinks } from '../components/search.js';
+import { renderGrid, renderPaginator } from '../components/grid.js';
+import { renderSidebar, renderPageTags } from '../components/sidebar.js';
+import { store, cursorForPage, recordPage, setHasMore } from '../state/store.js';
+import { buildSearchUrl, readSearchUrl } from '../state/catalog.js';
+import { api } from '../services/api.js';
+
+let requestVersion = 0;
+type SearchResult = Awaited<ReturnType<typeof api.posts.find>>;
+
+function renderResults(result: SearchResult): string {
+	const state = store.get();
+	const knownPages = [...new Set([1, state.currentPage, ...Object.entries(state.pages).flatMap(([index, entry]) => (entry.cursor ? [Number(index) + 2] : []))])].sort((a, b) => a - b);
+
+	return renderGrid(result.data) + renderPaginator(state.currentPage, knownPages, result.hasMore, (page) => buildSearchUrl({ page }));
+}
+
+async function fetchPage(): Promise<SearchResult> {
+	const state = store.get();
+	const cursor = state.currentPage > 1 ? (new URLSearchParams(location.search).get('cursor') ?? cursorForPage(state.currentPage)) : undefined;
+
+	return api.posts.find({ tags: state.tags.join(' '), sort: state.sort, cursor: cursor ?? undefined, limit: 42 });
+}
+
+function acceptPage(result: SearchResult): void {
+	recordPage(store.get().currentPage, result.nextCursor);
+	setHasMore(!!result.hasMore);
+}
+
+async function loadResults(): Promise<void> {
+	readSearchUrl();
+	const version = ++requestVersion;
+	const url = location.href;
+	const results = document.getElementById('results');
+	const status = document.getElementById('status');
+	results?.setAttribute('aria-busy', 'true');
+
+	if (status) status.textContent = 'Buscando…';
+
+	try {
+		const result = await fetchPage();
+
+		if (version !== requestVersion || location.href !== url || !results?.isConnected) return;
+
+		acceptPage(result);
+		results.innerHTML = renderResults(result);
+		const tags = document.getElementById('page-tags');
+		const sort = document.getElementById('sort-row');
+
+		if (tags) tags.innerHTML = renderPageTags(result.tags);
+		if (sort) sort.innerHTML = renderSortLinks(store.get().sort);
+		if (status) status.textContent = '';
+	} catch (error) {
+		console.error('Catalog search failed', error);
+
+		if (version === requestVersion && status?.isConnected) status.textContent = 'No se pudo cargar la búsqueda. Pulsa Buscar para reintentar.';
+	} finally {
+		if (version === requestVersion) results?.removeAttribute('aria-busy');
+	}
+}
+
+function search(path: string): void {
+	history.pushState(null, '', path);
+	readSearchUrl();
+	const input = document.getElementById('sidebar-tag-input');
+	const autocomplete = document.getElementById('sidebar-autocomplete');
+
+	if (input instanceof HTMLInputElement) input.value = store.get().query;
+	if (autocomplete) autocomplete.innerHTML = '';
+
+	void loadResults();
+}
+
+function editTag(tag: string, exclude: boolean): void {
+	const tags = store.get().tags.filter((value) => value !== tag && value !== `-${tag}`);
+
+	search(buildSearchUrl({ tags: [...tags, exclude ? `-${tag}` : tag] }));
+}
 
 export async function renderHome(): Promise<string> {
-	parseUrlIntoStore();
+	readSearchUrl();
+	const version = ++requestVersion;
+	const result = await fetchPage();
 
-	const page = store.get().currentPage;
-	const [result, tagGroups] = await Promise.all([fetchPage(page), browseTags(30).catch(() => ({ groups: {} }))]);
+	if (version !== requestVersion) return '';
 
-	const flatGroups: Record<string, any[]> = {};
+	acceptPage(result);
+	const state = store.get();
 
-	for (const [k, v] of Object.entries((tagGroups as any).groups || {})) {
-		flatGroups[k] = (v as any)?.tags || [];
-	}
-
-	return `
-    <div class="home-layout">
-      <aside class="home-side" id="home-side">${renderSidebar(flatGroups)}</aside>
-      <div class="home-main">
-        <div class="page-head"><h1>Memesbooru</h1></div>
-        <div class="search-toolbar">
-          <div id="selected-tags" class="selected-tags">${renderSelectedTags(store.get().tags)}</div>
-          <div id="sort-row" class="sort-row">${renderSortLinks(store.get().sort)}</div>
-        </div>
-        <div id="results">
-          ${renderGrid(result.data)}
-          ${renderPaginatorFor(page, result)}
-        </div>
-        <div id="status" class="status-line" aria-live="polite"></div>
-      </div>
-    </div>
-  `;
+	return `<div class="home-layout">
+		<aside class="home-side" id="home-side">${renderSidebar(result.tags, state.query, state.sort)}</aside>
+		<div class="home-main"><div id="status" class="status-line" role="status"></div>
+		<div id="results">${renderResults(result)}</div></div>
+	</div>`;
 }
 
 export function bindHome(): void {
 	const input = document.getElementById('sidebar-tag-input');
+	const form = document.getElementById('sidebar-search');
 
-	if (!(input instanceof HTMLInputElement)) return;
+	if (!(input instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return;
 
-	// Sync input with current store state (URL-driven renders).
-	const s = store.get();
-	input.value = s.query;
+	const tags = document.querySelector('.page-tags');
 
-	let t: number | undefined;
+	if (tags instanceof HTMLDetailsElement && matchMedia('(max-width: 600px)').matches) tags.open = false;
 
+	form.addEventListener('submit', (event) => {
+		event.preventDefault();
+		search(buildSearchUrl({ tags: [...new Set(input.value.trim().split(/\s+/).filter(Boolean))] }));
+	});
+	bindAutocomplete(input);
+}
+
+function bindAutocomplete(input: HTMLInputElement): void {
+	let timer: number | undefined;
+	let version = 0;
+	const dropdown = document.getElementById('sidebar-autocomplete');
 	input.addEventListener('input', () => {
-		store.set({ query: input.value });
-		clearTimeout(t);
+		clearTimeout(timer);
+		const current = ++version;
+		const searchVersion = requestVersion;
+		const value = input.value;
+		const term = value.split(/\s+/).pop()?.replace(/^-/, '') ?? '';
 
-		t = window.setTimeout(async () => {
-			const q = input.value.trim().split(/\s+/).pop() ?? '';
-			const el = document.getElementById('sidebar-autocomplete');
+		if (dropdown) dropdown.innerHTML = '';
+		if (!term) return;
 
-			if (!el) return;
+		timer = window.setTimeout(async () => {
+			try {
+				const result = await api.tags.autocomplete(term);
 
-			if (!q) {
-				el.innerHTML = '';
-
-				return;
+				if (current === version && searchVersion === requestVersion && input.isConnected && input.value === value && dropdown) dropdown.innerHTML = renderAutocomplete(result.tags);
+			} catch (error) {
+				console.error('Autocomplete failed', error);
 			}
-
-			const ac = await autocompleteTags(q).catch(() => ({ tags: [] }));
-
-			el.innerHTML = ac.tags.length ? renderAutocomplete(ac.tags) : '';
 		}, 200);
 	});
+	input.addEventListener('keydown', (event) => {
+		if (event.key === 'Escape') {
+			version++;
+			if (dropdown) dropdown.innerHTML = '';
+		}
+		if (event.key === 'ArrowDown') {
+			event.preventDefault();
+			dropdown?.querySelector('a')?.focus();
+		}
+	});
+}
 
-	input.addEventListener('keydown', (e) => {
-		if (e.key === ' ' && !e.ctrlKey && !e.metaKey) {
-			const parts = input.value.split(/\s+/).filter(Boolean);
+export function bindHomeGlobal(): void {
+	document.addEventListener('click', (event) => {
+		if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || location.pathname !== '/') return;
 
-			if (parts.length >= 1) {
-				const cur = store.get();
-				const merged = [...new Set([...cur.tags, ...parts])];
+		const target = event.target instanceof Element ? event.target.closest('[data-ac],[data-include],[data-exclude],[data-sort],[data-page],a[data-link]') : null;
 
-				if (merged.length !== cur.tags.length) {
-					e.preventDefault();
-					navigateTo(buildUrl({ tags: merged }));
+		if (!target) return;
 
-					void loadResults().then(() => {
-						input.value = '';
-						input.focus();
-					});
-				}
-			}
+		if (target instanceof HTMLAnchorElement && target.hasAttribute('data-link')) {
+			if (target.pathname !== '/') return;
+
+			event.preventDefault();
+			search(target.pathname + target.search);
 
 			return;
 		}
 
-		if (e.key === 'Enter') {
-			const parts = input.value.trim().split(/\s+/).filter(Boolean);
+		event.preventDefault();
+		if (target.hasAttribute('data-include')) return editTag(target.getAttribute('data-include') ?? '', false);
+		if (target.hasAttribute('data-exclude')) return editTag(target.getAttribute('data-exclude') ?? '', true);
+		if (target.hasAttribute('data-page')) return search(buildSearchUrl({ page: Number(target.getAttribute('data-page')) }));
 
-			if (!parts.length) return;
+		const sort = target.getAttribute('data-sort');
 
-			e.preventDefault();
-			navigateTo(buildUrl({ tags: parts }));
+		if (sort === 'recent' || sort === 'popular') return search(buildSearchUrl({ sort }));
 
-			void loadResults();
+		const input = document.getElementById('sidebar-tag-input');
+		const dropdown = document.getElementById('sidebar-autocomplete');
+
+		if (input instanceof HTMLInputElement && target.hasAttribute('data-ac')) {
+			input.value = input.value.replace(/-?[^\s]*$/, (term) => `${term.startsWith('-') ? '-' : ''}${target.getAttribute('data-ac')} `);
+			input.focus();
+			if (dropdown) dropdown.innerHTML = '';
 		}
 	});
-}
-
-// =========================================================================================================
-// Global delegation (bound once in the router). Keeps search bar stable; only #results re-renders.
-// =========================================================================================================
-
-export function bindHomeGlobal(): void {
-	document.addEventListener('click', (e) => {
-		if (e.defaultPrevented) return;
-
-		const target = (e.target as Element | null)?.closest?.('[data-ac],[data-remove],[data-sort],[data-page]');
-
-		if (!target) return;
-
-		e.preventDefault();
-
-		if (target.hasAttribute('data-ac')) return handleAddTag(target.getAttribute('data-ac') ?? '');
-
-		if (target.hasAttribute('data-remove')) return handleRemoveTag(target.getAttribute('data-remove') ?? '');
-
-		if (target.hasAttribute('data-sort')) return handleSort(target.getAttribute('data-sort') ?? 'recent');
-
-		if (target.hasAttribute('data-page')) return handlePage(parseInt(target.getAttribute('data-page') ?? '1', 10) || 1);
-	});
-}
-
-function handleAddTag(tag: string): void {
-	if (!tag) return;
-
-	const s = store.get();
-
-	navigateTo(buildUrl({ tags: [...new Set([...s.tags, tag])] }));
-
-	void loadResults();
-}
-
-function handleRemoveTag(tag: string): void {
-	const s = store.get();
-
-	navigateTo(buildUrl({ tags: s.tags.filter((t) => t !== tag) }));
-
-	void loadResults();
-}
-
-function handleSort(sort: string): void {
-	if (sort !== 'recent' && sort !== 'popular') return;
-
-	const s = store.get();
-
-	if (sort === s.sort) return;
-
-	navigateTo(buildUrl({ sort }));
-
-	void loadResults();
-}
-
-function handlePage(page: number): void {
-	navigateTo(buildUrl({ page }));
-
-	void loadResults();
-}
-
-// =========================================================================================================
-// Data loading — fetch a page and update only the results/tags/sort, preserving the search input.
-// =========================================================================================================
-
-async function loadResults(): Promise<void> {
-	parseUrlIntoStore();
-
-	const page = store.get().currentPage;
-	const result = await fetchPage(page);
-
-	updateDom(page, result);
-}
-
-async function fetchPage(page: number): Promise<SearchResult> {
-	const s = store.get();
-	const cursor = cursorForPage(page) ?? undefined;
-	const result = await searchPosts({ tags: s.tags.join(' '), sort: s.sort, cursor, limit: 24 }).catch<SearchResult>(() => ({
-		data: [],
-		nextCursor: null,
-		hasMore: false,
-	}));
-
-	recordPage(result.nextCursor);
-	setHasMore(result.hasMore ?? !!result.nextCursor);
-	setCurrentPage(page);
-
-	return result;
-}
-
-function updateDom(page: number, result: SearchResult): void {
-	const s = store.get();
-	const input = document.getElementById('sidebar-tag-input');
-
-	if (input instanceof HTMLInputElement) input.value = s.query;
-
-	const acEl = document.getElementById('sidebar-autocomplete');
-
-	if (acEl) acEl.innerHTML = '';
-
-	const tagsEl = document.getElementById('selected-tags');
-
-	if (tagsEl) tagsEl.innerHTML = renderSelectedTags(s.tags);
-
-	const sortEl = document.getElementById('sort-row');
-
-	if (sortEl) sortEl.innerHTML = renderSortLinks(s.sort);
-
-	const results = document.getElementById('results');
-
-	if (results) results.innerHTML = renderGrid(result.data) + renderPaginatorFor(page, result);
-}
-
-function renderPaginatorFor(page: number, result: SearchResult): string {
-	const hasNext = result.hasMore ?? !!result.nextCursor;
-
-	return renderPaginator(page, hasNext ? page + 1 : page, hasNext);
-}
-
-// =========================================================================================================
-// URL <-> store
-// =========================================================================================================
-
-function buildUrl({ tags, sort, page }: { tags?: string[]; sort?: 'recent' | 'popular'; page?: number }): string {
-	const s = store.get();
-	const t = tags ?? s.tags;
-	const so = sort ?? s.sort;
-	const p = page ?? 1;
-	const params = new URLSearchParams();
-
-	for (const tag of t) params.append('tags', tag);
-
-	if (so === 'popular') params.set('sort', so);
-
-	if (p > 1) params.set('page', String(p));
-
-	const qs = params.toString();
-
-	return qs ? `/?${qs}` : '/';
-}
-
-function navigateTo(path: string): void {
-	history.pushState(null, '', path);
-}
-
-function parseUrlIntoStore(): void {
-	const sp = new URLSearchParams(location.search);
-	const tagParams = sp.getAll('tags');
-	const tags = tagParams.flatMap((p) => p.split(/\s+/)).filter(Boolean);
-	const sort = sp.get('sort') === 'popular' ? 'popular' : 'recent';
-	const page = Math.max(1, parseInt(sp.get('page') ?? '1', 10) || 1);
-	const s = store.get();
-
-	if (s.tags.join(' ') !== tags.join(' ') || s.sort !== sort) {
-		resetPagination();
-		store.set({ tags, sort, query: tags.join(' ') });
-	} else if (s.currentPage !== page) {
-		store.set({ currentPage: page });
-	}
 }

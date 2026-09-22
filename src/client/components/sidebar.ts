@@ -1,50 +1,53 @@
 // =========================================================================================================
-// SIDEBAR (booru style)
-// Categorized tag browser for home page. Matches Rule34 left column.
+// Search and contextual tags for the visible page.
 // =========================================================================================================
 
-import { formatCount, escapeHtml, escapeAttr } from './search.js';
-
-export type SidebarTag = { name: string; display?: string | null; usage?: number };
+import { escapeHtml, escapeAttr, renderSortLinks } from './search.js';
 
 export const CATEGORY_ORDER = ['reaction', 'source', 'people', 'character', 'meta'] as const;
 export const CATEGORY_LABELS: Record<string, string> = {
-	reaction: 'Reaction',
-	source: 'Source',
-	people: 'People',
-	character: 'Character',
+	reaction: 'Reacciones',
+	source: 'Fuentes',
+	people: 'Personas',
+	character: 'Personajes',
 	meta: 'Meta',
 };
 
-export function renderSidebar(groups: Record<string, SidebarTag[]>): string {
-	const cats = CATEGORY_ORDER.filter((c) => (groups[c] ?? []).length > 0 || true); // show all even empty
+export type SidebarTag = { name: string; category: string; count: number };
 
-	return `
-  <div class="sidebar">
-    <div class="sidebar-search">
-      <label class="small muted">Search</label>
-      <input id="sidebar-tag-input" placeholder="safe_for_work" autocomplete="off" />
-      <div id="sidebar-autocomplete" class="sidebar-autocomplete"></div>
-      <div class="pool-filter">
-        <label><input type="checkbox" disabled /> Filter pools</label>
-        <span class="tiny">próximamente</span>
-      </div>
-    </div>
-     ${cats
-				.map((cat) => {
-					const list = groups[cat] ?? [];
-					const items = list
-						.map(
-							(t) =>
-								`<a href="/?tags=${encodeURIComponent(t.name)}" data-link data-ac="${escapeAttr(t.name)}">${escapeHtml(t.display ?? t.name)} ${typeof t.usage === 'number' ? `<span class="count">${formatCount(t.usage)}</span>` : ''}</a>`,
-						)
-						.join('');
+export function renderPageTags(tags: SidebarTag[]): string {
+	if (!tags.length) return '<p class="tiny">Sin tags en esta página.</p>';
 
-					return `<details class="sidebar-cat" data-cat="${cat}" open>
-          <summary>${CATEGORY_LABELS[cat] ?? cat}</summary>
-          <div class="tag-links">${items || '<span class="tiny">sin tags</span>'}</div>
-        </details>`;
-				})
-				.join('')}
-  </div>`;
+	return CATEGORY_ORDER.map((category) => {
+		const items = tags.filter((tag) => tag.category === category).sort((a, b) => a.name.localeCompare(b.name));
+
+		if (!items.length) return '';
+
+		return `<section class="sidebar-cat" data-cat="${category}"><h3>${CATEGORY_LABELS[category]}</h3>
+			<ul>${items
+				.map(
+					(tag) => `<li>
+				<span class="tag-help" aria-disabled="true" title="Información del tag: TODO">?</span>
+				<button type="button" data-include="${escapeAttr(tag.name)}" aria-label="Añadir ${escapeAttr(tag.name)}">+</button>
+				<button type="button" data-exclude="${escapeAttr(tag.name)}" aria-label="Excluir ${escapeAttr(tag.name)}">−</button>
+				<a href="/?tags=${encodeURIComponent(tag.name)}" data-link>${escapeHtml(tag.name.replaceAll('_', ' '))}</a>
+				<span class="count" title="Publicaciones en todo el catálogo">${tag.count}</span>
+			</li>`,
+				)
+				.join('')}</ul></section>`;
+	}).join('');
+}
+
+export function renderSidebar(tags: SidebarTag[], query: string, sort: 'recent' | 'popular'): string {
+	return `<div class="sidebar">
+		<form id="sidebar-search" class="sidebar-search" action="/" role="search">
+			<label for="sidebar-tag-input">Buscar</label>
+			<input id="sidebar-tag-input" name="tags" value="${escapeAttr(query)}" maxlength="500" autocomplete="off" aria-describedby="search-hint" />
+			<button type="submit">Buscar</button>
+			<div id="sidebar-autocomplete" class="sidebar-autocomplete"></div>
+			<span id="search-hint" class="tiny">tag otro_tag -excluir</span>
+		</form>
+		<div id="sort-row" class="sort-row">${renderSortLinks(sort)}</div>
+		<details class="page-tags" open><summary>Tags</summary><div id="page-tags">${renderPageTags(tags)}</div></details>
+	</div>`;
 }

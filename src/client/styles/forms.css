@@ -7,19 +7,18 @@ input,
 select,
 textarea {
 	font-family: inherit;
-	font-size: 0.95rem;
+	font-size: 13px;
 	color: var(--fg);
 	background: var(--bg-raise);
 	border: 1px solid var(--border-strong);
 	border-radius: var(--radius);
-	padding: 0.45rem 0.55rem;
+	padding: 3px 5px;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
 	border-color: var(--focus-ring);
-	outline: none;
 }
 
 textarea {
@@ -30,12 +29,12 @@ button,
 .button {
 	display: inline-block;
 	font-weight: 600;
-	font-size: 0.9rem;
+	font-size: 13px;
 	color: var(--fg);
 	background: var(--bg-raise);
 	border: 1px solid var(--border-strong);
 	border-radius: var(--radius);
-	padding: 0.4rem 0.75rem;
+	padding: 2px 8px;
 	text-decoration: none;
 }
 
@@ -71,7 +70,7 @@ button.danger,
 .form-stack {
 	display: flex;
 	flex-direction: column;
-	gap: 0.9rem;
+	gap: 10px;
 	max-width: 560px;
 }
 
@@ -107,9 +106,7 @@ button.danger,
 
 /* Fieldset grouping for settings */
 .settings-section {
-	border: 1px solid var(--border);
-	background: var(--bg-raise);
-	padding: 1rem 1.1rem;
+	padding: 0;
 	margin-bottom: 1rem;
 }
 

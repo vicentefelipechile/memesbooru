@@ -3,8 +3,8 @@
 // Small explicit state: search query, tags, sort, theme, and page↔cursor history for booru pagination.
 // =========================================================================================================
 
-export type ThemeName = 'android' | 'solarized' | 'gruvbox' | 'nord';
-export const THEMES: readonly ThemeName[] = ['android', 'solarized', 'gruvbox', 'nord'];
+export type ThemeName = 'cyan' | 'solarized' | 'gruvbox' | 'nord';
+export const THEMES: readonly ThemeName[] = ['cyan', 'solarized', 'gruvbox', 'nord'];
 
 const THEME_KEY = 'memesbooru.theme';
 
@@ -15,7 +15,7 @@ type State = {
 	tags: string[];
 	theme: ThemeName;
 	// page -> cursor (page 1 is the first request, cursor 1 = nextCursor from page 1)
-	pages: { cursor: string | null }[];
+	pages: Record<number, { cursor: string | null }>;
 	currentPage: number;
 	hasMore: boolean;
 };
@@ -23,10 +23,10 @@ type State = {
 function readTheme(): ThemeName {
 	const stored = localStorage.getItem(THEME_KEY);
 	if (stored && (THEMES as readonly string[]).includes(stored)) return stored as ThemeName;
-	return 'android';
+	return 'cyan';
 }
 
-let state: State = { user: null, query: '', sort: 'recent', tags: [], theme: readTheme(), pages: [], currentPage: 1, hasMore: false };
+let state: State = { user: null, query: '', sort: 'recent', tags: [], theme: readTheme(), pages: {}, currentPage: 1, hasMore: false };
 const listeners = new Set<() => void>();
 
 export function applyTheme(): void {
@@ -42,18 +42,20 @@ export function setTheme(theme: ThemeName): void {
 
 // Cursor pagination bookkeeping — page 1 has no cursor, subsequent pages use recorded cursors.
 export function resetPagination(): void {
-	state = { ...state, pages: [], currentPage: 1, hasMore: false };
+	state = { ...state, pages: {}, currentPage: 1, hasMore: false };
 }
 
-export function recordPage(cursor: string | null): void {
-	state = { ...state, pages: [...state.pages, { cursor }] };
+export function recordPage(page: number, cursor: string | null): void {
+	const pages = Object.fromEntries(Object.entries(state.pages).filter(([index]) => Number(index) < page));
+	pages[page - 1] = { cursor };
+	state = { ...state, pages };
 }
 
-export function cursorForPage(page: number): string | null {
-	if (page < 1) return null;
+export function cursorForPage(page: number): string | null | undefined {
+	if (!Number.isSafeInteger(page) || page < 1) return undefined;
 	if (page === 1) return null;
 	const rec = state.pages[page - 2];
-	return rec?.cursor ?? null;
+	return rec?.cursor ?? undefined;
 }
 
 export function setCurrentPage(page: number): void {

@@ -153,6 +153,7 @@ export type CreatedPostResult = { publicId: PublicId; postId: PostId };
 
 export type SearchResult = {
 	data: PostSearchResult[];
+	tags: PostTagResult[];
 	nextCursor: string | null;
 	hasMore: boolean;
 };

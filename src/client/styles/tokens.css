@@ -14,33 +14,39 @@
 @import '@fontsource/ibm-plex-sans/latin-700.css';
 @import '@fontsource/ibm-plex-sans/latin-ext-700.css';
 
-/* Default theme: android (green accent, light utilitarian base) */
+/* Default theme: cyan (classic booru layout with a blue/cyan palette). */
 :root {
 	--font-sans: 'IBM Plex Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 
 	--radius: 2px;
 
-	--bg: #f6f6f6;
-	--bg-alt: #ececec;
-	--bg-raise: #ffffff;
-	--border: #d6d6d6;
-	--border-strong: #b8b8b8;
+	--bg: #b8e5ee;
+	--bg-alt: #94cedf;
+	--bg-raise: #effbff;
+	--border: #679eaf;
+	--border-strong: #3e7284;
+	--nav-active: #dbf5fa;
+	--tag-reaction: #0645ad;
+	--tag-source: #643598;
+	--tag-people: #28527a;
+	--tag-character: #00616c;
+	--tag-meta: #344e86;
 
-	--fg: #1f1f1f;
-	--fg-muted: #565656;
-	--fg-faint: #7a7a7a;
+	--fg: #102d39;
+	--fg-muted: #335968;
+	--fg-faint: #335968;
 
-	--link: #0f9d58;
-	--link-hover: #0b7a45;
-	--accent: #3ddc84;
-	--accent-dark: #073042;
+	--link: #0645ad;
+	--link-hover: #002a78;
+	--accent: #087e9e;
+	--accent-dark: #064b65;
 
 	--ok: #1a9d4f;
 	--warn: #b8860b;
 	--err: #c62828;
 	--info: #1565c0;
 
-	--focus-ring: #3ddc84;
+	--focus-ring: #0645ad;
 }
 
 [data-theme='solarized'] {

@@ -30,7 +30,7 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 router.get('/', optionalAuth, async (c) => {
 	const db = c.env.DB;
 
-	if (!db) return c.json({ data: [], nextCursor: null, hasMore: false });
+	if (!db) return c.json({ data: [], tags: [], nextCursor: null, hasMore: false });
 
 	const parsed = SearchQuerySchema.safeParse(parseQueryWithArrays(c.req.url));
 

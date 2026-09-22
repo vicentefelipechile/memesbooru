@@ -1,138 +1,38 @@
 /* =========================================================================================================
- * SIDEBAR (booru catalog left column)
- * Dense tag browser. Collapsible categories, usage counts, minimal search.
+ * Narrow contextual tag column, integrated into the page background.
  * ========================================================================================================= */
 
-.home-layout {
-	display: grid;
-	grid-template-columns: 210px minmax(0, 1fr);
-	gap: 1rem;
-	align-items: start;
-}
+.home-layout { display: grid; grid-template-columns: 155px minmax(0, 1fr); gap: 10px; align-items: start; }
+.home-main { min-width: 0; }
+.home-side { font-size: 12px; }
+.sidebar-search { position: relative; }
+.sidebar-search label { display: block; font-size: 14px; font-weight: 700; }
+.sidebar-search input, .sidebar-search > button { display: block; width: 100%; height: 19px; min-height: 0; padding: 0 2px; margin: 0 0 2px; font-size: 12px; line-height: 16px; border: 1px solid var(--border-strong); border-radius: 0; background: var(--bg-raise); color: var(--fg); }
+.sidebar-search > button:hover { background: var(--bg-alt); }
+.sidebar-autocomplete:not(:empty) { position: absolute; top: 58px; left: 0; z-index: 5; min-width: 100%; width: max-content; max-width: min(320px, 85vw); background: var(--bg-raise); border: 1px solid var(--border-strong); }
+.sidebar-autocomplete ul { list-style: none; padding: 2px; margin: 0; max-height: 260px; overflow-y: auto; }
+.sidebar-autocomplete a { display: block; padding: 3px; }
+.sidebar-autocomplete a:hover { background: var(--bg-alt); }
+.sidebar-autocomplete .usage { color: var(--fg-muted); }
+.page-tags > summary { font-size: 14px; font-weight: 700; cursor: pointer; list-style: none; }
+.sidebar-cat h3 { font-size: 12px; font-weight: 700; }
+.sidebar-cat ul { list-style: none; padding: 0; margin: 0; }
+.sidebar-cat li { line-height: 1.2; overflow-wrap: anywhere; }
+.sidebar-cat button { border: 0; background: transparent; color: inherit; font-size: inherit; line-height: inherit; padding: 0; }
+.sidebar-cat button:hover { text-decoration: underline; }
+.sidebar-cat a { color: inherit; }
+.sidebar-cat .count { color: var(--fg); }
+.tag-help { cursor: help; }
+[data-cat='reaction'] li { color: var(--tag-reaction); }
+[data-cat='source'] li { color: var(--tag-source); }
+[data-cat='people'] li { color: var(--tag-people); }
+[data-cat='character'] li { color: var(--tag-character); }
+[data-cat='meta'] li { color: var(--tag-meta); }
 
-.home-side {
-	border: 1px solid var(--border);
-	background: var(--bg-raise);
-	padding: 0.5rem;
-	font-size: 0.85rem;
-}
-
-.home-main {
-	min-width: 0;
-}
-
-.sidebar {
-	display: flex;
-	flex-direction: column;
-	gap: 0.35rem;
-}
-
-.sidebar-search {
-	margin-bottom: 0.4rem;
-}
-.sidebar-search input {
-	width: 100%;
-	border: 1px solid var(--border);
-	background: var(--bg);
-	padding: 0.2rem 0.35rem;
-	font-size: 0.85rem;
-}
-
-.sidebar-autocomplete {
-	position: relative;
-}
-.sidebar-autocomplete ul {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	border: 1px solid var(--border);
-	background: var(--bg-raise);
-	font-size: 0.85rem;
-	max-height: 320px;
-	overflow-y: auto;
-}
-.sidebar-autocomplete li a {
-	display: flex;
-	justify-content: space-between;
-	align-items: baseline;
-	gap: 0.5rem;
-	padding: 0.25rem 0.45rem;
-	color: var(--link);
-	white-space: nowrap;
-}
-.sidebar-autocomplete li a:hover {
-	background: var(--bg-alt);
-	color: var(--link-hover);
-	text-decoration: none;
-}
-.sidebar-autocomplete li .count {
-	color: var(--fg-faint);
-	font-size: 0.72rem;
-	font-variant-numeric: tabular-nums;
-}
-
-.pool-filter {
-	margin-top: 0.25rem;
-	font-size: 0.78rem;
-	color: var(--fg-muted);
-	display: flex;
-	align-items: center;
-	gap: 0.3rem;
-}
-.pool-filter input {
-	vertical-align: middle;
-}
-.pool-filter .tiny {
-	color: var(--fg-faint);
-	font-size: 0.7rem;
-}
-
-.sidebar-cat {
-	border-bottom: 1px solid var(--border);
-}
-.sidebar-cat:last-child {
-	border-bottom: 0;
-}
-.sidebar-cat summary {
-	cursor: pointer;
-	font-weight: 600;
-	font-size: 0.78rem;
-	text-transform: uppercase;
-	letter-spacing: 0.03em;
-	color: var(--fg-muted);
-	padding: 0.2rem 0;
-	user-select: none;
-}
-.sidebar-cat[open] summary {
-	margin-bottom: 0.1rem;
-}
-.sidebar-cat .tag-links {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0 0.4rem;
-	line-height: 1.55;
-	padding-bottom: 0.3rem;
-}
-.sidebar-cat .tag-links a {
-	color: var(--link);
-	white-space: nowrap;
-}
-.sidebar-cat .tag-links .count {
-	color: var(--fg-faint);
-	font-size: 0.72rem;
-	margin-left: 0.1rem;
-}
-
-.tiny {
-	font-size: 0.72rem;
-	color: var(--fg-faint);
-}
-
-@media (max-width: 860px) {
-	.home-layout {
-		grid-template-columns: 1fr;
-	}
-	.home-side {
-		order: 2;
-	}
+@media (max-width: 600px) {
+	.home-layout { grid-template-columns: 1fr; }
+	.sidebar-search { max-width: 320px; }
+	.page-tags > summary { list-style: revert; }
+	.page-tags[open] #page-tags { max-height: 240px; overflow-y: auto; }
+	.sidebar-cat button { min-width: 24px; min-height: 24px; }
 }

@@ -5,16 +5,14 @@
 
 .post-layout {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 280px;
-	gap: 1rem;
+	grid-template-columns: 155px minmax(0, 1fr);
+	gap: 10px;
 	align-items: start;
 }
 
 .post-media {
-	background: var(--bg-alt);
-	border: 1px solid var(--border);
 	display: grid;
-	place-items: center;
+	justify-items: start;
 	min-height: 120px;
 }
 
@@ -50,13 +48,13 @@
 
 /* Sidebar */
 .post-side {
-	border: 1px solid var(--border);
-	background: var(--bg-raise);
+	font-size: 12px;
 }
 
+.post-main { min-width: 0; }
+
 .side-block {
-	padding: 0.6rem 0.75rem;
-	border-bottom: 1px solid var(--border);
+	padding: 0 0 12px;
 }
 
 .side-block:last-child {
@@ -64,10 +62,8 @@
 }
 
 .side-block h2 {
-	font-size: 0.78rem;
+	font-size: 14px;
 	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
 	color: var(--fg-muted);
 	margin-bottom: 0.4rem;
 }
@@ -111,7 +107,7 @@
 	font-size: 0.9rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 600px) {
 	.post-layout {
 		grid-template-columns: 1fr;
 	}

@@ -172,20 +172,20 @@ export async function searchByTags(db: DB, tagIds: TagId[], opts: SearchByTagsOp
 
 - `main.ts` boot: `applyTheme()` + **one** `getMe()` → cached in `store.user`. Never call `getMe` per render.
 - Router renders a **persistent shell** (header + sub-nav) once; navigation only swaps `<main id="page">`. No `location.reload()` anywhere — actions update the DOM in place.
-- **Global delegation** (bound once): `a[data-link]` navigation, plus home's `[data-ac]` (add tag), `[data-remove]` (remove tag), `[data-sort]`, `[data-page]` — so re-rendered content needs no re-binding.
+- **Global delegation** (bound once): `a[data-link]` navigation, plus home's `[data-ac]` (complete final token), `[data-include]`, `[data-exclude]`, `[data-sort]`, `[data-page]` — so re-rendered content needs no re-binding. Home-to-home links preserve the search input.
 - Post actions are in-place: vote/favorite refetch the post and update `#score-line` + `#stats`; a new comment is appended to `#comments-list`.
 
 ### 11.3 Booru catalog UI (Rule34-style)
 
-- **Two-column home**: left sidebar (`#home-side` 210px) + main. Sidebar contains: search input + autocomplete dropdown, "Filter pools" toggle (placeholder, disabled), collapsible category groups with alphabetical tag list + usage counts. Main contains: search-toolbar (selected tag chips + sort buttons) + dense square grid + numeric paginator.
+- **Two-column home**: left sidebar (`#home-side` 155px) + main, flush-left with 8px outer margins. Sidebar contains an explicit search form + autocomplete, compact sort links and contextual tags. Main starts directly with whole-image thumbnails and a numeric paginator; no title/toolbar/cards above the grid.
 - **Single search input** lives in the sidebar (`#sidebar-tag-input`). The main area has NO duplicate search input. Input is synced with `store.query` on every render.
-- **Sub-nav bar** (`site-subnav`) under the header: Posts / Upload / Random / Favorites. Targeted at publications + tags navigation (no wiki, no external sites, no comments index).
-- Selected tags are buttons (`<span class="tag-chip">`) with `<a>` name + `×` close. Sort is `<button class="sort-btn on|">` Recientes/Populares.
-- **Tag chaining**: typing space in the sidebar input commits prior tokens to `store.tags` (deduplicated via `Set`) and clears the input for the next tag — the user keeps typing in a single continuous string. Enter commits every token.
+- **Header**: brand on its own line, primary navigation below, secondary cyan strip underneath. Existing sections are links; unimplemented sections are visible, disabled `TODO` labels (no dead routes).
+- The complete query stays in the search field. Sort controls are compact Recientes/Populares links styled as buttons in the sidebar.
+- **Search submission**: spaces only separate tokens. Search runs on Buscar/Enter; autocomplete fills the final token without submitting. Tag names start a new search; `+` includes and `−` excludes (`-tag`). Unknown positive tags return no results; unknown exclusions have no effect.
 - **Multi-param tags in URL** (`?tags=choker&tags=wojak`), never `?tags=choker+wojak`. `buildUrl` uses `params.append('tags', t)`; `parseUrlIntoStore` uses `sp.getAll('tags').flatMap(s => s.split(/\s+/)).filter(Boolean)`. Server still receives space-joined `tags` in `SearchQuerySchema` (each item is whitespace-free post-normalize).
-- Dense square thumbnail grid (no wrapping cards), numeric paginator `« 1 2 3 … »`. The backend stays cursor-paginated; the **client maps page↔cursor** in `store.ts` (`pages[]`, `cursorForPage(page)`, `recordPage`).
-- Only `#results` (grid + paginator), `#selected-tags`, `#sort-row` re-render on search/tag/sort/page change (`home.ts loadResults`/`updateDom`). Sidebar is rendered once per home visit.
-- Post detail: two-column layout with sidebar blocks `Statistics` (score/favs/comments/media/autor/fecha) + `Tagged` (tags grouped by category with usage counts, from `PostTagResult`).
+- Whole-image thumbnails up to 160px, centered in regular 175×160px cells (no square crops/cards). Numeric paginator `« 1 2 3 … »` only links known cursors. Page URLs include cursors so reload/shared links preserve results. Never silently show page 1 under an unknown page number.
+- `GET /api/posts` returns contextual `tags: PostTagResult[]`, the distinct union of active tags on the returned page only, with global usage counts. Do not populate the sidebar with `/api/tags/browse`. Tags and results update together; the search input stays mounted. On mobile, the search precedes results and tags are collapsed.
+- Post detail: left sidebar blocks Estadísticas + Tags; image/actions/comments on the right. Tags use the same category labels as the catalog.
 - Tags are plain-text links with usage counts; comments show author + date.
 
 ### 11.4 Tag categories (memes domain)
@@ -196,7 +196,7 @@ export async function searchByTags(db: DB, tagIds: TagId[], opts: SearchByTagsOp
 
 ### 11.4 Themes (user-selectable)
 
-4 light palettes in `styles/tokens.css` as `[data-theme="android"|"solarized"|"gruvbox"|"nord"]` (`android` default). Applied via `data-theme` on `<html>`, persisted in `localStorage` (`memesbooru.theme`), switched from `/settings` (`setTheme` in `state/store.ts`). All colors come from CSS custom properties — never hardcode hex in markup/components.
+4 light palettes in `styles/tokens.css`: `cyan` (default), `solarized`, `gruvbox`, `nord`. Old `android` preferences fall back to cyan. Applied via `data-theme` on `<html>`, persisted in `localStorage` (`memesbooru.theme`), switched from `/settings` (`setTheme` in `state/store.ts`). All colors come from CSS custom properties — never hardcode hex in markup/components.
 
 ### 11.6 Modular CSS (no monolith)
 
@@ -208,7 +208,7 @@ Light utilitarian base (no dark-mode reflex), self-hosted `@fontsource/ibm-plex-
 
 ### 11.8 Services & state
 
-- `services/api.ts`: `apiGet/apiPost` → `Schema.safeParse`, no `as` casts. Includes `browseTags(per)` for the tag sidebar.
+- `services/api.ts`: single `MemesBooruApi` gateway exposed as `api`, grouped by resource (`api.posts.find`, `api.auth.me`, `api.comments.create`, etc.). It owns `fetch`, credentials, JSON headers, HTTP errors, and response `Schema.safeParse`; pages never call `fetch` directly. Search response validation failures are errors, not empty result sets. `api.tags.browse(per)` remains available for global tag browsing, not the contextual catalog sidebar.
 - `state/store.ts`: user, query, tags, sort, theme, and pagination cursor history.
 - `components/*` are pure render functions returning HTML strings; `pages/*` render + bind.
 
@@ -257,6 +257,7 @@ Conventional Commits, English, imperative: `refactor: ...` / `feat: ...` / `fix:
 - Business logic in `src/http/routes/*` or Hono in `src/services/*`
 - `SELECT *` on public endpoints, JSON columns for filterable data, `OFFSET` pagination, `ORDER BY RANDOM()`
 - `location.reload()` in `src/client` — update the DOM in place (vote/fav/comment/search)
+- Direct `fetch` calls in `src/client/pages/*` or other UI modules — use the grouped `api` client in `src/client/services/api.ts`
 - Calling `getMe()` per render in `src/client` — fetch once into `store.user` at boot
 - AI-slop UI: dark-mode reflex, Inter/system-ui/Poppins/Geist, `border-radius >= 8px` on cards/buttons, gradients/glassmorphism/pills/emojis, gray-bordered cards wrapping thumbnails, "load more" instead of the numeric paginator, hardcoded hex in markup instead of CSS tokens
 - Monolithic `main.css` — keep the category-split `styles/*.css`

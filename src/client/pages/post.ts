@@ -1,7 +1,7 @@
-import { getPost, getComments } from '../services/api.js';
+import { api } from '../services/api.js';
 import { renderScore } from '../components/score.js';
 import { renderCommentList, renderCommentForm, formatDate } from '../components/comment.js';
-import { renderSideBlock, renderStatistics, renderTagged, type SidebarTag } from '../components/tag-sidebar.js';
+import { renderStatistics, renderTagged, type SidebarTag } from '../components/tag-sidebar.js';
 import { formatCount } from '../components/search.js';
 import { store } from '../state/store.js';
 
@@ -26,7 +26,7 @@ type PostDetail = {
 // =========================================================================================================
 
 export async function renderPost(publicId: string): Promise<string> {
-	const data = await getPost(publicId).catch(() => null);
+	const data = await api.posts.get(publicId).catch(() => null);
 
 	if (!data) return `<div class="error">Post no encontrado<div class="detail"><a href="/" data-link>Volver al inicio</a></div></div>`;
 
@@ -42,6 +42,10 @@ export async function renderPost(publicId: string): Promise<string> {
 
 	return `
     <div class="post-layout">
+      <aside class="post-side">
+        <section class="side-block"><h2>Estadísticas</h2><div id="stats">${renderStatistics(buildStatistics(data))}</div></section>
+        <section class="side-block"><h2>Tags</h2>${renderTagged(data.tags ?? [])}</section>
+      </aside>
       <section class="post-main">
         <div class="post-media">
           ${restricted ? `<p class="restricted">Este video es solo para usuarios trusted. Gana confianza publicando y participando.</p>` : `<img src="/api/posts/${publicId}/variants/medium" alt="post ${publicId}" loading="eager" />`}
@@ -56,17 +60,13 @@ export async function renderPost(publicId: string): Promise<string> {
         </div>
         <a href="/api/posts/${publicId}/variants/original" target="_blank" rel="noopener" class="button small">Ver original</a>
         ${data.description ? `<div class="post-description">${escapeHtml(data.description)}</div>` : ''}
-      </section>
-      <aside class="post-side">
-        <section class="side-block"><h2>Statistics</h2><div id="stats">${renderStatistics(buildStatistics(data))}</div></section>
-        <section class="side-block"><h2>Tagged</h2>${renderTagged(data.tags ?? [])}</section>
-      </aside>
-    </div>
     <section id="comments" class="comments">
       <h2>Comentarios</h2>
       <div id="comments-list"><p class="none">Cargando...</p></div>
       ${user ? renderCommentForm() : '<p class="none small">Inicia sesión para comentar.</p>'}
     </section>
+      </section>
+    </div>
   `;
 }
 
@@ -87,10 +87,9 @@ export function bindPost(publicId: string): void {
 	q('#vote-down')?.addEventListener('click', () => void rate(publicId, -1));
 
 	q('#fav-btn')?.addEventListener('click', async () => {
-		const method = faved ? 'DELETE' : 'POST';
-		const r = await fetch(`/api/post/${publicId}/favorite`, { method, credentials: 'include' }).catch(() => null);
+		const result = faved ? api.posts.unfavorite(publicId) : api.posts.favorite(publicId);
 
-		if (!r || !r.ok) return;
+		if (!(await result.catch(() => null))) return;
 
 		faved = !faved;
 
@@ -106,12 +105,7 @@ export function bindPost(publicId: string): void {
 
 		if (!reason) return;
 
-		fetch('/api/moderation/reports', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			credentials: 'include',
-			body: JSON.stringify({ target_type: 'post', target_id: 0, reason }),
-		}).then((r) => alert(r.ok ? 'Reportado' : 'No se pudo reportar'));
+		api.moderation.report({ target_type: 'post', target_id: 0, reason }).then(() => alert('Reportado')).catch(() => alert('No se pudo reportar'));
 	});
 
 	bindCommentForm(publicId);
@@ -119,19 +113,14 @@ export function bindPost(publicId: string): void {
 }
 
 async function rate(publicId: string, value: number): Promise<void> {
-	const r = await fetch(`/api/post/${publicId}/rating`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		credentials: 'include',
-		body: JSON.stringify({ value }),
-	}).catch(() => null);
+	const result = await api.posts.rate(publicId, value).catch(() => null);
 
-	if (r && r.ok) await refreshPost(publicId);
+	if (result) await refreshPost(publicId);
 }
 
 // Refetch the post and update score + statistics in place.
 async function refreshPost(publicId: string): Promise<void> {
-	const data = await getPost(publicId).catch(() => null);
+	const data = await api.posts.get(publicId).catch(() => null);
 
 	if (!data) return;
 
@@ -161,14 +150,9 @@ function bindCommentForm(publicId: string): void {
 
 		if (!body) return;
 
-		const r = await fetch(`/api/comments/post/${publicId}`, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			credentials: 'include',
-			body: JSON.stringify({ body }),
-		}).catch(() => null);
+		const result = await api.comments.create(publicId, { body }).catch(() => null);
 
-		if (!r || !r.ok) return;
+		if (!result) return;
 
 		const user = store.get().user;
 		const author = user?.username ?? '';
@@ -191,7 +175,8 @@ function bindCommentForm(publicId: string): void {
 // =========================================================================================================
 
 function loadComments(publicId: string): void {
-	getComments(publicId)
+	api.comments
+		.list(publicId)
 		.then((res) => {
 			const list = document.getElementById('comments-list');
 

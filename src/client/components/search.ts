@@ -1,38 +1,13 @@
 // =========================================================================================================
 // SEARCH (v2)
-// Flat search bar: underline input, autocomplete as a list of text links, selected tags, sort links.
-// Stable ids so the app can update results/tags/sort without re-rendering the input (keeps focus).
+// Compact sort controls, autocomplete links and shared escaping/number formatting.
 // =========================================================================================================
 
 export type AutocompleteTag = { name: string; display?: string | null; usage?: number };
 
-export function renderSearch(query: string, tags: string[], sort: 'recent' | 'popular'): string {
-	return `
-  <div class="search-bar" id="search-bar">
-    <label class="field">
-      <span class="small muted">Buscar por tags</span>
-      <input id="tag-input" placeholder="pepe doge programacion..." value="${escapeHtml(query)}" autocomplete="off" />
-    </label>
-    <div id="autocomplete" class="autocomplete"></div>
-    <div id="selected-tags" class="selected-tags">${renderSelectedTags(tags)}</div>
-    <div id="sort-row" class="sort-row">${renderSortLinks(sort)}</div>
-  </div>`;
-}
-
 export function renderSortLinks(sort: 'recent' | 'popular'): string {
-	return `<span class="toolbar-label small muted">Orden</span>
-    <button type="button" class="sort-btn ${sort === 'recent' ? 'on' : ''}" data-sort="recent">Recientes</button>
-    <button type="button" class="sort-btn ${sort === 'popular' ? 'on' : ''}" data-sort="popular">Populares</button>`;
-}
-
-export function renderSelectedTags(tags: string[]): string {
-	if (tags.length === 0) return '<span class="toolbar-label small muted">Tags</span><span class="small muted">—</span>';
-	return `<span class="toolbar-label small muted">Tags</span>${tags
-		.map(
-			(t) =>
-				`<span class="tag-chip"><a href="/?tags=${encodeURIComponent(t)}" data-link class="tag-name">${escapeHtml(t)}</a><button type="button" class="tag-x" data-remove="${escapeAttr(t)}" aria-label="Quitar ${t}">×</button></span>`,
-		)
-		.join(' ')}`;
+	return `<button type="button" class="sort-btn ${sort === 'recent' ? 'on' : ''}" data-sort="recent" aria-pressed="${sort === 'recent'}">Recientes</button>
+    <button type="button" class="sort-btn ${sort === 'popular' ? 'on' : ''}" data-sort="popular" aria-pressed="${sort === 'popular'}">Populares</button>`;
 }
 
 export function renderAutocomplete(items: AutocompleteTag[]): string {

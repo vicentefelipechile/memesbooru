@@ -11,6 +11,7 @@
 import { queryOne, queryAll, type DB } from '../db/client';
 import type { TagRow, TagAliasRow } from '../db/schema';
 import { normalizeTag } from '../validators';
+import type { PostId } from '../types';
 
 // =========================================================================================================
 // Types
@@ -31,15 +32,20 @@ export type ListByCategoryOpts = {
 // =========================================================================================================
 
 export async function resolveTagIds(db: DB, inputs: string[]): Promise<number[]> {
-	const normalized = inputs.map(normalizeTag).filter(Boolean);
-	if (normalized.length === 0) return [];
+	return (await resolveTags(db, inputs)).ids;
+}
+
+export async function resolveTags(db: DB, inputs: string[]): Promise<ResolveAliasesResult> {
+	const normalized = [...new Set(inputs.map(normalizeTag).filter(Boolean))];
+	if (normalized.length === 0) return { ids: [], known: new Set() };
 
 	const aliasIds = await resolveViaAliases(db, normalized);
 	const remaining = normalized.filter((n) => !aliasIds.known.has(n));
-	if (remaining.length === 0) return [...aliasIds.ids];
+	if (remaining.length === 0) return { ids: [...new Set(aliasIds.ids)], known: aliasIds.known };
 
-	const directIds = await resolveViaTags(db, remaining);
-	return [...aliasIds.ids, ...directIds];
+	const tags = await resolveViaTags(db, remaining);
+
+	return { ids: [...new Set([...aliasIds.ids, ...tags.map((tag) => tag.id)])], known: new Set([...aliasIds.known, ...tags.map((tag) => tag.normalized_name)]) };
 }
 
 async function resolveViaAliases(db: DB, normalized: string[]): Promise<ResolveAliasesResult> {
@@ -67,12 +73,23 @@ async function resolveViaAliases(db: DB, normalized: string[]): Promise<ResolveA
 	};
 }
 
-async function resolveViaTags(db: DB, remaining: string[]): Promise<number[]> {
+async function resolveViaTags(db: DB, remaining: string[]): Promise<Pick<TagRow, 'id' | 'normalized_name'>[]> {
 	const tagPlaceholders = remaining.map(() => '?').join(',');
 
-	const tags = await queryAll<TagRow>(db, `SELECT * FROM tags WHERE normalized_name IN (${tagPlaceholders})`, remaining);
+	return queryAll<Pick<TagRow, 'id' | 'normalized_name'>>(db, `SELECT id, normalized_name FROM tags WHERE status = 'active' AND normalized_name IN (${tagPlaceholders})`, remaining);
+}
 
-	return tags.map((t) => t.id);
+export async function findByPostIds(db: DB, postIds: PostId[]): Promise<Pick<TagRow, 'normalized_name' | 'category' | 'usage_count'>[]> {
+	if (!postIds.length) return [];
+
+	const placeholders = postIds.map(() => '?').join(',');
+
+	return queryAll<Pick<TagRow, 'normalized_name' | 'category' | 'usage_count'>>(
+		db,
+		`SELECT DISTINCT t.normalized_name, t.category, t.usage_count FROM post_tags pt JOIN tags t ON t.id = pt.tag_id
+		 WHERE pt.post_id IN (${placeholders}) AND t.status = 'active' ORDER BY t.category, t.normalized_name`,
+		postIds,
+	);
 }
 
 export async function autocomplete(db: DB, prefix: string, limit = 20): Promise<TagRow[]> {
