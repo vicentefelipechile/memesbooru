@@ -23,7 +23,7 @@ export function buildSearchUrl({ tags, sort, page = 1 }: SearchLocation = {}): s
 		params.set('cursor', cursor);
 	}
 
-	return params.size ? `/?${params}` : '/';
+	return params.size ? `/posts?${params}` : '/posts';
 }
 
 export function readSearchUrl(): void {

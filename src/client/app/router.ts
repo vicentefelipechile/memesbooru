@@ -15,10 +15,12 @@ import { renderFavorites, bindFavorites } from '../pages/favorites.js';
 import { renderSettings, bindSettings } from '../pages/settings.js';
 import { renderProfile, bindProfile } from '../pages/profile.js';
 import { renderRandom, bindRandom } from '../pages/random.js';
+import { renderLanding, bindLanding } from '../pages/landing.js';
 import { api } from '../services/api.js';
 
 const routes: Route[] = [
-	{ pattern: /^\/(\?.*)?$/, render: () => renderHome(), bind: () => bindHome() },
+	{ pattern: /^\/$/, render: () => Promise.resolve(renderLanding()), bind: () => bindLanding() },
+	{ pattern: /^\/posts$/, render: () => renderHome(), bind: () => bindHome() },
 	{ pattern: /^\/post\/([^/]+)$/, render: (m) => renderPost(m[1]), bind: (m) => bindPost(m[1]) },
 	{ pattern: /^\/upload$/, render: () => renderUpload(), bind: () => bindUpload() },
 	{ pattern: /^\/favorites$/, render: () => renderFavorites(), bind: () => bindFavorites() },
@@ -63,7 +65,7 @@ async function renderRoute(path: string): Promise<void> {
 
 function updateNavigation(pathname: string): void {
 	for (const link of Array.from(document.querySelectorAll<HTMLAnchorElement>('.site-nav a[data-link], .site-subnav a[data-link]'))) {
-		const active = link.pathname === pathname || (link.pathname === '/' && pathname.startsWith('/post/'));
+		const active = link.pathname === pathname || (link.pathname === '/posts' && pathname.startsWith('/post/'));
 
 		if (active) link.setAttribute('aria-current', 'page');
 		else link.removeAttribute('aria-current');

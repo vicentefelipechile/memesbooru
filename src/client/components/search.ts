@@ -12,7 +12,7 @@ export function renderSortLinks(sort: 'recent' | 'popular'): string {
 
 export function renderAutocomplete(items: AutocompleteTag[]): string {
 	if (items.length === 0) return '';
-	return `<ul>${items.map((t) => `<li><a href="/?tags=${encodeURIComponent(t.name)}" data-ac="${escapeAttr(t.name)}">${escapeHtml(t.display ?? t.name)}${typeof t.usage === 'number' ? ` <span class="usage">${formatCount(t.usage)}</span>` : ''}</a></li>`).join('')}</ul>`;
+	return `<ul>${items.map((t) => `<li><a href="/posts?tags=${encodeURIComponent(t.name)}" data-ac="${escapeAttr(t.name)}">${escapeHtml(t.display ?? t.name)}${typeof t.usage === 'number' ? ` <span class="usage">${formatCount(t.usage)}</span>` : ''}</a></li>`).join('')}</ul>`;
 }
 
 export function formatCount(n: number): string {

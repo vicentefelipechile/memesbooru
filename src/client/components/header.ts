@@ -17,7 +17,7 @@ export function renderHeader(user: { username: string; rank: string } | null): s
      <a href="/" data-link class="brand">Memesbooru</a>
     <nav class="site-nav" aria-label="Principal">
        <a href="${user ? '/profile' : '/api/auth/google'}" ${user ? 'data-link' : ''}>Mi cuenta</a>
-       <a href="/" data-link>Posts</a>
+       <a href="/posts" data-link>Posts</a>
        ${['Comentarios', 'Wiki', 'Alias', 'Artistas', 'Tags', 'Pools', 'Foro', 'Top', 'Ayuda'].map(renderTodo).join('')}
       ${
 				user

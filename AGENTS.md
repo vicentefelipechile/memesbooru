@@ -164,21 +164,23 @@ export async function searchByTags(db: DB, tagIds: TagId[], opts: SearchByTagsOp
 
 `src/client/` — vanilla TS + HTML + CSS (`vite` build, no React/Vue). SPA with `history.pushState`. No backend type imports (`src/client` never imports `src/types`); the frontend consumes the Zod response schemas in `src/validators.ts` via `safeParse`.
 
-### 11.1 Views (7 + 404)
+### 11.1 Views (8 + 404)
 
-`src/client/app/router.ts` mounts: Catálogo `/`, Detalle `/post/:publicId`, Subir `/upload`, Favoritos `/favorites`, Configuración `/settings`, Perfil `/profile`, Aleatorio `/random` (redirect-to-detail), + 404. Moderación es TO DO. Login es redirect a Google OAuth, no vista SPA.
+`src/client/app/router.ts` mounts: Portada `/`, Catálogo `/posts`, Detalle `/post/:publicId`, Subir `/upload`, Favoritos `/favorites`, Configuración `/settings`, Perfil `/profile`, Aleatorio `/random` (redirect-to-detail), + 404. Moderación es TO DO. Login es redirect a Google OAuth, no vista SPA.
+
+La portada `/` es una entrada de búsqueda estática y no solicita resultados al cargar. El formulario central envía a `/posts` con parámetros `tags`; el catálogo conserva la búsqueda avanzada, autocompletado, filtros, orden y paginación.
 
 ### 11.2 Shell & navigation (no full page reloads)
 
 - `main.ts` boot: `applyTheme()` + **one** `getMe()` → cached in `store.user`. Never call `getMe` per render.
 - Router renders a **persistent shell** (header + sub-nav) once; navigation only swaps `<main id="page">`. No `location.reload()` anywhere — actions update the DOM in place.
-- **Global delegation** (bound once): `a[data-link]` navigation, plus home's `[data-ac]` (complete final token), `[data-include]`, `[data-exclude]`, `[data-sort]`, `[data-page]` — so re-rendered content needs no re-binding. Home-to-home links preserve the search input.
+- **Global delegation** (bound once): `a[data-link]` navigation, plus catalog's `[data-ac]` (complete final token), `[data-include]`, `[data-exclude]`, `[data-sort]`, `[data-page]` — so re-rendered content needs no re-binding. Catalog links preserve the search input.
 - Post actions are in-place: vote/favorite refetch the post and update `#score-line` + `#stats`; a new comment is appended to `#comments-list`.
 
 ### 11.3 Booru catalog UI (Rule34-style)
 
 - **Two-column home**: left sidebar (`#home-side` 155px) + main, flush-left with 8px outer margins. Sidebar contains an explicit search form + autocomplete, compact sort links and contextual tags. Main starts directly with whole-image thumbnails and a numeric paginator; no title/toolbar/cards above the grid.
-- **Single search input** lives in the sidebar (`#sidebar-tag-input`). The main area has NO duplicate search input. Input is synced with `store.query` on every render.
+- **Catalog search input** lives in the sidebar (`#sidebar-tag-input`). The main area has NO duplicate search input; the landing page has its own central entry form (`#landing-search`). The catalog input is synced with `store.query` on every render.
 - **Header**: brand on its own line, primary navigation below, secondary cyan strip underneath. Existing sections are links; unimplemented sections are visible, disabled `TODO` labels (no dead routes).
 - The complete query stays in the search field. Sort controls are compact Recientes/Populares links styled as buttons in the sidebar.
 - **Search submission**: spaces only separate tokens. Search runs on Buscar/Enter; autocomplete fills the final token without submitting. Tag names start a new search; `+` includes and `−` excludes (`-tag`). Unknown positive tags return no results; unknown exclusions have no effect.

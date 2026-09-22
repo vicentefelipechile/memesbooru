@@ -1,0 +1,104 @@
+/* =========================================================================================================
+ * LANDING
+ * A compact search-first entry point, adapted to the existing light booru language.
+ * ========================================================================================================= */
+
+.landing {
+	max-width: 620px;
+	margin: clamp(42px, 12vh, 120px) auto 0;
+	padding: 0 16px 48px;
+	text-align: center;
+}
+
+.landing-mark {
+	display: grid;
+	place-items: center;
+	width: 58px;
+	height: 58px;
+	margin: 0 auto 12px;
+	border: 2px solid var(--accent);
+	border-radius: 50%;
+	color: var(--accent-dark);
+	font-size: 18px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+}
+
+.landing h1 {
+	font-size: clamp(30px, 6vw, 46px);
+	line-height: 1;
+}
+
+.landing-lead {
+	margin-top: 12px;
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.landing-copy {
+	max-width: 480px;
+	margin: 8px auto 24px;
+	color: var(--fg-muted);
+}
+
+.landing-search {
+	max-width: 540px;
+	margin: 0 auto;
+	text-align: left;
+}
+
+.landing-search label {
+	display: block;
+	margin-bottom: 4px;
+	font-weight: 600;
+}
+
+.landing-search-row {
+	display: flex;
+	gap: 6px;
+}
+
+.landing-search-row input {
+	flex: 1;
+	min-width: 0;
+	min-height: 32px;
+}
+
+.landing-search-row button {
+	min-width: 78px;
+}
+
+.landing-hint {
+	margin-top: 6px;
+	font-size: 12px;
+	color: var(--fg-muted);
+}
+
+.landing-links {
+	display: flex;
+	justify-content: center;
+	gap: 18px;
+	margin-top: 26px;
+	font-size: 12px;
+}
+
+@media (max-width: 480px) {
+	.landing {
+		margin-top: 38px;
+	}
+
+	.landing-search-row {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.landing-search-row button {
+		width: 100%;
+	}
+
+	.landing-links {
+		align-items: center;
+		flex-direction: column;
+		gap: 8px;
+	}
+}

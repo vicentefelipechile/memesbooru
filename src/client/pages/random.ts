@@ -9,7 +9,7 @@ export async function renderRandom(): Promise<string> {
 			return '';
 		}
 	} catch {}
-	return `<div class="empty">No hay publicaciones disponibles.<div class="detail"><a href="/" data-link>Volver</a></div></div>`;
+	return `<div class="empty">No hay publicaciones disponibles.<div class="detail"><a href="/posts" data-link>Volver</a></div></div>`;
 }
 
 export function bindRandom(): void {}

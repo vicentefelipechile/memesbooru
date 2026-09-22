@@ -153,14 +153,14 @@ function bindAutocomplete(input: HTMLInputElement): void {
 
 export function bindHomeGlobal(): void {
 	document.addEventListener('click', (event) => {
-		if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || location.pathname !== '/') return;
+		if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || location.pathname !== '/posts') return;
 
 		const target = event.target instanceof Element ? event.target.closest('[data-ac],[data-include],[data-exclude],[data-sort],[data-page],a[data-link]') : null;
 
 		if (!target) return;
 
 		if (target instanceof HTMLAnchorElement && target.hasAttribute('data-link')) {
-			if (target.pathname !== '/') return;
+			if (target.pathname !== '/posts') return;
 
 			event.preventDefault();
 			search(target.pathname + target.search);

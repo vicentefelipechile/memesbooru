@@ -28,7 +28,7 @@ type PostDetail = {
 export async function renderPost(publicId: string): Promise<string> {
 	const data = await api.posts.get(publicId).catch(() => null);
 
-	if (!data) return `<div class="error">Post no encontrado<div class="detail"><a href="/" data-link>Volver al inicio</a></div></div>`;
+	if (!data) return `<div class="error">Post no encontrado<div class="detail"><a href="/posts" data-link>Volver a publicaciones</a></div></div>`;
 
 	if (data.redirectTo) {
 		history.pushState(null, '', `/post/${data.redirectTo}`);
