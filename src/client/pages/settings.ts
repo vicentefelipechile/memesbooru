@@ -1,5 +1,5 @@
 import { store, THEMES, setTheme, type ThemeName } from '../state/store.js';
-import { api } from '../services/api.js';
+import { api, loginUrl } from '../services/api.js';
 
 const THEME_LABELS: Record<ThemeName, string> = {
 	cyan: 'Memesbooru (azul/cyan)',
@@ -10,7 +10,7 @@ const THEME_LABELS: Record<ThemeName, string> = {
 
 export async function renderSettings(): Promise<string> {
 	const user = store.get().user;
-	if (!user) return `<div class="empty">Necesitas entrar para configurar tu cuenta.<div class="detail"><a href="/api/auth/google">Entrar con Google</a></div></div>`;
+	if (!user) return `<div class="empty">Necesitas entrar para configurar tu cuenta.<div class="detail"><a href="${loginUrl()}">Entrar con Google</a></div></div>`;
 	const theme = store.get().theme;
 	return `
     <div class="page-head"><h1>Configuración</h1></div>

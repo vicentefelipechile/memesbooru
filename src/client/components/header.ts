@@ -5,6 +5,7 @@
 
 import { renderSubNav } from './sub-nav.js';
 import { escapeHtml } from './search.js';
+import { loginUrl } from '../services/api.js';
 
 function renderTodo(label: string): string {
 	return `<span class="nav-todo" aria-disabled="true" title="Pendiente de implementar">${label} <small>TODO</small></span>`;
@@ -16,7 +17,7 @@ export function renderHeader(user: { username: string; rank: string } | null): s
   <header class="site-header">
      <a href="/" data-link class="brand">Memesbooru</a>
     <nav class="site-nav" aria-label="Principal">
-       <a href="${user ? '/profile' : '/api/auth/google'}" ${user ? 'data-link' : ''}>Mi cuenta</a>
+       <a href="${user ? '/profile' : loginUrl()}" ${user ? 'data-link' : ''}>Mi cuenta</a>
        <a href="/posts" data-link>Posts</a>
        ${['Comentarios', 'Wiki', 'Alias', 'Artistas', 'Tags', 'Pools', 'Foro', 'Top', 'Ayuda'].map(renderTodo).join('')}
       ${

@@ -1,4 +1,4 @@
-import { api } from '../services/api.js';
+import { api, apiUrl } from '../services/api.js';
 import { renderScore } from '../components/score.js';
 import { renderCommentList, renderCommentForm, formatDate } from '../components/comment.js';
 import { renderStatistics, renderTagged, type SidebarTag } from '../components/tag-sidebar.js';
@@ -48,7 +48,7 @@ export async function renderPost(publicId: string): Promise<string> {
       </aside>
       <section class="post-main">
         <div class="post-media">
-          ${restricted ? `<p class="restricted">Este video es solo para usuarios trusted. Gana confianza publicando y participando.</p>` : `<img src="/api/posts/${publicId}/variants/medium" alt="post ${publicId}" loading="eager" />`}
+          ${restricted ? `<p class="restricted">Este video es solo para usuarios trusted. Gana confianza publicando y participando.</p>` : `<img src="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`)}" alt="post ${publicId}" loading="eager" />`}
         </div>
         <h1 class="post-title">${data.title ? escapeHtml(data.title) : `Post ${publicId}`}</h1>
         <div class="post-actions">
@@ -58,7 +58,7 @@ export async function renderPost(publicId: string): Promise<string> {
           <button id="fav-btn">Favorito</button>
           <button id="report-btn">Reportar</button>
         </div>
-        <a href="/api/posts/${publicId}/variants/original" target="_blank" rel="noopener" class="button small">Ver original</a>
+        <a href="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/original`)}" target="_blank" rel="noopener" class="button small">Ver original</a>
         ${data.description ? `<div class="post-description">${escapeHtml(data.description)}</div>` : ''}
     <section id="comments" class="comments">
       <h2>Comentarios</h2>

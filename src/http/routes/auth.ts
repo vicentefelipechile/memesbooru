@@ -19,6 +19,7 @@ import * as sessionRepo from '../../repositories/session-repository';
 import * as authRepo from '../../repositories/auth-repository';
 import { TotpVerifySchema } from '../../validators';
 import type { JsonValue } from '../../types';
+import { isAllowedOrigin } from '../../helpers/net';
 
 // =========================================================================================================
 // Endpoints
@@ -26,7 +27,9 @@ import type { JsonValue } from '../../types';
 
 const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
-const stateStore = new Map<string, number>();
+type OAuthState = { returnTo: string };
+
+const stateStore = new Map<string, OAuthState>();
 
 // =========================================================================================================
 // GET /api/auth/google
@@ -38,8 +41,14 @@ router.get('/google', async (c) => {
 	const service = new AuthService(db);
 	const env = c.env;
 	const state = crypto.randomUUID();
+	const requestedReturnTo = c.req.query('returnTo');
+	const requestOrigin = new URL(c.req.url).origin;
 
-	stateStore.set(state, Date.now());
+	if (requestedReturnTo && !isAllowedOrigin(requestedReturnTo)) return fail(c, 'Invalid return URL', 400);
+
+	const returnTo = requestedReturnTo ?? (isAllowedOrigin(requestOrigin) ? requestOrigin : '/');
+
+	stateStore.set(state, { returnTo });
 	setTimeout(() => stateStore.delete(state), 10 * 60 * 1000);
 
 	try {
@@ -62,7 +71,11 @@ router.get('/google/callback', async (c) => {
 	const code = c.req.query('code');
 	const state = c.req.query('state');
 
-	if (!code || !state || !stateStore.has(state)) return fail(c, 'Invalid state/code', 400);
+	if (!code || !state) return fail(c, 'Invalid state/code', 400);
+
+	const oauthState = stateStore.get(state);
+
+	if (!oauthState) return fail(c, 'Invalid state/code', 400);
 
 	stateStore.delete(state);
 
@@ -75,9 +88,9 @@ router.get('/google/callback', async (c) => {
 	const user = await service.findOrCreateUserBySub(sub);
 	const sessionToken = await service.createSession(user.id);
 
-	setCookie(c, 'session', sessionToken, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 30 * 24 * 3600 });
+	setCookie(c, 'session', sessionToken, { httpOnly: true, secure: true, sameSite: 'None', path: '/', maxAge: 30 * 24 * 3600 });
 
-	return c.redirect('/');
+	return c.redirect(oauthState.returnTo === '/' ? '/' : `${oauthState.returnTo}/`);
 });
 
 // =========================================================================================================

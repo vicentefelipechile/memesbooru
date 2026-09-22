@@ -1,10 +1,10 @@
 import { store } from '../state/store.js';
-import { api } from '../services/api.js';
+import { api, loginUrl } from '../services/api.js';
 
 export async function renderUpload(): Promise<string> {
 	const user = store.get().user;
 
-	if (!user) return `<div class="empty">Necesitas entrar con Google para subir.<div class="detail"><a href="/api/auth/google">Entrar con Google</a></div></div>`;
+	if (!user) return `<div class="empty">Necesitas entrar con Google para subir.<div class="detail"><a href="${loginUrl()}">Entrar con Google</a></div></div>`;
 
 	return `
     <div class="page-head"><h1>Subir meme</h1></div>

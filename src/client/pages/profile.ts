@@ -1,8 +1,9 @@
 import { store } from '../state/store.js';
+import { loginUrl } from '../services/api.js';
 
 export async function renderProfile(): Promise<string> {
 	const user = store.get().user;
-	if (!user) return `<div class="empty">Necesitas entrar para ver tu perfil.<div class="detail"><a href="/api/auth/google">Entrar con Google</a></div></div>`;
+	if (!user) return `<div class="empty">Necesitas entrar para ver tu perfil.<div class="detail"><a href="${loginUrl()}">Entrar con Google</a></div></div>`;
 	const status = user.status ?? 'active';
 	const display = user.display_name && user.display_name !== user.username ? user.display_name : user.username;
 	return `

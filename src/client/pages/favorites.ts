@@ -1,10 +1,10 @@
 import { renderGrid, type GridItem } from '../components/grid.js';
-import { api } from '../services/api.js';
+import { api, loginUrl } from '../services/api.js';
 import { store } from '../state/store.js';
 
 export async function renderFavorites(): Promise<string> {
 	const user = store.get().user;
-	if (!user) return `<div class="empty">Necesitas entrar para ver favoritos.<div class="detail"><a href="/api/auth/google">Entrar con Google</a></div></div>`;
+	if (!user) return `<div class="empty">Necesitas entrar para ver favoritos.<div class="detail"><a href="${loginUrl()}">Entrar con Google</a></div></div>`;
 	const res = await api.favorites.list().catch<{ data: GridItem[] }>(() => ({ data: [] }));
 	return `<div class="page-head"><h1>Favoritos</h1></div>${renderGrid(res.data)}`;
 }

@@ -34,6 +34,16 @@ type ReportInput = { target_type: string; target_id: number; reason: string };
 
 type RequestInitWithBody = Omit<RequestInit, 'body'> & { body?: JsonValue };
 
+const WORKER_ORIGIN = 'https://memesbooru.vicentefelipechile.workers.dev';
+
+export function apiUrl(path: string): string {
+	return location.hostname === 'memesbooru.pages.dev' ? `${WORKER_ORIGIN}${path}` : path;
+}
+
+export function loginUrl(): string {
+	return `${apiUrl('/api/auth/google')}?returnTo=${encodeURIComponent(location.origin)}`;
+}
+
 // =========================================================================================================
 // Errors
 // =========================================================================================================
@@ -103,7 +113,7 @@ export class MemesBooruApi {
 
 	private async request(path: string, init: RequestInitWithBody = {}): Promise<JsonValue> {
 		const { body, ...options } = init;
-		const response = await fetch(path, {
+		const response = await fetch(apiUrl(path), {
 			...options,
 			credentials: 'include',
 			headers: body === undefined ? options.headers : { 'content-type': 'application/json', ...options.headers },

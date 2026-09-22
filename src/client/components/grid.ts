@@ -4,6 +4,7 @@
 // =========================================================================================================
 
 import { escapeAttr } from './search.js';
+import { apiUrl } from '../services/api.js';
 
 export type GridItem = { public_id: string; low_variant_key?: string | null; score: number; favorite_count: number; media_type?: string };
 
@@ -12,7 +13,7 @@ export function renderCard(item: GridItem): string {
 
 	return `
   <a href="/post/${encodeURIComponent(item.public_id)}" class="thumb" data-link>
-    <img loading="lazy" src="/api/posts/${encodeURIComponent(item.public_id)}/variants/low" alt="Meme ${escapeAttr(item.public_id)}" />
+	    <img loading="lazy" src="${apiUrl(`/api/posts/${encodeURIComponent(item.public_id)}/variants/low`)}" alt="Meme ${escapeAttr(item.public_id)}" />
     ${isVideo ? `<span class="media-label">${item.media_type === 'gif' ? 'GIF' : 'Vídeo'}</span>` : ''}
   </a>`;
 }
