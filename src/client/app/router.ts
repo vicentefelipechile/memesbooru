@@ -7,6 +7,7 @@
 type Route = { pattern: RegExp; render: (match: RegExpMatchArray) => Promise<string>; bind?: (match: RegExpMatchArray) => void };
 
 import { renderHeader } from '../components/header.js';
+import { navigationSection, renderSubNav } from '../components/sub-nav.js';
 import { sanitizeMarkup } from '../components/sanitize.js';
 import { store } from '../state/store.js';
 import { renderHome, bindHome, bindHomeGlobal } from '../pages/home.js';
@@ -31,6 +32,8 @@ const routes: Route[] = [
 	{ pattern: /^\/random$/, render: () => renderRandom(new URL(location.href).searchParams.get('tags') ?? undefined), bind: () => bindRandom() },
 	{ pattern: /^\/upload\/video$/, render: () => renderUpload(true), bind: () => bindUpload() },
 	{ pattern: /^\/comments$/, render: () => renderSection('comments'), bind: () => bindSection('comments') },
+	{ pattern: /^\/(wiki|aliases|artists|pools|forum)\/create$/, render: (m) => renderSection(m[1], 'create'), bind: (m) => bindSection(m[1]) },
+	{ pattern: /^\/tags\/edit$/, render: () => renderSection('tags', 'edit'), bind: () => bindSection('tags') },
 	{ pattern: /^\/wiki(?:\/[^/]+)?$/, render: () => renderSection('wiki'), bind: () => bindSection('wiki') },
 	{ pattern: /^\/aliases$/, render: () => renderSection('aliases'), bind: () => bindSection('aliases') },
 	{ pattern: /^\/artists(?:\/[^/]+)?$/, render: () => renderSection('artists'), bind: () => bindSection('artists') },
@@ -77,6 +80,7 @@ async function renderRoute(path: string): Promise<void> {
 
 		page.innerHTML = sanitizeMarkup(html);
 		match.bind?.(m);
+		if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
 	} catch (error) {
 		console.error('Route failed', error);
 
@@ -85,8 +89,12 @@ async function renderRoute(path: string): Promise<void> {
 }
 
 function updateNavigation(pathname: string): void {
+	const subnav = document.querySelector('.site-subnav');
+	if (subnav) subnav.outerHTML = renderSubNav(pathname);
+
+	const section = navigationSection(pathname);
 	for (const link of Array.from(document.querySelectorAll<HTMLAnchorElement>('.site-nav a[data-link], .site-subnav a[data-link]'))) {
-		const active = link.pathname === pathname || (link.pathname === '/posts' && pathname.startsWith('/post/'));
+		const active = link.closest('.site-nav') ? navigationSection(link.pathname) === section && section !== '' : link.pathname === pathname && link.hash === location.hash;
 
 		if (active) link.setAttribute('aria-current', 'page');
 		else link.removeAttribute('aria-current');

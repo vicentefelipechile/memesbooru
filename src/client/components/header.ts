@@ -31,5 +31,5 @@ export function renderHeader(user: { username: string; rank: string } | null): s
 			}
     </nav>
   </header>
-  ${renderSubNav()}`;
+	  ${renderSubNav(location.pathname)}`;
 }

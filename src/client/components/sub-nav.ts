@@ -1,19 +1,77 @@
 // =========================================================================================================
-// SUB-NAV (secondary bar under header)
-// Shared contextual links for the public shell.
+// SUB-NAV
+// Links for the section currently open in the persistent shell.
 // =========================================================================================================
 
-export function renderSubNav(): string {
-	return `
-  <nav class="site-subnav" aria-label="Secciones">
-     <a href="/upload" data-link>Subir</a>
-      <a href="/upload/video" data-link>Subir vídeo</a>
-     <a href="/random" data-link>Aleatorio</a>
-     <a href="/favorites" data-link>Favoritos</a>
-     <a href="/settings" data-link>Configuración</a>
-      <a href="/contact" data-link>Contacto</a>
-      <a href="/about" data-link>Acerca de</a>
-      <a href="/dmca" data-link>DMCA</a>
-      <a href="/tos" data-link>TOS</a>
-  </nav>`;
+const LINKS: Record<string, [string, string][]> = {
+	account: [
+		['Inicio', '/account'],
+		['Perfil', '/profile'],
+		['Favoritos', '/favorites'],
+		['Configuración', '/settings'],
+		['Correo', '/mail'],
+	],
+	posts: [
+		['Catálogo', '/posts'],
+		['Subir', '/upload'],
+		['Subir vídeo', '/upload/video'],
+		['Mis favoritos', '/favorites'],
+		['Aleatorio', '/random'],
+	],
+	comments: [
+		['Lista', '/comments'],
+		['Ayuda', '/help'],
+	],
+	wiki: [
+		['Crear', '/wiki/create'],
+		['Lista', '/wiki'],
+	],
+	aliases: [
+		['Lista', '/aliases'],
+		['Añadir', '/aliases/create'],
+	],
+	artists: [
+		['Lista', '/artists'],
+		['Añadir artista', '/artists/create'],
+	],
+	tags: [
+		['Lista', '/tags'],
+		['Editar', '/tags/edit'],
+	],
+	pools: [
+		['Lista', '/pools'],
+		['Crear', '/pools/create'],
+	],
+	forum: [
+		['Lista', '/forum'],
+		['Crear tema', '/forum/create'],
+	],
+	help: [
+		['Ayuda', '/help'],
+		['Contacto', '/contact'],
+		['Acerca de', '/about'],
+		['DMCA', '/dmca'],
+		['TOS', '/tos'],
+	],
+};
+
+export function navigationSection(pathname: string): string {
+	const section = pathname.split('/')[1];
+
+	if (['post', 'upload', 'favorites', 'random', 'top'].includes(section)) return 'posts';
+	if (['profile', 'settings', 'mail', 'login', 'register', 'moderation'].includes(section)) return 'account';
+	if (['contact', 'about', 'dmca', 'tos'].includes(section)) return 'help';
+
+	return section in LINKS ? section : '';
+}
+
+export function renderSubNav(pathname: string): string {
+	const section = navigationSection(pathname);
+	const links = LINKS[section] ?? [
+		['Inicio', '/'],
+		['Catálogo', '/posts'],
+		['Aleatorio', '/random'],
+	];
+
+	return `<nav class="site-subnav" aria-label="${section ? `Opciones de ${section}` : 'Inicio'}">${links.map(([label, href]) => `<a href="${href}" data-link>${label}</a>`).join('')}</nav>`;
 }

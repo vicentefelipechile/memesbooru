@@ -5,11 +5,35 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderSidebar } from '../../src/client/components/sidebar';
 import { renderPaginator } from '../../src/client/components/grid';
+import { renderSubNav } from '../../src/client/components/sub-nav';
 
 beforeAll(() => vi.stubGlobal('localStorage', { getItem: () => 'android' }));
 afterAll(() => vi.unstubAllGlobals());
 
 describe('booru controls', () => {
+	it('shows section-specific links for posts, wiki and aliases', () => {
+		expect(renderSubNav('/post/123')).toContain('href="/upload"');
+		expect(renderSubNav('/post/123')).not.toContain('href="/wiki/create"');
+		expect(renderSubNav('/wiki')).toContain('href="/wiki/create"');
+		expect(renderSubNav('/aliases')).toContain('href="/aliases"');
+		expect(renderSubNav('/aliases')).not.toContain('href="/upload"');
+	});
+
+	it('keeps the wiki form off the listing and opens it on the create view', async () => {
+		const { renderSection } = await import('../../src/client/pages/sections');
+		const { api } = await import('../../src/client/services/api');
+		const wiki = vi.spyOn(api.community, 'wiki').mockResolvedValue({ data: [] });
+		const listing = await renderSection('wiki');
+		const create = await renderSection('wiki', 'create');
+
+		expect(listing).toContain('No hay artículos.');
+		expect(listing).not.toContain('data-section-form');
+		expect(create).toContain('data-section-form="wiki"');
+		expect(create).not.toContain('No hay artículos.');
+		expect(wiki).toHaveBeenCalledTimes(1);
+		wiki.mockRestore();
+	});
+
 	it('renders explicit search and only populated tag categories with exact counts', () => {
 		const html = renderSidebar([{ name: 'falling', category: 'reaction', count: 2345 }], 'dog -cat', 'recent');
 		expect(html).toContain('type="submit"');
