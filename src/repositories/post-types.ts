@@ -23,6 +23,8 @@ export type CreatePostData = {
 	title: PostRow['title'];
 	checksum: MediaAssetRow['checksum'];
 	originalKey: MediaAssetRow['original_object_key'];
+	mimeType: MediaAssetRow['mime_type'];
+	byteSize: MediaAssetRow['byte_size'];
 };
 
 export type InsertPostStatementData = {
@@ -43,6 +45,7 @@ export type InsertMediaAssetStatementData = {
 	mediaType: MediaAssetRow['media_type'];
 	originalKey: MediaAssetRow['original_object_key'];
 	mimeType: MediaAssetRow['mime_type'];
+	byteSize: MediaAssetRow['byte_size'];
 	checksum: MediaAssetRow['checksum'];
 	processingStatus: MediaAssetRow['processing_status'];
 	createdAt: MediaAssetRow['created_at'];
@@ -72,5 +75,5 @@ export function buildInsertPostStatement(db: DB, row: InsertPostStatementData): 
 export function buildInsertMediaAssetStatement(db: DB, row: InsertMediaAssetStatementData): D1PreparedStatement {
 	return db
 		.prepare('INSERT INTO media_assets (id, post_id, media_type, original_object_key, mime_type, byte_size, checksum, processing_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-		.bind(row.id, row.postId, row.mediaType, row.originalKey, row.mimeType, 0, row.checksum, row.processingStatus, row.createdAt);
+		.bind(row.id, row.postId, row.mediaType, row.originalKey, row.mimeType, row.byteSize, row.checksum, row.processingStatus, row.createdAt);
 }

@@ -32,6 +32,22 @@ export class AuthRepository {
 		return queryOne<UserPublic>(this.db, 'SELECT id, username, display_name, rank, status FROM users WHERE id = ?', [id]);
 	}
 
+	async findUserByEmail(email: string): Promise<UserRow | null> {
+		return queryOne<UserRow>(this.db, 'SELECT * FROM users WHERE email = ?', [email]);
+	}
+
+	async setPassword(userId: number, passwordHash: ArrayBuffer): Promise<void> {
+		await execute(this.db, 'UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
+	}
+
+	async setEmail(userId: number, email: string): Promise<void> {
+		await execute(this.db, 'UPDATE users SET email = ?, email_verified_at = NULL WHERE id = ?', [email, userId]);
+	}
+
+	async setDisplayName(userId: number, displayName: string | null): Promise<void> {
+		await execute(this.db, 'UPDATE users SET display_name = ? WHERE id = ?', [displayName, userId]);
+	}
+
 	async getTotpSecret(userId: number): Promise<Uint8Array | null> {
 		const row = await queryOne<Pick<UserTotpRow, 'secret_encrypted'>>(this.db, 'SELECT secret_encrypted FROM user_totp WHERE user_id = ?', [userId]);
 		return row?.secret_encrypted ?? null;

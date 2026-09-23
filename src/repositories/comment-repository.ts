@@ -56,6 +56,10 @@ export class CommentRepository {
 		return queryAll<CommentResult>(this.db, `${base} ORDER BY c.created_at ASC, c.id ASC LIMIT ?`, [postId, limit]);
 	}
 
+	async listRecent(limit = 50): Promise<CommentResult[]> {
+		return queryAll<CommentResult>(this.db, "SELECT c.*, u.username AS author_username FROM comments c LEFT JOIN users u ON u.id = c.author_id WHERE c.status = 'visible' ORDER BY c.created_at DESC, c.id DESC LIMIT ?", [limit]);
+	}
+
 	async findById(id: number): Promise<CommentRow | null> {
 		return queryOne<CommentRow>(this.db, 'SELECT * FROM comments WHERE id = ?', [id]);
 	}

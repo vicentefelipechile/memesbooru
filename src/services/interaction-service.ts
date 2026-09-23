@@ -12,7 +12,7 @@ import type { DB } from '../db/client';
 import { NotFoundError } from '../domain/errors';
 import type { AuthUser } from '../types';
 import type { RatingInput } from '../validators';
-import type { PostListingRow } from '../db/schema';
+import type { FavoriteListingRow } from '../db/schema';
 import { PostRepository } from '../repositories/post-repository';
 
 // =========================================================================================================
@@ -52,7 +52,7 @@ export class InteractionService {
 		await this.posts.removeFavorite(postId, viewer.id);
 	}
 
-	async listFavorites(viewer: AuthUser): Promise<PostListingRow[]> {
-		return this.posts.listFavoritesByUser(viewer.id);
+	async listFavorites(viewer: AuthUser, limit = 50, cursor?: { favoritedAt: number; postId: number }): Promise<{ data: FavoriteListingRow[]; nextCursor: { favoritedAt: number; postId: number } | null }> {
+		return this.posts.listFavoritesByUser(viewer.id, limit, cursor);
 	}
 }

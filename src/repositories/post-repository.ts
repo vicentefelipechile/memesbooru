@@ -9,13 +9,13 @@
 // =========================================================================================================
 
 import { queryOne, queryAll, batch, execute, type DB } from '../db/client';
-import type { PostRow, PostListingRow, MediaAssetRow, PostDetailRow, PostTagRow, PostRatingRow, UserActivityRow, NextIdRow } from '../db/schema';
+import type { FavoriteListingRow, PostRow, PostListingRow, MediaAssetRow, PostDetailRow, PostTagRow, PostRatingRow, UserActivityRow, NextIdRow } from '../db/schema';
 import { encodeCursor as encodeCursorHelper, decodeCursor as decodeCursorHelper } from '../helpers/cursor';
 import { normalizeTag } from '../validators';
 import * as tagRepo from './tag-repository';
 import { buildInsertPostStatement, buildInsertMediaAssetStatement } from './post-types';
 import type { CreatePostData } from './post-types';
-import { searchByTags, findRandomPublicId, type SearchByTagsOpts } from './post-search';
+import { searchByTags, findRandomPublicId, listTop, type SearchByTagsOpts } from './post-search';
 
 // =========================================================================================================
 // Export — canonical cursor helpers (single source in helpers/cursor.ts) + split modules for compat
@@ -25,7 +25,7 @@ export const encodeCursor = encodeCursorHelper;
 export const decodeCursor = decodeCursorHelper;
 export type { CreatePostData, InsertPostStatementData, InsertMediaAssetStatementData, SearchByTagsOpts, PostCountFilter } from './post-types';
 export { buildInsertPostStatement, buildInsertMediaAssetStatement } from './post-types';
-export { searchByTags, count, findRandomPublicId } from './post-search';
+export { searchByTags, count, findRandomPublicId, listTop } from './post-search';
 
 // =========================================================================================================
 // Queries
@@ -40,6 +40,10 @@ export class PostRepository {
 
 	async findRandomPublicId(): Promise<string | null> {
 		return findRandomPublicId(this.db);
+	}
+
+	listTop(limit = 100, since = 0, sort: 'score' | 'favorites' | 'recent' = 'score'): Promise<PostListingRow[]> {
+		return listTop(this.db, limit, since, sort);
 	}
 
 	async findByPublicId(publicId: string): Promise<PostDetailRow | null> {
@@ -115,8 +119,18 @@ export class PostRepository {
 		]);
 	}
 
-	async listFavoritesByUser(userId: number, limit = 50): Promise<PostListingRow[]> {
-		return queryAll<PostListingRow>(this.db, 'SELECT pl.* FROM post_listing pl JOIN post_favorites pf ON pf.post_id = pl.post_id WHERE pf.user_id = ? ORDER BY pf.created_at DESC LIMIT ?', [userId, limit]);
+	async listFavoritesByUser(userId: number, limit = 50, cursor?: { favoritedAt: number; postId: number }): Promise<{ data: FavoriteListingRow[]; nextCursor: { favoritedAt: number; postId: number } | null }> {
+		const where = cursor ? ' AND (pf.created_at < ? OR (pf.created_at = ? AND pf.post_id < ?))' : '';
+		const params = cursor ? [userId, cursor.favoritedAt, cursor.favoritedAt, cursor.postId, limit + 1] : [userId, limit + 1];
+		const rows = await queryAll<FavoriteListingRow>(
+			this.db,
+			`SELECT pl.*, pf.created_at AS favorited_at FROM post_listing pl JOIN post_favorites pf ON pf.post_id = pl.post_id WHERE pf.user_id = ?${where} ORDER BY pf.created_at DESC, pf.post_id DESC LIMIT ?`,
+			params,
+		);
+		const hasMore = rows.length > limit;
+		const data = rows.slice(0, limit);
+		const last = data[data.length - 1];
+		return { data, nextCursor: hasMore && last ? { favoritedAt: last.favorited_at, postId: last.post_id } : null };
 	}
 
 	// =========================================================================================================
@@ -161,7 +175,8 @@ export class PostRepository {
 				postId,
 				mediaType: data.mediaType,
 				originalKey: data.originalKey,
-				mimeType: data.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
+				mimeType: data.mimeType,
+				byteSize: data.byteSize,
 				checksum: data.checksum,
 				processingStatus: isDuplicate ? 'done' : 'pending',
 				createdAt: now,
@@ -179,5 +194,37 @@ export class PostRepository {
 		await batch(this.db, stmts);
 
 		return postId;
+	}
+
+	async createStreamPost(data: { publicId: string; authorId: number; title: string | null; tags: string[]; streamUid: string }): Promise<PostRow['id']> {
+		const existing = await queryOne<Pick<PostRow, 'id'>>(this.db, 'SELECT id FROM posts WHERE stream_uid = ?', [data.streamUid]);
+		if (existing) return existing.id;
+
+		const now = Date.now();
+		const postId = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id),0)+1 AS v FROM posts', []))?.v ?? 1;
+		const assetId = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id),0)+1 AS v FROM media_assets', []))?.v ?? 1;
+		const tagIds = await new tagRepo.TagRepository(this.db).ensureTags(data.tags.map(normalizeTag).filter(Boolean), data.authorId);
+		const checksum = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data.streamUid));
+		const key = `stream/${data.streamUid}`;
+		const statements: D1PreparedStatement[] = [
+			this.db
+				.prepare("INSERT INTO posts (id, public_id, author_id, media_type, status, title, stream_uid, created_at, published_at, updated_at) VALUES (?, ?, ?, 'video', 'available', ?, ?, ?, ?, ?)")
+				.bind(postId, data.publicId, data.authorId, data.title, data.streamUid, now, now, now),
+			this.db
+				.prepare("INSERT INTO media_assets (id, post_id, media_type, provider, original_object_key, mime_type, byte_size, checksum, processing_status, created_at) VALUES (?, ?, 'video', 'stream', ?, 'video/mp4', 0, ?, 'done', ?)")
+				.bind(assetId, postId, key, checksum, now),
+			this.db
+				.prepare(
+					"INSERT INTO post_listing (post_id, public_id, media_type, status, low_variant_key, medium_variant_key, score, rating_count, favorite_count, comment_count, published_at) VALUES (?, ?, 'video', 'available', ?, ?, 0, 0, 0, 0, ?)",
+				)
+				.bind(postId, data.publicId, key, key, now),
+		];
+		for (const tagId of tagIds) statements.push(this.db.prepare('INSERT INTO post_tags (post_id, tag_id, added_by, created_at) VALUES (?, ?, ?, ?)').bind(postId, tagId, data.authorId, now));
+		await batch(this.db, statements);
+		return postId;
+	}
+
+	findStreamPost(streamUid: string): Promise<Pick<PostRow, 'id' | 'public_id'> | null> {
+		return queryOne<Pick<PostRow, 'id' | 'public_id'>>(this.db, 'SELECT id, public_id FROM posts WHERE stream_uid = ?', [streamUid]);
 	}
 }

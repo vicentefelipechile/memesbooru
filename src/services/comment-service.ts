@@ -36,6 +36,10 @@ export class CommentService {
 		return this.comments.listByPost(postId, cursor, limit);
 	}
 
+	listRecent(limit = 50) {
+		return this.comments.listRecent(limit);
+	}
+
 	async create(viewer: AuthUser, publicId: string, input: CommentInput): Promise<CreatedCommentResult> {
 		const postId = await this.posts.findPostIdByPublicId(publicId);
 

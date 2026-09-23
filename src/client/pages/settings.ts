@@ -15,6 +15,14 @@ export async function renderSettings(): Promise<string> {
 	return `
     <div class="page-head"><h1>Configuración</h1></div>
     <section class="settings-section">
+      <h2>Correo electrónico</h2>
+      <form id="email-form" class="form-stack"><label for="email-input">Nuevo correo</label><input id="email-input" type="email" required maxlength="254"><button class="primary" type="submit">Cambiar correo</button><p id="email-output" class="form-msg" aria-live="polite"></p></form>
+    </section>
+    <section class="settings-section">
+      <h2>Contraseña</h2>
+      <form id="password-form" class="form-stack"><label for="current-password">Contraseña actual</label><input id="current-password" type="password" required minlength="8"><label for="new-password">Nueva contraseña</label><input id="new-password" type="password" required minlength="8"><button class="primary" type="submit">Cambiar contraseña</button><p id="password-output" class="form-msg" aria-live="polite"></p></form>
+    </section>
+    <section class="settings-section">
       <h2>Tema</h2>
       <div class="form-stack">
         <div class="field">
@@ -37,6 +45,40 @@ export async function renderSettings(): Promise<string> {
 }
 
 export function bindSettings(): void {
+	const emailForm = document.getElementById('email-form');
+	if (emailForm instanceof HTMLFormElement)
+		emailForm.addEventListener('submit', async (event) => {
+			event.preventDefault();
+			const email = document.getElementById('email-input');
+			const output = document.getElementById('email-output');
+			if (!(email instanceof HTMLInputElement) || !output) return;
+			try {
+				await api.auth.changeEmail(email.value);
+				output.textContent = 'Correo actualizado.';
+				output.className = 'form-msg ok';
+			} catch {
+				output.textContent = 'No se pudo actualizar el correo.';
+				output.className = 'form-msg err';
+			}
+		});
+	const passwordForm = document.getElementById('password-form');
+	if (passwordForm instanceof HTMLFormElement)
+		passwordForm.addEventListener('submit', async (event) => {
+			event.preventDefault();
+			const current = document.getElementById('current-password');
+			const next = document.getElementById('new-password');
+			const output = document.getElementById('password-output');
+			if (!(current instanceof HTMLInputElement) || !(next instanceof HTMLInputElement) || !output) return;
+			try {
+				await api.auth.changePassword(current.value, next.value);
+				output.textContent = 'Contraseña actualizada.';
+				output.className = 'form-msg ok';
+				passwordForm.reset();
+			} catch {
+				output.textContent = 'No se pudo actualizar la contraseña.';
+				output.className = 'form-msg err';
+			}
+		});
 	const themeSelect = document.getElementById('theme-select');
 	if (themeSelect instanceof HTMLSelectElement) {
 		themeSelect.addEventListener('change', () => {

@@ -10,10 +10,11 @@
 
 import type { DB } from '../db/client';
 import { UserRepository } from '../repositories/user-repository';
+import { AuthRepository } from '../repositories/auth-repository';
 import { SessionRepository } from '../repositories/session-repository';
 import { normalizeTag } from '../validators';
 import { ValidationError } from '../domain/errors';
-import { b64url, hashToken } from '../helpers/crypto';
+import { b64url, encodePassword, hashToken, verifyPassword } from '../helpers/crypto';
 import { totpVerifyCode, generateTotpSecretValue } from './auth-totp';
 import type { AuthUserBrief, GoogleTokens, SessionTokenPair, SessionVerification } from '../types';
 
@@ -142,6 +143,38 @@ export class AuthService {
 		await this.sessions.createSession(userId, hash, expiresAt);
 
 		return token;
+	}
+
+	async authenticatePassword(email: string, password: string): Promise<AuthUserBrief | null> {
+		const user = await new AuthRepository(this.db).findUserByEmail(email);
+		if (!user?.password_hash || !(await verifyPassword(password, user.password_hash))) return null;
+		return { id: user.id, username: user.username, rank: user.rank };
+	}
+
+	async register(username: string, email: string, password: string): Promise<AuthUserBrief> {
+		if ((await this.users.findByUsername(username)) || (await new AuthRepository(this.db).findUserByEmail(email))) throw new ValidationError('username or email already in use');
+		const user = await this.users.createLocal(username, email, await encodePassword(password));
+		return { id: user.id, username: user.username, rank: user.rank };
+	}
+
+	async setPassword(userId: number, password: string): Promise<void> {
+		await new AuthRepository(this.db).setPassword(userId, await encodePassword(password));
+	}
+
+	async setEmail(userId: number, email: string): Promise<void> {
+		const normalized = email.trim().toLowerCase();
+		const existing = await new AuthRepository(this.db).findUserByEmail(normalized);
+		if (existing && existing.id !== userId) throw new ValidationError('email already in use');
+		await new AuthRepository(this.db).setEmail(userId, normalized);
+	}
+
+	setDisplayName(userId: number, displayName: string | null): Promise<void> {
+		return new AuthRepository(this.db).setDisplayName(userId, displayName?.trim() || null);
+	}
+
+	async verifyCurrentPassword(userId: number, password: string): Promise<boolean> {
+		const user = await new AuthRepository(this.db).findUserById(userId);
+		return user?.password_hash ? verifyPassword(password, user.password_hash) : false;
 	}
 
 	async verifySession(token: string): Promise<SessionVerification | null> {

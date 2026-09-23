@@ -17,7 +17,7 @@ import { fail } from '../responses';
 import { hashToken } from '../../helpers/crypto';
 import { SessionRepository } from '../../repositories/session-repository';
 import { AuthRepository } from '../../repositories/auth-repository';
-import { TotpVerifySchema } from '../../validators';
+import { EmailChangeSchema, PasswordChangeSchema, PasswordLoginSchema, ProfileSchema, RegisterSchema, TotpVerifySchema } from '../../validators';
 import type { JsonValue } from '../../types';
 import { isAllowedOrigin } from '../../helpers/net';
 
@@ -30,6 +30,64 @@ const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 type OAuthState = { returnTo: string };
 
 const stateStore = new Map<string, OAuthState>();
+
+router.post('/login', async (c) => {
+	const body = await c.req.json<JsonValue>().catch(() => null);
+	const parsed = PasswordLoginSchema.safeParse(body);
+
+	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+
+	const service = new AuthService(c.env.DB);
+	const user = await service.authenticatePassword(parsed.data.email.toLowerCase(), parsed.data.password);
+
+	if (!user) return fail(c, 'Credenciales invalidas', 401);
+
+	const token = await service.createSession(user.id);
+	setCookie(c, 'session', token, { httpOnly: true, secure: true, sameSite: 'None', path: '/', maxAge: 30 * 24 * 3600 });
+
+	return c.json({ user });
+});
+
+router.post('/register', async (c) => {
+	const body = await c.req.json<JsonValue>().catch(() => null);
+	const parsed = RegisterSchema.safeParse(body);
+	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+	const service = new AuthService(c.env.DB);
+	const user = await service.register(parsed.data.username, parsed.data.email.toLowerCase(), parsed.data.password);
+	setCookie(c, 'session', await service.createSession(user.id), { httpOnly: true, secure: true, sameSite: 'None', path: '/', maxAge: 30 * 24 * 3600 });
+	return c.json({ user }, 201);
+});
+
+router.post('/password', requireAuth, async (c) => {
+	const body = await c.req.json<JsonValue>().catch(() => null);
+	const parsed = PasswordChangeSchema.safeParse(body);
+
+	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+
+	const user = c.get('user');
+	const service = new AuthService(c.env.DB);
+	if (!(await service.verifyCurrentPassword(user.id, parsed.data.current_password))) return fail(c, 'Credenciales invalidas', 401);
+
+	await service.setPassword(user.id, parsed.data.password);
+
+	return c.json({ ok: true });
+});
+
+router.post('/email', requireAuth, async (c) => {
+	const body = await c.req.json<JsonValue>().catch(() => null);
+	const parsed = EmailChangeSchema.safeParse(body);
+	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+	await new AuthService(c.env.DB).setEmail(c.get('user').id, parsed.data.email);
+	return c.json({ ok: true });
+});
+
+router.patch('/profile', requireAuth, async (c) => {
+	const body = await c.req.json<JsonValue>().catch(() => null);
+	const parsed = ProfileSchema.safeParse(body);
+	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+	await new AuthService(c.env.DB).setDisplayName(c.get('user').id, parsed.data.display_name);
+	return c.json({ ok: true });
+});
 
 // =========================================================================================================
 // GET /api/auth/google

@@ -5,11 +5,6 @@
 
 import { renderSubNav } from './sub-nav.js';
 import { escapeHtml } from './search.js';
-import { loginUrl } from '../services/api.js';
-
-function renderTodo(label: string): string {
-	return `<span class="nav-todo" aria-disabled="true" title="Pendiente de implementar">${label} <small>TODO</small></span>`;
-}
 
 export function renderHeader(user: { username: string; rank: string } | null): string {
 	return `
@@ -17,9 +12,17 @@ export function renderHeader(user: { username: string; rank: string } | null): s
   <header class="site-header">
      <a href="/" data-link class="brand">Memesbooru</a>
     <nav class="site-nav" aria-label="Principal">
-       <a href="${user ? '/profile' : loginUrl()}" ${user ? 'data-link' : ''}>Mi cuenta</a>
+        <a href="${user ? '/account' : '/login'}" data-link>Mi cuenta</a>
        <a href="/posts" data-link>Posts</a>
-       ${['Comentarios', 'Wiki', 'Alias', 'Artistas', 'Tags', 'Pools', 'Foro', 'Top', 'Ayuda'].map(renderTodo).join('')}
+       <a href="/comments" data-link>Comentarios</a>
+       <a href="/wiki" data-link>Wiki</a>
+       <a href="/aliases" data-link>Aliases</a>
+       <a href="/artists" data-link>Artists</a>
+       <a href="/tags" data-link>Tags</a>
+       <a href="/pools" data-link>Pools</a>
+       <a href="/forum" data-link>Forum</a>
+       <a href="/top" data-link>Top 100</a>
+       <a href="/help" data-link>Help</a>
       ${
 				user
 					? `<a href="/profile" data-link>@${escapeHtml(user.username)}</a>

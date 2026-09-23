@@ -73,14 +73,12 @@ export async function publishPost(db: DB, postId: number, lowKey: string | null,
 	]);
 }
 
-export async function publishPostWithExistingVariant(db: DB, postId: number, assetId: number, now = Date.now()): Promise<void> {
+export async function publishPostWithExistingVariant(db: DB, postId: number, assetId: number, lowKey: string, now = Date.now()): Promise<void> {
 	await markAssetDone(db, assetId);
 
 	await batch(db, [
 		db.prepare("UPDATE posts SET status='available', published_at=?, updated_at=? WHERE id=?").bind(now, now, postId),
-		db
-			.prepare("INSERT OR REPLACE INTO post_listing (post_id, public_id, media_type, status, low_variant_key, published_at, score) SELECT id, public_id, media_type, 'available', ?, ?, score FROM posts WHERE id=?")
-			.bind(`media/${postId}/low.avif`, now, postId),
+		db.prepare("INSERT OR REPLACE INTO post_listing (post_id, public_id, media_type, status, low_variant_key, published_at, score) SELECT id, public_id, media_type, 'available', ?, ?, score FROM posts WHERE id=?").bind(lowKey, now, postId),
 	]);
 }
 
@@ -147,8 +145,8 @@ export class MediaRepository {
 	findVariant(assetId: number, variantName: string) {
 		return findVariant(this.db, assetId, variantName);
 	}
-	publishPostWithExistingVariant(postId: number, assetId: number, now?: number) {
-		return publishPostWithExistingVariant(this.db, postId, assetId, now);
+	publishPostWithExistingVariant(postId: number, assetId: number, lowKey: string, now?: number) {
+		return publishPostWithExistingVariant(this.db, postId, assetId, lowKey, now);
 	}
 	insertVariantsAndPublish(assetId: number, postId: number, lowKey: string, medKey: string, byteSize: number, now?: number) {
 		return insertVariantsAndPublish(this.db, assetId, postId, lowKey, medKey, byteSize, now);

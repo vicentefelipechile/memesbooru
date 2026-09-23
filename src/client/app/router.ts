@@ -7,6 +7,7 @@
 type Route = { pattern: RegExp; render: (match: RegExpMatchArray) => Promise<string>; bind?: (match: RegExpMatchArray) => void };
 
 import { renderHeader } from '../components/header.js';
+import { sanitizeMarkup } from '../components/sanitize.js';
 import { store } from '../state/store.js';
 import { renderHome, bindHome, bindHomeGlobal } from '../pages/home.js';
 import { renderPost, bindPost } from '../pages/post.js';
@@ -16,6 +17,7 @@ import { renderSettings, bindSettings } from '../pages/settings.js';
 import { renderProfile, bindProfile } from '../pages/profile.js';
 import { renderRandom, bindRandom } from '../pages/random.js';
 import { renderLanding, bindLanding } from '../pages/landing.js';
+import { bindSection, renderSection } from '../pages/sections.js';
 import { api } from '../services/api.js';
 
 const routes: Route[] = [
@@ -23,10 +25,29 @@ const routes: Route[] = [
 	{ pattern: /^\/posts$/, render: () => renderHome(), bind: () => bindHome() },
 	{ pattern: /^\/post\/([^/]+)$/, render: (m) => renderPost(m[1]), bind: (m) => bindPost(m[1]) },
 	{ pattern: /^\/upload$/, render: () => renderUpload(), bind: () => bindUpload() },
-	{ pattern: /^\/favorites$/, render: () => renderFavorites(), bind: () => bindFavorites() },
+	{ pattern: /^\/favorites$/, render: () => renderFavorites(new URL(location.href).searchParams.get('cursor') ?? undefined), bind: () => bindFavorites() },
 	{ pattern: /^\/settings$/, render: () => renderSettings(), bind: () => bindSettings() },
 	{ pattern: /^\/profile$/, render: () => renderProfile(), bind: () => bindProfile() },
-	{ pattern: /^\/random$/, render: () => renderRandom(), bind: () => bindRandom() },
+	{ pattern: /^\/random$/, render: () => renderRandom(new URL(location.href).searchParams.get('tags') ?? undefined), bind: () => bindRandom() },
+	{ pattern: /^\/upload\/video$/, render: () => renderUpload(true), bind: () => bindUpload() },
+	{ pattern: /^\/comments$/, render: () => renderSection('comments'), bind: () => bindSection('comments') },
+	{ pattern: /^\/wiki(?:\/[^/]+)?$/, render: () => renderSection('wiki'), bind: () => bindSection('wiki') },
+	{ pattern: /^\/aliases$/, render: () => renderSection('aliases'), bind: () => bindSection('aliases') },
+	{ pattern: /^\/artists(?:\/[^/]+)?$/, render: () => renderSection('artists'), bind: () => bindSection('artists') },
+	{ pattern: /^\/tags(?:\/[^/]+)?$/, render: () => renderSection('tags'), bind: () => bindSection('tags') },
+	{ pattern: /^\/pools(?:\/[^/]+)?$/, render: () => renderSection('pools'), bind: () => bindSection('pools') },
+	{ pattern: /^\/forum(?:\/[^/]+)?$/, render: () => renderSection('forum'), bind: () => bindSection('forum') },
+	{ pattern: /^\/top$/, render: () => renderSection('top') },
+	{ pattern: /^\/account$/, render: () => renderSection('account') },
+	{ pattern: /^\/mail$/, render: () => renderSection('mail'), bind: () => bindSection('mail') },
+	{ pattern: /^\/help$/, render: () => renderSection('help') },
+	{ pattern: /^\/about$/, render: () => renderSection('about') },
+	{ pattern: /^\/contact$/, render: () => renderSection('contact'), bind: () => bindSection('contact') },
+	{ pattern: /^\/dmca$/, render: () => renderSection('dmca') },
+	{ pattern: /^\/tos$/, render: () => renderSection('tos') },
+	{ pattern: /^\/login$/, render: () => renderSection('login'), bind: () => bindSection('login') },
+	{ pattern: /^\/register$/, render: () => renderSection('register'), bind: () => bindSection('register') },
+	{ pattern: /^\/moderation$/, render: () => renderSection('moderation') },
 ];
 
 let routeVersion = 0;
@@ -54,7 +75,7 @@ async function renderRoute(path: string): Promise<void> {
 
 		if (version !== routeVersion) return;
 
-		page.innerHTML = html;
+		page.innerHTML = sanitizeMarkup(html);
 		match.bind?.(m);
 	} catch (error) {
 		console.error('Route failed', error);
@@ -99,7 +120,7 @@ function renderShell(): void {
 
 	const user = store.get().user;
 
-	app.innerHTML = `${renderHeader(user)}<main id="page" class="site-main" tabindex="-1"></main>`;
+	app.innerHTML = sanitizeMarkup(`${renderHeader(user)}<main id="page" class="site-main" tabindex="-1"></main>`);
 
 	document.getElementById('logout-btn')?.addEventListener('click', async () => {
 		await api.auth.logout().catch(() => undefined);

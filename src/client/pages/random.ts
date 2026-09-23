@@ -1,9 +1,9 @@
 import { navigate } from '../app/router.js';
 import { api } from '../services/api.js';
 
-export async function renderRandom(): Promise<string> {
+export async function renderRandom(tags?: string): Promise<string> {
 	try {
-		const result = await api.posts.random();
+		const result = await api.posts.random(tags);
 		if (result.public_id) {
 			navigate(`/post/${result.public_id}`);
 			return '';

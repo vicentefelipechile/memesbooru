@@ -21,6 +21,14 @@ import { parseJsonBody } from '../../helpers/http';
 
 const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
+router.get('/', async (c) => {
+	const parsed = PaginationSchema.safeParse({ limit: c.req.query('limit'), page: undefined });
+	const limit = parsed.success ? Math.min(50, parsed.data.limit) : 20;
+	const data = await new CommentService(c.env.DB).listRecent(limit);
+
+	return c.json({ data });
+});
+
 // =========================================================================================================
 // GET /api/comments/post/:publicId
 // List visible comments with cursor.

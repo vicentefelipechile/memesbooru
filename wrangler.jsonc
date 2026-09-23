@@ -26,11 +26,10 @@
 			"binding": "MEDIA_BUCKET",
 			"bucket_name": "memesbooru-media"
 		},
-		{
-			"binding": "QUARANTINE_BUCKET",
-			"bucket_name": "memesbooru-quarantine"
-		}
 	],
+	"stream": {
+		"binding": "STREAM"
+	},
 	"queues": {
 		"producers": [
 			{

@@ -1,5 +1,5 @@
 import { store } from '../state/store.js';
-import { loginUrl } from '../services/api.js';
+import { api, loginUrl } from '../services/api.js';
 
 export async function renderProfile(): Promise<string> {
 	const user = store.get().user;
@@ -15,11 +15,29 @@ export async function renderProfile(): Promise<string> {
         <dt>Estado</dt><dd>${escapeHtml(status)}</dd>
       </dl>
     </section>
+    <form id="profile-form" class="form-stack"><label for="display-name">Nombre visible</label><input id="display-name" maxlength="100" value="${escapeHtml(user.display_name ?? '')}"><button class="primary" type="submit">Guardar perfil</button><p id="profile-status" class="form-msg" aria-live="polite"></p></form>
     <p class="small muted"><a href="/settings" data-link>Configuración</a></p>
   `;
 }
 
-export function bindProfile(): void {}
+export function bindProfile(): void {
+	const form = document.getElementById('profile-form');
+	if (!(form instanceof HTMLFormElement)) return;
+	form.addEventListener('submit', async (event) => {
+		event.preventDefault();
+		const input = document.getElementById('display-name');
+		const status = document.getElementById('profile-status');
+		if (!(input instanceof HTMLInputElement) || !status) return;
+		try {
+			await api.auth.updateProfile(input.value.trim() || null);
+			status.textContent = 'Perfil actualizado.';
+			status.className = 'form-msg ok';
+		} catch {
+			status.textContent = 'No se pudo actualizar.';
+			status.className = 'form-msg err';
+		}
+	});
+}
 
 function escapeHtml(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

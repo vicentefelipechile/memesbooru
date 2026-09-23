@@ -52,6 +52,38 @@ export function validateFileSize(mime: string, size: number): boolean {
 	return size <= max;
 }
 
+export function imageDimensions(bytes: Uint8Array, mime: string): { width: number; height: number } | null {
+	if (mime === 'image/png' && bytes.length >= 24) return { width: readU32(bytes, 16), height: readU32(bytes, 20) };
+	if (mime === 'image/gif' && bytes.length >= 10) return { width: bytes[6] | (bytes[7] << 8), height: bytes[8] | (bytes[9] << 8) };
+	if (mime === 'image/webp' && bytes.length >= 30 && bytes[12] === 0x56) return { width: 1 + readU24(bytes, 24), height: 1 + readU24(bytes, 27) };
+	if (mime === 'image/jpeg') return jpegDimensions(bytes);
+	return null;
+}
+
+function readU32(bytes: Uint8Array, offset: number): number {
+	return bytes[offset] * 0x1000000 + ((bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]);
+}
+
+function readU24(bytes: Uint8Array, offset: number): number {
+	return (bytes[offset] << 16) | (bytes[offset + 1] << 8) | bytes[offset + 2];
+}
+
+function jpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+	let offset = 2;
+	while (offset + 9 < bytes.length) {
+		if (bytes[offset] !== 0xff) {
+			offset++;
+			continue;
+		}
+		const marker = bytes[offset + 1];
+		const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
+		if (marker >= 0xc0 && marker <= 0xc3) return { height: (bytes[offset + 5] << 8) | bytes[offset + 6], width: (bytes[offset + 7] << 8) | bytes[offset + 8] };
+		if (length < 2) return null;
+		offset += 2 + length;
+	}
+	return null;
+}
+
 export function assertValidMime(mime: string): asserts mime is keyof typeof MAX_FILE_SIZES {
 	if (!(mime in MAX_FILE_SIZES)) throw new Error(`Unsupported mime: ${mime}`);
 }

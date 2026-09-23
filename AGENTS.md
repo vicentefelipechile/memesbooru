@@ -1,12 +1,12 @@
 # AGENTS.md — Memesbooru
 
-> Source of truth is the **current codebase** (`src/`). `PLAN.md` is reference only. If they conflict, trust the code + this file.
+> Source of truth is the **current codebase** (`src/`) and this file.
 
 ## 1. Project Overview
 
 Memesbooru is a booru-style meme catalog (Spanish-first) optimized for read speed at scale: 100k users / 37k tags / 1.5M posts / ~15M `post_tags`. Reference UX is Rule34's search/catalog, not its content/branding.
 
-**Stack:** TypeScript 5.8 `strict` • Hono 4 • Cloudflare Workers (single Worker) • D1 (single primary DB + `post_listing` read projection) • R2 (`MEDIA_BUCKET` + `QUARANTINE_BUCKET`) • Queues (`MEDIA_QUEUE` + DLQ) • Images/Stream for variants • Vite 6 • Vitest 3 + `@cloudflare/vitest-pool-workers`.
+**Stack:** TypeScript 5.8 `strict` • Hono 4 • Cloudflare Workers (single Worker) • D1 (single primary DB + `post_listing` read projection) • R2 (`MEDIA_BUCKET`) • Queues (`MEDIA_QUEUE` + DLQ) • Images/Stream for variants • Vite 6 • Vitest 3 + `@cloudflare/vitest-pool-workers`.
 
 **Principle:** read-speed over dev-ease. No `SELECT *` on public endpoints, no JSON columns for filterable data, cursor pagination, materialized counters.
 
@@ -46,7 +46,7 @@ migrations/      # D1 versioned SQL
 tests/           # server/* (vitest + miniflare)
 ```
 
-Planned `server/` / `shared/` layout in `PLAN.md:248` does not exist — do not create it.
+`server/` / `shared/` layout does not exist — do not create it.
 
 ## 4. Single Sources of Truth
 
@@ -251,7 +251,7 @@ Conventional Commits, English, imperative: `refactor: ...` / `feat: ...` / `fix:
 2. Update `validators.ts` Zod schema, then `types.ts` inferred type, then repository → service → route.
 3. Run `npm run cf-typegen` if `wrangler.jsonc` changed.
 4. Run `npm run format:check && npm run typecheck && npm test` before push.
-5. Keep `PLAN.md` reference but code is truth.
+5. Treat the current codebase as the source of truth.
 
 ## 16. Anti-Patterns — DO NOT
 
@@ -267,7 +267,7 @@ Conventional Commits, English, imperative: `refactor: ...` / `feat: ...` / `fix:
 - AI-slop UI: dark-mode reflex, Inter/system-ui/Poppins/Geist, `border-radius >= 8px` on cards/buttons, gradients/glassmorphism/pills/emojis, gray-bordered cards wrapping thumbnails, "load more" instead of the numeric paginator, hardcoded hex in markup instead of CSS tokens
 - Monolithic `main.css` — keep the category-split `styles/*.css`
 - Dual `types` files — keep monoliths `src/types.ts` + `src/validators.ts`
-- New `src/server` / `src/shared` dirs from `PLAN.md` — actual layout is `src/db|domain|helpers|http|queues|repositories|services`
+- New `src/server` / `src/shared` dirs — actual layout is `src/db|domain|helpers|http|queues|repositories|services`
 - `wrangler.toml` — use `wrangler.jsonc`
 
 ## 17. Quick Start for Agents

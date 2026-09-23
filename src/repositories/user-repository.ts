@@ -112,6 +112,18 @@ export class UserRepository {
 		return created;
 	}
 
+	async createLocal(username: string, email: string, passwordHash: ArrayBuffer): Promise<UserRow> {
+		const now = Date.now();
+		const nextId = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM users', []))?.v ?? 1;
+		await batch(this.db, [
+			this.db.prepare('INSERT INTO users (id, username, email, password_hash, rank, status, trust_score, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(nextId, username, email, passwordHash, 'new', 'active', 0, now),
+			this.buildInsertUserActivityStatement({ userId: nextId, updatedAt: now }),
+		]);
+		const created = await this.findById(nextId);
+		if (!created) throw new Error('create user failed');
+		return created;
+	}
+
 	async updateLastLogin(userId: number): Promise<void> {
 		const now = Date.now();
 

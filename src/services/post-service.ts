@@ -24,6 +24,9 @@ import type { PostRow } from '../db/schema';
 export type CreatePostServiceInput = Pick<CreatePostInput, 'tags'> & {
 	title: CreatePostInput['title'];
 	mediaType: CreatePostInput['media_type'];
+	checksum: ArrayBuffer;
+	mimeType: string;
+	byteSize: number;
 };
 export type SearchParams = Pick<SearchQueryInput, 'tags' | 'cursor' | 'limit'> & { sort: SearchQueryInput['sort'] };
 
@@ -90,6 +93,20 @@ export class PostService {
 		return this.posts.findRandomPublicId();
 	}
 
+	async top(limit = 100, period = 'all', sort: 'score' | 'favorites' | 'recent' = 'score'): Promise<PostSearchResult[]> {
+		const age = period === 'day' ? 86400000 : period === 'week' ? 604800000 : period === 'month' ? 2592000000 : 0;
+		return this.posts.listTop(Math.min(100, Math.max(1, limit)), age ? Date.now() - age : 0, sort);
+	}
+
+	async createStreamPost(user: AuthUser, title: string | null, tags: string[], streamUid: string): Promise<CreatedPostResult> {
+		const existing = await this.posts.findStreamPost(streamUid);
+		if (existing) return { publicId: toPublicId(existing.public_id), postId: toPostId(existing.id) };
+
+		const publicId = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
+		const postId = await this.posts.createStreamPost({ publicId, authorId: user.id, title, tags, streamUid });
+		return { publicId: toPublicId(publicId), postId: toPostId(postId) };
+	}
+
 	async detail(publicId: string, viewer: AuthUser | null): Promise<PostDetailResult> {
 		const row = await this.posts.findByPublicId(publicId);
 
@@ -128,7 +145,7 @@ export class PostService {
 		} satisfies PostDetailResult;
 	}
 
-	async create(viewer: AuthUser, input: CreatePostServiceInput, queue?: Queue): Promise<CreatedPostResult> {
+	async create(viewer: AuthUser, input: CreatePostServiceInput): Promise<CreatedPostResult> {
 		if (viewer.status !== 'active') throw new ForbiddenError('cuenta restringida');
 
 		if (input.mediaType === 'video' && viewer.rank !== 'trusted') throw new ForbiddenError('videos solo para trusted');
@@ -143,7 +160,6 @@ export class PostService {
 		}
 
 		const publicId = toPublicId(crypto.randomUUID().slice(0, 8));
-		const checksum = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(publicId + Date.now()));
 		const originalKey = `media/${publicId}/original` as const satisfies `media/${string}/original`;
 
 		const postId = toPostId(
@@ -153,14 +169,14 @@ export class PostService {
 				mediaType: input.mediaType,
 				tags: input.tags,
 				title: input.title ?? null,
-				checksum,
+				checksum: input.checksum,
 				originalKey,
+				mimeType: input.mimeType,
+				byteSize: input.byteSize,
 			}),
 		);
 
 		await this.posts.updateUserActivityOnUpload(viewer.id);
-
-		if (queue) await queue.send({ type: 'process_media', postId });
 
 		return { publicId, postId };
 	}

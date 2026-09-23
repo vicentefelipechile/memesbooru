@@ -1,17 +1,19 @@
 // =========================================================================================================
 // SUB-NAV (secondary bar under header)
-// Focused on publications + tags navigation. No wiki, no external sites.
+// Shared contextual links for the public shell.
 // =========================================================================================================
 
 export function renderSubNav(): string {
 	return `
   <nav class="site-subnav" aria-label="Secciones">
      <a href="/upload" data-link>Subir</a>
-     <span class="nav-todo" aria-disabled="true">Subir vídeo <small>TODO</small></span>
+      <a href="/upload/video" data-link>Subir vídeo</a>
      <a href="/random" data-link>Aleatorio</a>
      <a href="/favorites" data-link>Favoritos</a>
      <a href="/settings" data-link>Configuración</a>
-     <span class="nav-todo" aria-disabled="true">Contacto <small>TODO</small></span>
-     <span class="nav-todo" aria-disabled="true">Acerca de <small>TODO</small></span>
+      <a href="/contact" data-link>Contacto</a>
+      <a href="/about" data-link>Acerca de</a>
+      <a href="/dmca" data-link>DMCA</a>
+      <a href="/tos" data-link>TOS</a>
   </nav>`;
 }

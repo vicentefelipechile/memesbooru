@@ -17,7 +17,7 @@ import type { QueueMessage } from '../types';
 // Types
 // =========================================================================================================
 
-export type QueueEnv = Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket; QUARANTINE_BUCKET: R2Bucket };
+export type QueueEnv = Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket };
 
 // =========================================================================================================
 // Handler
@@ -51,41 +51,34 @@ export async function handleQueue(batch: MessageBatch<QueueMessage>, env: QueueE
 // Helpers
 // =========================================================================================================
 
-function toBytes(checksum: ArrayBuffer | Uint8Array): Uint8Array {
-	return checksum instanceof Uint8Array ? checksum : new Uint8Array(checksum);
-}
-
 async function processMedia(env: QueueEnv, postId: number): Promise<void> {
 	const db = env.DB;
 	const media = new MediaRepository(db);
 	const asset = await media.findAssetByPostId(postId);
 
 	if (!asset) return;
+	if (asset.processing_status === 'done') return;
 
 	const existing = await media.findVariant(asset.id, 'low');
 
 	if (existing) {
-		await media.publishPostWithExistingVariant(postId, asset.id);
+		await media.publishPostWithExistingVariant(postId, asset.id, existing.object_key);
 
 		return;
 	}
 
-	const lowKey = buildLowKey(asset.checksum, postId);
-	const medKey = `media/${postId}/medium.avif`;
-	const dummy = new Uint8Array(10 * 1024);
+	const mediaPrefix = asset.original_object_key.replace(/\/original$/, '');
+	const lowKey = `${mediaPrefix}/low.avif`;
+	const medKey = `${mediaPrefix}/medium.avif`;
+	const source = await env.MEDIA_BUCKET.get(asset.original_object_key);
 
-	await env.MEDIA_BUCKET.put(lowKey, dummy, { httpMetadata: { contentType: 'image/avif' } });
-	await env.MEDIA_BUCKET.put(medKey, dummy, { httpMetadata: { contentType: 'image/avif' } });
+	if (!source) throw new Error(`missing media: ${asset.original_object_key}`);
 
-	await media.insertVariantsAndPublish(asset.id, postId, lowKey, medKey, dummy.length);
-}
+	const bytes = await source.arrayBuffer();
+	const metadata = { httpMetadata: { contentType: asset.mime_type } };
 
-function buildLowKey(checksum: ArrayBuffer | Uint8Array | null, postId: number): string {
-	if (!checksum) return `media/${postId}/low.avif`;
+	await env.MEDIA_BUCKET.put(lowKey, bytes, metadata);
+	await env.MEDIA_BUCKET.put(medKey, bytes, metadata);
 
-	const hex = Array.from(toBytes(checksum).slice(0, 4))
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('');
-
-	return `media/${hex}/low.avif`;
+	await media.insertVariantsAndPublish(asset.id, postId, lowKey, medKey, bytes.byteLength);
 }

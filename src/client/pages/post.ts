@@ -3,6 +3,7 @@ import { renderScore } from '../components/score.js';
 import { renderCommentList, renderCommentForm, formatDate } from '../components/comment.js';
 import { renderStatistics, renderTagged, type SidebarTag } from '../components/tag-sidebar.js';
 import { formatCount } from '../components/search.js';
+import { sanitizeMarkup } from '../components/sanitize.js';
 import { store } from '../state/store.js';
 
 type PostDetail = {
@@ -48,7 +49,7 @@ export async function renderPost(publicId: string): Promise<string> {
       </aside>
       <section class="post-main">
         <div class="post-media">
-          ${restricted ? `<p class="restricted">Este video es solo para usuarios trusted. Gana confianza publicando y participando.</p>` : `<img src="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`)}" alt="post ${publicId}" loading="eager" />`}
+		  ${restricted ? `<p class="restricted">Este video es solo para usuarios trusted. Gana confianza publicando y participando.</p>` : data.media_type === 'video' ? '<div id="video-player"></div>' : `<img src="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`)}" alt="post ${publicId}" loading="eager" />`}
         </div>
         <h1 class="post-title">${data.title ? escapeHtml(data.title) : `Post ${publicId}`}</h1>
         <div class="post-actions">
@@ -75,6 +76,17 @@ export async function renderPost(publicId: string): Promise<string> {
 // =========================================================================================================
 
 export function bindPost(publicId: string): void {
+	const player = document.getElementById('video-player');
+
+	if (player) {
+		const iframe = document.createElement('iframe');
+		iframe.src = apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`);
+		iframe.title = `Vídeo ${publicId}`;
+		iframe.allow = 'accelerometer; autoplay; encrypted-media; picture-in-picture';
+		iframe.allowFullscreen = true;
+		player.replaceWith(iframe);
+	}
+
 	const q = (s: string) => {
 		const el = document.querySelector(s);
 
@@ -82,6 +94,10 @@ export function bindPost(publicId: string): void {
 	};
 
 	let faved = false;
+	void api.posts.get(publicId).then((post) => {
+		const report = document.getElementById('report-btn');
+		if (report instanceof HTMLButtonElement && post.post_id) report.dataset.postId = String(post.post_id);
+	});
 
 	q('#vote-up')?.addEventListener('click', () => void rate(publicId, 1));
 	q('#vote-down')?.addEventListener('click', () => void rate(publicId, -1));
@@ -105,8 +121,10 @@ export function bindPost(publicId: string): void {
 
 		if (!reason) return;
 
+		const targetId = Number((document.getElementById('report-btn') as HTMLButtonElement | null)?.dataset.postId ?? 0);
+		if (!targetId) return;
 		api.moderation
-			.report({ target_type: 'post', target_id: 0, reason })
+			.report({ target_type: 'post', target_id: targetId, reason })
 			.then(() => alert('Reportado'))
 			.catch(() => alert('No se pudo reportar'));
 	});
@@ -129,11 +147,11 @@ async function refreshPost(publicId: string): Promise<void> {
 
 	const scoreLine = document.getElementById('score-line');
 
-	if (scoreLine) scoreLine.innerHTML = renderScore(data.score ?? 0, data.favorite_count ?? 0, data.comment_count ?? 0);
+	if (scoreLine) scoreLine.innerHTML = sanitizeMarkup(renderScore(data.score ?? 0, data.favorite_count ?? 0, data.comment_count ?? 0));
 
 	const stats = document.getElementById('stats');
 
-	if (stats) stats.innerHTML = renderStatistics(buildStatistics(data));
+	if (stats) stats.innerHTML = sanitizeMarkup(renderStatistics(buildStatistics(data)));
 }
 
 // Append the new comment to the list without reloading.
@@ -162,7 +180,10 @@ function bindCommentForm(publicId: string): void {
 		const list = document.getElementById('comments-list');
 
 		if (list) {
-			list.insertAdjacentHTML('beforeend', `<article class="comment"><div class="byline"><span class="author">${escapeHtml(author)}</span> · ${formatDate(Date.now())}</div><div class="body">${escapeHtml(body)}</div></article>`);
+			list.insertAdjacentHTML(
+				'beforeend',
+				sanitizeMarkup(`<article class="comment"><div class="byline"><span class="author">${escapeHtml(author)}</span> · ${formatDate(Date.now())}</div><div class="body">${escapeHtml(body)}</div></article>`),
+			);
 
 			const none = list.querySelector('.none');
 
@@ -183,7 +204,7 @@ function loadComments(publicId: string): void {
 		.then((res) => {
 			const list = document.getElementById('comments-list');
 
-			if (list) list.innerHTML = renderCommentList(res.data);
+			if (list) list.innerHTML = sanitizeMarkup(renderCommentList(res.data));
 		})
 		.catch(() => {
 			const list = document.getElementById('comments-list');

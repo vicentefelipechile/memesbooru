@@ -61,3 +61,8 @@ export async function findRandomPublicId(db: DB): Promise<string | null> {
 
 	return row?.public_id ?? null;
 }
+
+export async function listTop(db: DB, limit = 100, since = 0, sort: 'score' | 'favorites' | 'recent' = 'score'): Promise<PostListingRow[]> {
+	const order = sort === 'favorites' ? 'pl.favorite_count DESC, pl.score DESC' : sort === 'recent' ? 'pl.published_at DESC, pl.post_id DESC' : 'pl.score DESC, pl.favorite_count DESC';
+	return queryAll<PostListingRow>(db, `SELECT ${LISTING_COLUMNS} FROM post_listing pl WHERE pl.status = 'available' AND pl.published_at >= ? ORDER BY ${order}, pl.post_id DESC LIMIT ?`, [since, limit]);
+}

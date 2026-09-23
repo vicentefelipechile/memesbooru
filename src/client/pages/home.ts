@@ -3,6 +3,7 @@
 // =========================================================================================================
 
 import { renderAutocomplete, renderSortLinks } from '../components/search.js';
+import { sanitizeMarkup } from '../components/sanitize.js';
 import { renderGrid, renderPaginator } from '../components/grid.js';
 import { renderSidebar, renderPageTags } from '../components/sidebar.js';
 import { store, cursorForPage, recordPage, setHasMore } from '../state/store.js';
@@ -47,12 +48,12 @@ async function loadResults(): Promise<void> {
 		if (version !== requestVersion || location.href !== url || !results?.isConnected) return;
 
 		acceptPage(result);
-		results.innerHTML = renderResults(result);
+		results.innerHTML = sanitizeMarkup(renderResults(result));
 		const tags = document.getElementById('page-tags');
 		const sort = document.getElementById('sort-row');
 
-		if (tags) tags.innerHTML = renderPageTags(result.tags);
-		if (sort) sort.innerHTML = renderSortLinks(store.get().sort);
+		if (tags) tags.innerHTML = sanitizeMarkup(renderPageTags(result.tags));
+		if (sort) sort.innerHTML = sanitizeMarkup(renderSortLinks(store.get().sort));
 		if (status) status.textContent = '';
 	} catch (error) {
 		console.error('Catalog search failed', error);
@@ -133,7 +134,7 @@ function bindAutocomplete(input: HTMLInputElement): void {
 			try {
 				const result = await api.tags.autocomplete(term);
 
-				if (current === version && searchVersion === requestVersion && input.isConnected && input.value === value && dropdown) dropdown.innerHTML = renderAutocomplete(result.tags);
+				if (current === version && searchVersion === requestVersion && input.isConnected && input.value === value && dropdown) dropdown.innerHTML = sanitizeMarkup(renderAutocomplete(result.tags));
 			} catch (error) {
 				console.error('Autocomplete failed', error);
 			}

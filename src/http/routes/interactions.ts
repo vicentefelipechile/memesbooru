@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { requireAuth, type AuthVariables } from '../middleware/auth';
 import { InteractionService } from '../../services/interaction-service';
 import { RatingSchema } from '../../validators';
+import { decodeCursor, encodeCursor } from '../../helpers/cursor';
 import { fail } from '../responses';
 import { parseJsonBody } from '../../helpers/http';
 
@@ -87,9 +88,13 @@ router.get('/favorites', requireAuth, async (c) => {
 	const db = c.env.DB;
 	const viewer = c.get('user');
 	const service = new InteractionService(db);
-	const data = await service.listFavorites(viewer);
+	const limit = Math.min(100, Math.max(1, Number(c.req.query('limit') ?? 50)));
+	const cursorValue = c.req.query('cursor');
+	const decoded = cursorValue ? decodeCursor<{ favoritedAt: number; postId: number }>(cursorValue) : null;
+	if (cursorValue && (!decoded || !Number.isFinite(decoded.favoritedAt) || !Number.isInteger(decoded.postId))) return fail(c, 'Invalid cursor', 400);
+	const result = await service.listFavorites(viewer, limit, decoded ?? undefined);
 
-	return c.json({ data });
+	return c.json({ data: result.data, nextCursor: result.nextCursor ? encodeCursor({ favoritedAt: result.nextCursor.favoritedAt, postId: result.nextCursor.postId }) : null, hasMore: result.nextCursor !== null });
 });
 
 // =========================================================================================================

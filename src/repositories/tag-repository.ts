@@ -8,8 +8,8 @@
 // Imports
 // =========================================================================================================
 
-import { queryOne, batch, type DB } from '../db/client';
-import type { TagRow, PostTagRow, NextIdRow } from '../db/schema';
+import { queryOne, queryAll, batch, execute, type DB } from '../db/client';
+import type { TagAliasRow, TagRow, PostTagRow, NextIdRow } from '../db/schema';
 import type { PostId } from '../types';
 import { resolveTagIds, resolveTags, findByPostIds, findByPostId, listByCategory, listGroupedByCategory, autocomplete, sortTagIdsByUsage, type ResolveAliasesResult, type ListByCategoryOpts } from './tag-lookup';
 
@@ -101,6 +101,47 @@ export class TagRepository {
 
 	async autocomplete(prefix: string, limit = 20): Promise<TagRow[]> {
 		return autocomplete(this.db, prefix, limit);
+	}
+
+	list(limit = 100, offset = 0): Promise<TagRow[]> {
+		return queryAll<TagRow>(this.db, 'SELECT id, normalized_name, display_name, description, category, usage_count, status, created_by, created_at, updated_at FROM tags ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?', [limit, offset]);
+	}
+
+	async update(id: number, displayName: string | null, description: string | null, category: string, userId: number): Promise<void> {
+		const old = await queryOne<Pick<TagRow, 'display_name' | 'description' | 'category'>>(this.db, 'SELECT display_name, description, category FROM tags WHERE id = ?', [id]);
+		if (!old) throw new Error('tag not found');
+		const now = Date.now();
+		await batch(this.db, [
+			this.db.prepare('UPDATE tags SET display_name = ?, description = ?, category = ?, updated_at = ? WHERE id = ?').bind(displayName, description, category, now, id),
+			this.db
+				.prepare('INSERT INTO tag_history (id, tag_id, action, previous_value, new_value, created_by, created_at) VALUES (COALESCE((SELECT MAX(id) + 1 FROM tag_history), 1), ?, ?, ?, ?, ?, ?)')
+				.bind(id, 'update', JSON.stringify(old), JSON.stringify({ display_name: displayName, description, category }), userId, now),
+		]);
+	}
+
+	async addAlias(alias: string, tagId: number, userId: number): Promise<void> {
+		const id = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id), 0) + 1 AS v FROM tag_aliases', []))?.v ?? 1;
+		await execute(this.db, 'INSERT INTO tag_aliases (id, alias_normalized, tag_id, created_by, created_at) VALUES (?, ?, ?, ?, ?)', [id, alias, tagId, userId, Date.now()]);
+	}
+
+	listAliases(limit = 100, offset = 0): Promise<TagAliasRow[]> {
+		return queryAll<TagAliasRow>(this.db, 'SELECT id, alias_normalized, tag_id, created_by, created_at FROM tag_aliases ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?', [limit, offset]);
+	}
+
+	listHistory(tagId: number): Promise<{ id: number; tag_id: number; action: string; previous_value: string | null; new_value: string | null; created_by: number; created_at: number }[]> {
+		return queryAll(this.db, 'SELECT id, tag_id, action, previous_value, new_value, created_by, created_at FROM tag_history WHERE tag_id = ? ORDER BY id DESC', [tagId]);
+	}
+
+	async revert(tagId: number, historyId: number, userId: number): Promise<void> {
+		const history = await queryOne<{ previous_value: string | null }>(this.db, 'SELECT previous_value FROM tag_history WHERE id = ? AND tag_id = ?', [historyId, tagId]);
+		if (!history?.previous_value) throw new Error('history not found');
+		const now = Date.now();
+		await batch(this.db, [
+			this.db.prepare("UPDATE tags SET display_name = json_extract(?, '$.display_name'), category = json_extract(?, '$.category'), updated_at = ? WHERE id = ?").bind(history.previous_value, history.previous_value, now, tagId),
+			this.db
+				.prepare('INSERT INTO tag_history (id, tag_id, action, previous_value, new_value, created_by, created_at) VALUES (COALESCE((SELECT MAX(id) + 1 FROM tag_history), 1), ?, ?, ?, ?, ?, ?)')
+				.bind(tagId, 'revert', null, history.previous_value, userId, now),
+		]);
 	}
 }
 

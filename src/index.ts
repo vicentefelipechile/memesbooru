@@ -22,6 +22,7 @@ import tagRoutes from './http/routes/tags';
 import commentRoutes from './http/routes/comments';
 import interactionRoutes from './http/routes/interactions';
 import moderationRoutes from './http/routes/moderation';
+import communityRoutes from './http/routes/community';
 import { handleQueue } from './queues/processor';
 import type { QueueMessage } from './types';
 
@@ -59,6 +60,7 @@ app.route('/api/tags', tagRoutes);
 app.route('/api/comments', commentRoutes);
 app.route('/api', interactionRoutes);
 app.route('/api/moderation', moderationRoutes);
+app.route('/api/community', communityRoutes);
 
 // =========================================================================================================
 // 404

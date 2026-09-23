@@ -106,6 +106,18 @@ export const ModerationActionSchema = z.object({
 });
 
 export const TotpVerifySchema = z.object({ code: z.string().length(6) });
+export const PasswordLoginSchema = z.object({ email: z.string().email().max(254), password: z.string().min(8).max(128) });
+export const RegisterSchema = z.object({
+	username: z
+		.string()
+		.trim()
+		.regex(/^[a-zA-Z0-9_]{3,24}$/),
+	email: z.string().email().max(254),
+	password: z.string().min(8).max(128),
+});
+export const EmailChangeSchema = z.object({ email: z.string().email().max(254) });
+export const PasswordChangeSchema = z.object({ current_password: z.string().min(1).max(128), password: z.string().min(8).max(128) });
+export const ProfileSchema = z.object({ display_name: z.string().trim().max(100).nullable() });
 
 export const SearchCursorSchema = z.object({ id: z.number().int().positive(), score: z.number().optional(), published_at: z.number().optional() });
 
@@ -191,11 +203,13 @@ export const PostResponseSchema = z.object({
 	redirectTo: z.string().optional(),
 });
 export const CreatePostResponseSchema = z.object({ publicId: z.string(), postId: z.number(), status: z.string().optional() });
-export const FavoritesResponseSchema = z.object({ data: z.array(GridItemSchema) });
+export const FavoritesResponseSchema = z.object({ data: z.array(GridItemSchema), nextCursor: z.string().nullable().optional(), hasMore: z.boolean().optional() });
 export const TotpSetupResponseSchema = z.object({ secret: z.string(), uri: z.string() });
 export const TotpVerifyResponseSchema = z.object({ ok: z.boolean(), recoveryCodes: z.array(z.string()).optional() });
-export const CommentItemSchema = z.object({ id: z.number(), body: z.string(), author_id: z.number(), author_username: z.string().nullable().optional(), created_at: z.number().optional() });
+export const CommentItemSchema = z.object({ id: z.number(), body: z.string(), post_id: z.number(), author_id: z.number(), author_username: z.string().nullable().optional(), created_at: z.number().optional() });
 export const CommentListResponseSchema = z.object({ data: z.array(CommentItemSchema) });
+export const CommunityListResponseSchema = z.object({ data: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.null()]))) });
+export const TopResponseSchema = z.object({ data: z.array(z.object({ public_id: z.string(), media_type: z.string(), low_variant_key: z.string(), score: z.number(), favorite_count: z.number(), comment_count: z.number() })) });
 
 // =========================================================================================================
 // Inferred input types — single source for service signatures (never inline anonymous)

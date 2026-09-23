@@ -12,6 +12,9 @@ export interface UserRow {
 	id: number;
 	username: string;
 	display_name: string | null;
+	email: string | null;
+	email_verified_at: number | null;
+	password_hash: ArrayBuffer | null;
 	rank: string;
 	status: string;
 	trust_score: number;
@@ -42,6 +45,7 @@ export interface PostRow {
 	public_id: string;
 	author_id: number;
 	canonical_post_id: number | null;
+	stream_uid: string | null;
 	media_type: string;
 	status: string;
 	title: string | null;
@@ -69,6 +73,10 @@ export interface PostListingRow {
 	favorite_count: number;
 	comment_count: number;
 	published_at: number;
+}
+
+export interface FavoriteListingRow extends PostListingRow {
+	favorited_at: number;
 }
 
 export interface MediaAssetRow {
@@ -105,6 +113,7 @@ export interface TagRow {
 	id: number;
 	normalized_name: string;
 	display_name: string | null;
+	description: string | null;
 	category: string;
 	usage_count: number;
 	status: string;
@@ -196,6 +205,98 @@ export interface ModerationActionRow {
 	action: string;
 	reason: string | null;
 	created_at: number;
+}
+
+export interface ArtistRow {
+	id: number;
+	name: string;
+	normalized_name: string;
+	status: string;
+	updated_by: number | null;
+	created_at: number;
+	updated_at: number;
+}
+
+export interface PoolRow {
+	id: number;
+	public_id: string;
+	name: string;
+	description: string | null;
+	creator_id: number;
+	visibility: string;
+	created_at: number;
+	updated_at: number;
+}
+
+export interface ForumTopicRow {
+	id: number;
+	category_id: number;
+	author_id: number;
+	title: string;
+	status: string;
+	is_pinned: number;
+	reply_count: number;
+	last_post_at: number;
+	last_author_id: number | null;
+	created_at: number;
+	updated_at: number;
+}
+
+export interface WikiPageRow {
+	id: number;
+	tag_id: number;
+	title: string;
+	current_revision_id: number | null;
+	status: string;
+	created_by: number;
+	created_at: number;
+	updated_at: number;
+}
+
+export interface WikiRevisionRow {
+	id: number;
+	wiki_page_id: number;
+	body: string;
+	editor_id: number;
+	created_at: number;
+	reason: string | null;
+}
+
+export interface ForumPostRow {
+	id: number;
+	topic_id: number;
+	author_id: number;
+	body: string;
+	created_at: number;
+	updated_at: number;
+	edited_at: number | null;
+}
+
+export interface MailThreadRow {
+	id: number;
+	subject: string;
+	created_by: number;
+	created_at: number;
+	updated_at: number;
+}
+
+export interface MailMessageRow {
+	id: number;
+	thread_id: number;
+	sender_id: number;
+	body: string;
+	created_at: number;
+}
+
+export interface ContactTicketRow {
+	id: number;
+	requester_id: number | null;
+	email: string;
+	subject: string;
+	body: string;
+	status: string;
+	created_at: number;
+	updated_at: number;
 }
 
 // =========================================================================================================

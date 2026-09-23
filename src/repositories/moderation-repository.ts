@@ -38,7 +38,7 @@ export class ModerationRepository {
 	constructor(private readonly db: DB) {}
 
 	async listOpenReports(limit = 50): Promise<ReportRow[]> {
-		return queryAll<ReportRow>(this.db, "SELECT * FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT ?", [limit]);
+		return queryAll<ReportRow>(this.db, "SELECT id, reporter_id, target_type, target_id, reason, status, created_at FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT ?", [limit]);
 	}
 
 	// =========================================================================================================
