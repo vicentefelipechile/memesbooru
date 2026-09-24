@@ -5,11 +5,20 @@
 import { env } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
 import initialSql from '../../migrations/0001_initial.sql?raw';
+import communitySql from '../../migrations/0004_community_entities.sql?raw';
+import tagDescriptionsSql from '../../migrations/0005_tag_descriptions.sql?raw';
 import { PostService } from '../../src/services/post-service';
-import { SearchQuerySchema } from '../../src/validators';
+import { TagService } from '../../src/services/tag-service';
+import { CommunityService } from '../../src/services/community-service';
+import { toUserId } from '../../src/types';
+import { SearchQuerySchema, TagDisplayNameSchema } from '../../src/validators';
 
 beforeAll(async () => {
-	const statements = initialSql.replace(/--[^\n]*/g, '').split(';').map((sql) => sql.trim()).filter(Boolean);
+	const statements = `${initialSql}\n${communitySql}\n${tagDescriptionsSql}`
+		.replace(/--[^\n]*/g, '')
+		.split(';')
+		.map((sql) => sql.trim())
+		.filter(Boolean);
 	await env.DB.batch(statements.map((sql) => env.DB.prepare(sql)));
 	await env.DB.prepare("INSERT INTO users (id, username, created_at) VALUES (1, 'tester', 1)").run();
 	await env.DB.batch([
@@ -18,14 +27,15 @@ beforeAll(async () => {
 	]);
 	for (let id = 1; id <= 4; id++) {
 		await env.DB.prepare("INSERT INTO posts (id, public_id, author_id, media_type, status, created_at, updated_at) VALUES (?, ?, 1, 'image', 'available', 1, 1)").bind(id, `meme${id}`).run();
-		await env.DB.prepare("INSERT INTO post_listing (post_id, public_id, media_type, status, low_variant_key, score, published_at) VALUES (?, ?, 'image', 'available', 'low', ?, ?)").bind(id, `meme${id}`, 5 - id, id).run();
+		await env.DB.prepare("INSERT INTO post_listing (post_id, public_id, media_type, status, low_variant_key, score, published_at) VALUES (?, ?, 'image', 'available', 'low', ?, ?)")
+			.bind(id, `meme${id}`, 5 - id, id)
+			.run();
 	}
 	await env.DB.prepare('INSERT INTO post_tags (post_id, tag_id, added_by, created_at) VALUES (1, 1, 1, 1), (2, 1, 1, 1), (2, 2, 1, 1), (3, 3, 1, 1), (4, 1, 1, 1)').run();
 });
 
 describe('contextual catalog', () => {
-	const search = (tags = '', cursor?: string, sort: 'recent' | 'popular' = 'recent', limit = 1) =>
-		new PostService(env.DB).search({ tags, cursor, sort, limit });
+	const search = (tags = '', cursor?: string, sort: 'recent' | 'popular' = 'recent', limit = 1) => new PostService(env.DB).search({ tags, cursor, sort, limit });
 
 	it('returns only the visible page tags, not the lookahead or global tags', async () => {
 		const first = await search();
@@ -58,12 +68,39 @@ describe('contextual catalog', () => {
 		await expect(search('', btoa('null'))).rejects.toThrow('Invalid search cursor');
 	});
 
+	it('resolves tag names for aliases and wiki creation without numeric input', async () => {
+		const user = { id: toUserId(1), username: 'tester', rank: 'trusted', status: 'active', isAdmin: false } as const;
+		const tags = new TagService(env.DB);
+
+		await expect(tags.resolveId('DOG')).resolves.toBe(1);
+		await expect(tags.resolveId('missing')).rejects.toThrow('Tag no encontrado');
+		await tags.addAlias('canine', 'dog', user);
+		await new CommunityService(env.DB).createWiki(user, 'dog', 'Dog', 'A meme tag');
+
+		expect((await tags.listAliases()).find((alias) => alias.alias_normalized === 'canine')?.normalized_name).toBe('dog');
+		expect((await new CommunityService(env.DB).listWiki()).find((page) => page.title === 'Dog')?.normalized_name).toBe('dog');
+	});
+
+	it('accepts meme-style tag names, rejects free text, and preserves descriptions', async () => {
+		for (const name of ['curitoons', 'carl_jhonson_(personaje)', 'cj_(personaje)']) expect(TagDisplayNameSchema.safeParse(name).success).toBe(true);
+		for (const name of ['asdasd asdas', 'Pepe', 'tag-evil', 'tag__broken', 'tag_(bad space)']) expect(TagDisplayNameSchema.safeParse(name).success).toBe(false);
+
+		const user = { id: toUserId(1), username: 'tester', rank: 'trusted', status: 'active', isAdmin: false } as const;
+		await env.DB.prepare("UPDATE tags SET description = 'existing description' WHERE id = 1").run();
+		await new TagService(env.DB).update(1, 'cj_(personaje)', undefined, 'character', user);
+		expect(await env.DB.prepare('SELECT display_name, description FROM tags WHERE id = 1').first()).toMatchObject({ display_name: 'cj_(personaje)', description: 'existing description' });
+	});
+
 	it('does not discard older popular posts beyond 500 tag candidates', async () => {
-		await env.DB.prepare(`WITH RECURSIVE ids(id) AS (SELECT 5 UNION ALL SELECT id + 1 FROM ids WHERE id < 505)
+		await env.DB.prepare(
+			`WITH RECURSIVE ids(id) AS (SELECT 5 UNION ALL SELECT id + 1 FROM ids WHERE id < 505)
 			INSERT INTO posts (id, public_id, author_id, media_type, status, created_at, updated_at)
-			SELECT id, 'meme' || id, 1, 'image', 'available', 1, 1 FROM ids`).run();
-		await env.DB.prepare(`INSERT INTO post_listing (post_id, public_id, media_type, status, low_variant_key, score, published_at)
-			SELECT id, public_id, media_type, status, 'low', 0, id FROM posts WHERE id >= 5`).run();
+			SELECT id, 'meme' || id, 1, 'image', 'available', 1, 1 FROM ids`,
+		).run();
+		await env.DB.prepare(
+			`INSERT INTO post_listing (post_id, public_id, media_type, status, low_variant_key, score, published_at)
+			SELECT id, public_id, media_type, status, 'low', 0, id FROM posts WHERE id >= 5`,
+		).run();
 		await env.DB.prepare('INSERT INTO post_tags (post_id, tag_id, added_by, created_at) SELECT id, 1, 1, 1 FROM posts WHERE id >= 5').run();
 		expect((await search('dog', undefined, 'popular')).data[0].public_id).toBe('meme1');
 	});

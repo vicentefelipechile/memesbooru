@@ -6,6 +6,8 @@
 
 import { api, loginUrl } from '../services/api.js';
 import { store } from '../state/store.js';
+import { bindTagAutocomplete, renderTagAutocompleteField } from '../components/tag-autocomplete.js';
+import { CATEGORY_LABELS, CATEGORY_ORDER } from '../components/sidebar.js';
 
 const CONTENT: Record<string, { title: string; body: string }> = {
 	wiki: { title: 'Wiki', body: 'La wiki documenta tags, fuentes y contexto de los memes.' },
@@ -35,13 +37,13 @@ function form(name: string, fields: string, submit: string): string {
 
 export async function renderSection(name: string, mode: 'list' | 'create' | 'edit' = 'list'): Promise<string> {
 	if (mode !== 'list') {
+		const tagId = name === 'tags' ? Number(new URL(location.href).searchParams.get('id')) : 0;
+		if (name === 'tags' && (!Number.isSafeInteger(tagId) || tagId < 1)) return '<p class="error">Selecciona un tag desde la lista.</p>';
+		const tag = name === 'tags' ? await api.tags.get(tagId) : null;
+		const tagField = `<div class="field"><label for="section-tag-input">Tag</label>${renderTagAutocompleteField('<input id="section-tag-input" name="tag" required maxlength="100" autocomplete="off" data-single-tag>')}</div>`;
 		const forms: Record<string, string> = {
-			wiki: form(
-				'wiki',
-				'<label>Tag ID<input name="tag_id" type="number" min="1" required></label><label>Título<input name="title" required maxlength="200"></label><label>Contenido<textarea name="body" required maxlength="10000"></textarea></label>',
-				'Crear artículo',
-			),
-			aliases: form('alias', '<label>Alias<input name="alias" required maxlength="100"></label><label>Tag ID<input name="tag_id" type="number" min="1" required></label>', 'Añadir alias'),
+			wiki: form('wiki', `${tagField}<label>Título<input name="title" required maxlength="200"></label><label>Contenido<textarea name="body" required maxlength="10000"></textarea></label>`, 'Crear artículo'),
+			aliases: form('alias', `<label>Alias<input name="alias" required maxlength="100"></label>${tagField}`, 'Añadir alias'),
 			artists: form('artist', '<label>Nombre<input name="name" required maxlength="100"></label>', 'Crear artista'),
 			pools: form('pool', '<label>Nombre<input name="name" required maxlength="120"></label><label>Descripción<textarea name="description" maxlength="2000"></textarea></label>', 'Crear pool'),
 			forum: form(
@@ -51,13 +53,13 @@ export async function renderSection(name: string, mode: 'list' | 'create' | 'edi
 			),
 			tags: form(
 				'tag',
-				'<label>ID<input name="id" type="number" min="1" required></label><label>Nombre visible<input name="display_name" maxlength="200"></label><label>Descripción<textarea name="description" maxlength="2000"></textarea></label><label>Categoría<select name="category"><option>reaction</option><option>source</option><option>people</option><option>character</option><option>meta</option></select></label>',
+				`<input name="id" type="hidden" value="${tagId}"><label>Nombre visible<input name="display_name" value="${esc(tag?.display_name ?? tag?.normalized_name)}" required maxlength="100" pattern="[a-z0-9]+(_[a-z0-9]+)*(_\\([a-z0-9]+(_[a-z0-9]+)*\\))?" title="Minúsculas, números y guiones bajos; opcionalmente _(tipo)." autocomplete="off"><small class="hint">Sin espacios. Ej.: curitoons, carl_jhonson_(personaje).</small></label><label>Categoría<select name="category">${CATEGORY_ORDER.map((category) => `<option value="${category}" ${tag?.category === category ? 'selected' : ''}>${category === 'source' ? 'Origen (juegos, series, películas)' : CATEGORY_LABELS[category]}</option>`).join('')}</select></label>`,
 				'Guardar tag',
 			),
 		};
 		const title: Record<string, string> = { wiki: 'Crear artículo', aliases: 'Añadir alias', artists: 'Añadir artista', tags: 'Editar tag', pools: 'Crear pool', forum: 'Crear tema' };
 
-		return `<section class="page-head"><h1>${title[name]}</h1></section>${forms[name]}`;
+		return `<section class="page-head"><h1>${title[name]}${tag ? `: ${esc(tag.normalized_name)}` : ''}</h1></section>${forms[name]}`;
 	}
 
 	if (name === 'comments') {
@@ -112,20 +114,23 @@ export async function renderSection(name: string, mode: 'list' | 'create' | 'edi
 
 	if (name === 'wiki') {
 		const result = await api.community.wiki().catch(() => ({ data: [] }));
-		const rows = result.data.map((item) => `<tr><td>${esc(item.title)}</td><td>${esc(item.tag_id)}</td><td>${esc(item.updated_at)}</td></tr>`).join('');
+		const rows = result.data.map((item) => `<tr><td>${esc(item.title)}</td><td>${esc(item.normalized_name)}</td><td>${esc(item.updated_at)}</td></tr>`).join('');
 		return `<section class="page-head"><h1>Wiki</h1><p>Documentación de tags y contexto.</p></section><table class="data-table"><thead><tr><th>Título</th><th>Tag</th><th>Actualizado</th></tr></thead><tbody>${rows || '<tr><td colspan="3">No hay artículos.</td></tr>'}</tbody></table>`;
 	}
 
 	if (name === 'aliases') {
 		const result = await api.tags.aliases().catch(() => ({ data: [] }));
-		const rows = result.data.map((item) => `<tr><td>${esc(item.alias_normalized)}</td><td>${esc(item.tag_id)}</td><td>${esc(item.created_at)}</td></tr>`).join('');
+		const rows = result.data.map((item) => `<tr><td>${esc(item.alias_normalized)}</td><td>${esc(item.normalized_name)}</td><td>${esc(item.created_at)}</td></tr>`).join('');
 		return `<section class="page-head"><h1>Aliases</h1><p>Los aliases redirigen nombres alternativos al tag canónico.</p></section><table class="data-table"><thead><tr><th>Alias</th><th>Destino</th><th>Creado</th></tr></thead><tbody>${rows || '<tr><td colspan="3">No hay aliases.</td></tr>'}</tbody></table>`;
 	}
 
 	if (name === 'tags') {
 		const result = await api.tags.list().catch(() => ({ data: [] }));
 		const rows = result.data
-			.map((item) => `<tr><td>${esc(item.normalized_name)}</td><td>${esc(item.category)}</td><td>${esc(item.usage_count)}</td><td>${esc(item.status)}</td><td><button data-tag-edit="${esc(item.id)}">Editar</button></td></tr>`)
+			.map(
+				(item) =>
+					`<tr><td>${esc(item.display_name ?? item.normalized_name)}</td><td>${esc(CATEGORY_LABELS[String(item.category)] ?? item.category)}</td><td>${esc(item.usage_count)}</td><td>${esc(item.status)}</td><td><button data-tag-edit="${esc(item.id)}">Editar</button></td></tr>`,
+			)
 			.join('');
 		return `<section class="page-head"><h1>Tags</h1><p>Listado y categorías de tags.</p></section><table class="data-table"><thead><tr><th>Nombre</th><th>Categoría</th><th>Posts</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No hay tags.</td></tr>'}</tbody></table>`;
 	}
@@ -181,8 +186,6 @@ export function bindSection(name: string): void {
 				history.pushState(null, '', `/tags/edit?id=${encodeURIComponent(button.dataset.tagEdit ?? '')}`);
 				window.dispatchEvent(new PopStateEvent('popstate'));
 			});
-		const field = document.querySelector<HTMLInputElement>('[data-section-form="tag"] [name="id"]');
-		if (field) field.value = new URL(location.href).searchParams.get('id') ?? '';
 	}
 
 	if (name === 'moderation') {
@@ -195,6 +198,8 @@ export function bindSection(name: string): void {
 	}
 	const formElement = document.querySelector<HTMLFormElement>('[data-section-form]');
 	if (!formElement) return;
+	const tagInput = formElement.querySelector<HTMLInputElement>('[name="tag"]');
+	if (tagInput) bindTagAutocomplete(tagInput);
 	formElement.addEventListener('submit', async (event) => {
 		event.preventDefault();
 		const status = formElement.querySelector<HTMLElement>('[data-form-status]');
@@ -202,7 +207,6 @@ export function bindSection(name: string): void {
 		new FormData(formElement).forEach((value, key) => {
 			if (typeof value === 'string') data[key] = value;
 		});
-		for (const key of ['category_id', 'tag_id', 'recipient_id']) if (data[key]) data[key] = String(Number(data[key]));
 		try {
 			if (name === 'contact') await api.community.createContact(data);
 			else if (name === 'login') {
@@ -220,12 +224,15 @@ export function bindSection(name: string): void {
 			} else if (name === 'artist') await api.community.createArtist(data);
 			else if (name === 'pool') await api.community.createPool(data);
 			else if (name === 'topic') await api.community.createTopic({ ...data, category_id: Number(data.category_id) });
-			else if (name === 'wiki') await api.community.createWiki({ ...data, tag_id: Number(data.tag_id) });
+			else if (name === 'wiki') await api.community.createWiki(data);
 			else if (name === 'mail') await api.community.createMail({ ...data, recipient_id: Number(data.recipient_id) });
-			else if (name === 'alias') await api.tags.addAlias({ ...data, tag_id: Number(data.tag_id) });
-			else if (name === 'tag') await api.tags.edit(Number(data.id), { display_name: data.display_name || null, description: data.description || null, category: data.category });
+			else if (name === 'alias') await api.tags.addAlias(data);
+			else if (name === 'tag') {
+				if (!Number.isSafeInteger(Number(data.id)) || Number(data.id) < 1) throw new Error('Selecciona un tag de la lista.');
+				await api.tags.edit(Number(data.id), { display_name: data.display_name || null, description: data.description || null, category: data.category });
+			}
 			if (status) status.textContent = 'Guardado.';
-			formElement.reset();
+			if (name !== 'tag') formElement.reset();
 		} catch (error) {
 			if (status) status.textContent = error instanceof Error ? error.message : 'No se pudo guardar.';
 		}

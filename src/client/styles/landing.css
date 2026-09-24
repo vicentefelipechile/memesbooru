@@ -58,9 +58,13 @@
 	gap: 6px;
 }
 
-.landing-search-row input {
+.landing-search-row .tag-autocomplete {
 	flex: 1;
 	min-width: 0;
+}
+
+.landing-search-row input {
+	width: 100%;
 	min-height: 32px;
 }
 

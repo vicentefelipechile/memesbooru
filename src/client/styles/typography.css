@@ -48,3 +48,13 @@ h3 {
 	text-align: right;
 	font-variant-numeric: tabular-nums;
 }
+
+.profile-summary {
+	width: min(100%, 520px);
+	grid-template-columns: 100px minmax(0, 1fr);
+}
+
+.profile-summary dd {
+	text-align: left;
+	overflow-wrap: anywhere;
+}

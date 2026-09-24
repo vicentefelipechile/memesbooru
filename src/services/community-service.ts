@@ -4,6 +4,7 @@
 
 import type { DB } from '../db/client';
 import { CommunityRepository } from '../repositories/community-repository';
+import { TagService } from './tag-service';
 import { normalizeTag } from '../validators';
 import type { AuthUser } from '../types';
 import { ForbiddenError } from '../domain/errors';
@@ -65,8 +66,10 @@ export class CommunityService {
 		return this.community.createTopic(categoryId, title, user.id, body);
 	}
 
-	createWiki(user: AuthUser, tagId: number, title: string, body: string): Promise<void> {
-		return this.community.createWiki(tagId, title, body, user.id);
+	async createWiki(user: AuthUser, tagName: string, title: string, body: string): Promise<void> {
+		const tagId = await new TagService(this.db).resolveId(tagName);
+
+		await this.community.createWiki(tagId, title, body, user.id);
 	}
 
 	addReply(user: AuthUser, topicId: number, body: string): Promise<void> {

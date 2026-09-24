@@ -3,14 +3,15 @@
 // =========================================================================================================
 
 import { escapeHtml, escapeAttr, renderSortLinks } from './search.js';
+import { renderTagAutocompleteField } from './tag-autocomplete.js';
 
 export const CATEGORY_ORDER = ['reaction', 'source', 'people', 'character', 'meta'] as const;
 export const CATEGORY_LABELS: Record<string, string> = {
-	reaction: 'Reacciones',
-	source: 'Fuentes',
-	people: 'Personas',
-	character: 'Personajes',
-	meta: 'Meta',
+	reaction: 'Memes y reacciones',
+	source: 'Origen',
+	people: 'Personas reales',
+	character: 'Personajes ficticios',
+	meta: 'Formato y calidad',
 };
 
 export type SidebarTag = { name: string; category: string; count: number };
@@ -42,9 +43,8 @@ export function renderSidebar(tags: SidebarTag[], query: string, sort: 'recent' 
 	return `<div class="sidebar">
 		<form id="sidebar-search" class="sidebar-search" action="/" role="search">
 			<label for="sidebar-tag-input">Buscar</label>
-			<input id="sidebar-tag-input" name="tags" value="${escapeAttr(query)}" maxlength="500" autocomplete="off" aria-describedby="search-hint" />
+			${renderTagAutocompleteField(`<input id="sidebar-tag-input" name="tags" value="${escapeAttr(query)}" maxlength="500" autocomplete="off" aria-describedby="search-hint" />`)}
 			<button type="submit">Buscar</button>
-			<div id="sidebar-autocomplete" class="sidebar-autocomplete"></div>
 			<span id="search-hint" class="tiny">tag otro_tag -excluir</span>
 		</form>
 		<div id="sort-row" class="sort-row">${renderSortLinks(sort)}</div>

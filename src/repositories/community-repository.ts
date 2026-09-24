@@ -5,7 +5,7 @@
 // =========================================================================================================
 
 import { execute, queryAll, queryOne, type DB } from '../db/client';
-import type { ArtistRow, ContactTicketRow, ForumPostRow, ForumTopicRow, MailMessageRow, PoolRow, WikiPageRow, WikiRevisionRow } from '../db/schema';
+import type { ArtistRow, ContactTicketRow, ForumPostRow, ForumTopicRow, MailMessageRow, PoolRow, TagRow, WikiPageRow, WikiRevisionRow } from '../db/schema';
 
 export class CommunityRepository {
 	constructor(private readonly db: DB) {}
@@ -34,8 +34,12 @@ export class CommunityRepository {
 		return queryAll(this.db, "SELECT id, name, description, position FROM forum_categories WHERE status = 'visible' ORDER BY position, id", []);
 	}
 
-	listWiki(limit: number): Promise<WikiPageRow[]> {
-		return queryAll<WikiPageRow>(this.db, "SELECT id, tag_id, title, current_revision_id, status, created_by, created_at, updated_at FROM wiki_pages WHERE status = 'active' ORDER BY updated_at DESC, id DESC LIMIT ?", [limit]);
+	listWiki(limit: number): Promise<(WikiPageRow & Pick<TagRow, 'normalized_name'>)[]> {
+		return queryAll<WikiPageRow & Pick<TagRow, 'normalized_name'>>(
+			this.db,
+			"SELECT w.id, w.tag_id, w.title, w.current_revision_id, w.status, w.created_by, w.created_at, w.updated_at, t.normalized_name FROM wiki_pages w JOIN tags t ON t.id = w.tag_id WHERE w.status = 'active' ORDER BY w.updated_at DESC, w.id DESC LIMIT ?",
+			[limit],
+		);
 	}
 
 	async createArtist(name: string, normalizedName: string, userId: number): Promise<void> {

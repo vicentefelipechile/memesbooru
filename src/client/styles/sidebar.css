@@ -6,14 +6,15 @@
 .home-main { min-width: 0; }
 .home-side { font-size: 12px; }
 .sidebar-search { position: relative; }
+.tag-autocomplete { position: relative; }
 .sidebar-search label { display: block; font-size: 14px; font-weight: 700; }
 .sidebar-search input, .sidebar-search > button { display: block; width: 100%; height: 19px; min-height: 0; padding: 0 2px; margin: 0 0 2px; font-size: 12px; line-height: 16px; border: 1px solid var(--border-strong); border-radius: 0; background: var(--bg-raise); color: var(--fg); }
 .sidebar-search > button:hover { background: var(--bg-alt); }
-.sidebar-autocomplete:not(:empty) { position: absolute; top: 58px; left: 0; z-index: 5; min-width: 100%; width: max-content; max-width: min(320px, 85vw); background: var(--bg-raise); border: 1px solid var(--border-strong); }
-.sidebar-autocomplete ul { list-style: none; padding: 2px; margin: 0; max-height: 260px; overflow-y: auto; }
-.sidebar-autocomplete a { display: block; padding: 3px; }
-.sidebar-autocomplete a:hover { background: var(--bg-alt); }
-.sidebar-autocomplete .usage { color: var(--fg-muted); }
+.tag-autocomplete-list:not(:empty) { position: absolute; top: 100%; left: 0; z-index: 5; min-width: 100%; width: max-content; max-width: min(320px, 85vw); background: var(--bg-raise); border: 1px solid var(--border-strong); }
+.tag-autocomplete-list ul { list-style: none; padding: 2px; margin: 0; max-height: 260px; overflow-y: auto; }
+.tag-autocomplete-list a { display: block; padding: 3px; }
+.tag-autocomplete-list a:hover, .tag-autocomplete-list a:focus-visible { background: var(--bg-alt); }
+.tag-autocomplete-list .usage { color: var(--fg-muted); }
 .page-tags > summary { font-size: 14px; font-weight: 700; cursor: pointer; list-style: none; }
 .sidebar-cat h3 { font-size: 12px; font-weight: 700; }
 .sidebar-cat ul { list-style: none; padding: 0; margin: 0; }

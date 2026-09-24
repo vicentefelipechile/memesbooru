@@ -11,7 +11,7 @@
 import { Hono } from 'hono';
 import { TagRepository } from '../../repositories/tag-repository';
 import { TagService } from '../../services/tag-service';
-import { BrowseTagsQuerySchema, parseQueryWithArrays } from '../../validators';
+import { BrowseTagsQuerySchema, TagDisplayNameSchema, TAG_CATEGORIES, parseQueryWithArrays } from '../../validators';
 import { fail } from '../responses';
 import { requireAuth, type AuthVariables } from '../middleware/auth';
 import { z } from 'zod';
@@ -21,8 +21,8 @@ import { z } from 'zod';
 // =========================================================================================================
 
 const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
-const editSchema = z.object({ display_name: z.string().trim().max(200).nullable(), description: z.string().trim().max(2000).nullable().optional(), category: z.enum(['reaction', 'source', 'people', 'character', 'meta']) });
-const aliasSchema = z.object({ alias: z.string().trim().min(1).max(100), tag_id: z.number().int().positive() });
+const editSchema = z.object({ display_name: TagDisplayNameSchema, description: z.string().trim().max(2000).nullable().optional(), category: z.enum(TAG_CATEGORIES) });
+const aliasSchema = z.object({ alias: z.string().trim().min(1).max(100), tag: z.string().trim().min(1).max(100) });
 
 // =========================================================================================================
 // GET /api/tags/autocomplete?q=pe
@@ -80,10 +80,20 @@ router.get('/browse/:category', async (c) => {
 	return c.json(await new TagService(c.env.DB).browseCategory(category, { limit: parsed.data.limit, offset: parsed.data.offset }));
 });
 
+router.get('/by-id/:id', async (c) => {
+	const parsed = z.coerce.number().int().positive().safeParse(c.req.param('id'));
+	if (!parsed.success) return fail(c, 'Invalid tag ID', 400, parsed.error.issues);
+
+	return c.json(await new TagService(c.env.DB).get(parsed.data));
+});
+
 router.post('/:id/edit', requireAuth, async (c) => {
+	const id = z.coerce.number().int().positive().safeParse(c.req.param('id'));
+	if (!id.success) return fail(c, 'Invalid tag ID', 400, id.error.issues);
+
 	const parsed = editSchema.safeParse(await c.req.json().catch(() => null));
 	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new TagService(c.env.DB).update(Number(c.req.param('id')), parsed.data.display_name, parsed.data.description ?? null, parsed.data.category, c.get('user'));
+	await new TagService(c.env.DB).update(id.data, parsed.data.display_name, parsed.data.description, parsed.data.category, c.get('user'));
 	return c.json({ ok: true });
 });
 
@@ -99,7 +109,7 @@ router.post('/:id/revert', requireAuth, async (c) => {
 router.post('/aliases', requireAuth, async (c) => {
 	const parsed = aliasSchema.safeParse(await c.req.json().catch(() => null));
 	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new TagService(c.env.DB).addAlias(parsed.data.alias, parsed.data.tag_id, c.get('user'));
+	await new TagService(c.env.DB).addAlias(parsed.data.alias, parsed.data.tag, c.get('user'));
 	return c.json({ ok: true }, 201);
 });
 

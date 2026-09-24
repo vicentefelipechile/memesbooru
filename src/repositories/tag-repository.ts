@@ -107,15 +107,19 @@ export class TagRepository {
 		return queryAll<TagRow>(this.db, 'SELECT id, normalized_name, display_name, description, category, usage_count, status, created_by, created_at, updated_at FROM tags ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?', [limit, offset]);
 	}
 
-	async update(id: number, displayName: string | null, description: string | null, category: string, userId: number): Promise<void> {
+	findById(id: number): Promise<Pick<TagRow, 'id' | 'normalized_name' | 'display_name' | 'category'> | null> {
+		return queryOne(this.db, 'SELECT id, normalized_name, display_name, category FROM tags WHERE id = ? AND status = ?', [id, 'active']);
+	}
+
+	async update(id: number, displayName: string, description: string | null | undefined, category: string, userId: number): Promise<void> {
 		const old = await queryOne<Pick<TagRow, 'display_name' | 'description' | 'category'>>(this.db, 'SELECT display_name, description, category FROM tags WHERE id = ?', [id]);
 		if (!old) throw new Error('tag not found');
 		const now = Date.now();
 		await batch(this.db, [
-			this.db.prepare('UPDATE tags SET display_name = ?, description = ?, category = ?, updated_at = ? WHERE id = ?').bind(displayName, description, category, now, id),
+			this.db.prepare('UPDATE tags SET display_name = ?, description = ?, category = ?, updated_at = ? WHERE id = ?').bind(displayName, description === undefined ? old.description : description, category, now, id),
 			this.db
 				.prepare('INSERT INTO tag_history (id, tag_id, action, previous_value, new_value, created_by, created_at) VALUES (COALESCE((SELECT MAX(id) + 1 FROM tag_history), 1), ?, ?, ?, ?, ?, ?)')
-				.bind(id, 'update', JSON.stringify(old), JSON.stringify({ display_name: displayName, description, category }), userId, now),
+				.bind(id, 'update', JSON.stringify(old), JSON.stringify({ display_name: displayName, description: description === undefined ? old.description : description, category }), userId, now),
 		]);
 	}
 
@@ -124,8 +128,12 @@ export class TagRepository {
 		await execute(this.db, 'INSERT INTO tag_aliases (id, alias_normalized, tag_id, created_by, created_at) VALUES (?, ?, ?, ?, ?)', [id, alias, tagId, userId, Date.now()]);
 	}
 
-	listAliases(limit = 100, offset = 0): Promise<TagAliasRow[]> {
-		return queryAll<TagAliasRow>(this.db, 'SELECT id, alias_normalized, tag_id, created_by, created_at FROM tag_aliases ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?', [limit, offset]);
+	listAliases(limit = 100, offset = 0): Promise<(TagAliasRow & Pick<TagRow, 'normalized_name'>)[]> {
+		return queryAll<TagAliasRow & Pick<TagRow, 'normalized_name'>>(
+			this.db,
+			'SELECT a.id, a.alias_normalized, a.tag_id, a.created_by, a.created_at, t.normalized_name FROM tag_aliases a JOIN tags t ON t.id = a.tag_id ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?',
+			[limit, offset],
+		);
 	}
 
 	listHistory(tagId: number): Promise<{ id: number; tag_id: number; action: string; previous_value: string | null; new_value: string | null; created_by: number; created_at: number }[]> {

@@ -70,25 +70,56 @@ button.danger,
 .form-stack {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
-	max-width: 560px;
+	gap: 14px;
+	width: 100%;
+	max-width: 520px;
 }
 
 .form-stack label {
+	display: block;
 	font-size: 0.85rem;
 	font-weight: 600;
 	color: var(--fg-muted);
 }
 
+.form-stack > label {
+	display: grid;
+	gap: 5px;
+}
+
+.form-stack :is(input:not([type='hidden']), textarea, select) {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 34px;
+}
+
+.form-stack textarea {
+	min-height: 110px;
+}
+
+.form-stack > button {
+	align-self: flex-start;
+	min-width: 130px;
+	min-height: 34px;
+}
+
 .form-stack .field {
 	display: flex;
 	flex-direction: column;
-	gap: 0.25rem;
+	gap: 5px;
 }
 
 .form-stack .hint {
 	font-size: 0.78rem;
 	color: var(--fg-faint);
+}
+
+.form-stack .form-msg {
+	margin: 0;
+}
+
+.form-stack .form-msg:empty {
+	display: none;
 }
 
 .form-msg {

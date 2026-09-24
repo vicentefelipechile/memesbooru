@@ -2,7 +2,8 @@
 // Booru catalog: persistent search input, atomic results/tags updates and explicit form submission.
 // =========================================================================================================
 
-import { renderAutocomplete, renderSortLinks } from '../components/search.js';
+import { renderSortLinks } from '../components/search.js';
+import { bindTagAutocomplete } from '../components/tag-autocomplete.js';
 import { sanitizeMarkup } from '../components/sanitize.js';
 import { renderGrid, renderPaginator } from '../components/grid.js';
 import { renderSidebar, renderPageTags } from '../components/sidebar.js';
@@ -11,6 +12,7 @@ import { buildSearchUrl, readSearchUrl } from '../state/catalog.js';
 import { api } from '../services/api.js';
 
 let requestVersion = 0;
+let clearAutocomplete = () => {};
 type SearchResult = Awaited<ReturnType<typeof api.posts.find>>;
 
 function renderResults(result: SearchResult): string {
@@ -68,10 +70,9 @@ function search(path: string): void {
 	history.pushState(null, '', path);
 	readSearchUrl();
 	const input = document.getElementById('sidebar-tag-input');
-	const autocomplete = document.getElementById('sidebar-autocomplete');
 
 	if (input instanceof HTMLInputElement) input.value = store.get().query;
-	if (autocomplete) autocomplete.innerHTML = '';
+	clearAutocomplete();
 
 	void loadResults();
 }
@@ -113,50 +114,14 @@ export function bindHome(): void {
 		event.preventDefault();
 		search(buildSearchUrl({ tags: [...new Set(input.value.trim().split(/\s+/).filter(Boolean))] }));
 	});
-	bindAutocomplete(input);
-}
-
-function bindAutocomplete(input: HTMLInputElement): void {
-	let timer: number | undefined;
-	let version = 0;
-	const dropdown = document.getElementById('sidebar-autocomplete');
-	input.addEventListener('input', () => {
-		clearTimeout(timer);
-		const current = ++version;
-		const searchVersion = requestVersion;
-		const value = input.value;
-		const term = value.split(/\s+/).pop()?.replace(/^-/, '') ?? '';
-
-		if (dropdown) dropdown.innerHTML = '';
-		if (!term) return;
-
-		timer = window.setTimeout(async () => {
-			try {
-				const result = await api.tags.autocomplete(term);
-
-				if (current === version && searchVersion === requestVersion && input.isConnected && input.value === value && dropdown) dropdown.innerHTML = sanitizeMarkup(renderAutocomplete(result.tags));
-			} catch (error) {
-				console.error('Autocomplete failed', error);
-			}
-		}, 200);
-	});
-	input.addEventListener('keydown', (event) => {
-		if (event.key === 'Escape') {
-			version++;
-			if (dropdown) dropdown.innerHTML = '';
-		}
-		if (event.key === 'ArrowDown') {
-			event.preventDefault();
-			dropdown?.querySelector('a')?.focus();
-		}
-	});
+	clearAutocomplete = bindTagAutocomplete(input);
 }
 
 export function bindHomeGlobal(): void {
 	document.addEventListener('click', (event) => {
 		if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || location.pathname !== '/posts') return;
 
-		const target = event.target instanceof Element ? event.target.closest('[data-ac],[data-include],[data-exclude],[data-sort],[data-page],a[data-link]') : null;
+		const target = event.target instanceof Element ? event.target.closest('[data-include],[data-exclude],[data-sort],[data-page],a[data-link]') : null;
 
 		if (!target) return;
 
@@ -177,14 +142,5 @@ export function bindHomeGlobal(): void {
 		const sort = target.getAttribute('data-sort');
 
 		if (sort === 'recent' || sort === 'popular') return search(buildSearchUrl({ sort }));
-
-		const input = document.getElementById('sidebar-tag-input');
-		const dropdown = document.getElementById('sidebar-autocomplete');
-
-		if (input instanceof HTMLInputElement && target.hasAttribute('data-ac')) {
-			input.value = input.value.replace(/-?[^\s]*$/, (term) => `${term.startsWith('-') ? '-' : ''}${target.getAttribute('data-ac')} `);
-			input.focus();
-			if (dropdown) dropdown.innerHTML = '';
-		}
 	});
 }

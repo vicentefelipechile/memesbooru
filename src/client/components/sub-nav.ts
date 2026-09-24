@@ -14,7 +14,6 @@ const LINKS: Record<string, [string, string][]> = {
 	posts: [
 		['Catálogo', '/posts'],
 		['Subir', '/upload'],
-		['Subir vídeo', '/upload/video'],
 		['Mis favoritos', '/favorites'],
 		['Aleatorio', '/random'],
 	],

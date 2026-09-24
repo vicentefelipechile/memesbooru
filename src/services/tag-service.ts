@@ -9,10 +9,11 @@
 // =========================================================================================================
 
 import type { DB } from '../db/client';
+import type { TagRow } from '../db/schema';
 import { TagRepository } from '../repositories/tag-repository';
 import type { BrowseTagsResponse } from '../validators';
 import type { AuthUser, BrowseCategoryParams, BrowseParams, TagItemsResult } from '../types';
-import { ForbiddenError } from '../domain/errors';
+import { ForbiddenError, NotFoundError } from '../domain/errors';
 
 // =========================================================================================================
 // Service
@@ -53,14 +54,31 @@ export class TagService {
 		return this.tags.list(limit, offset);
 	}
 
-	update(id: number, displayName: string | null, description: string | null, category: string, user: AuthUser): Promise<void> {
+	async get(id: number): Promise<Pick<TagRow, 'id' | 'normalized_name' | 'display_name' | 'category'>> {
+		const tag = await this.tags.findById(id);
+		if (!tag) throw new NotFoundError('Tag no encontrado');
+
+		return tag;
+	}
+
+	update(id: number, displayName: string, description: string | null | undefined, category: string, user: AuthUser): Promise<void> {
 		this.assertEditor(user);
 		return this.tags.update(id, displayName, description, category, user.id);
 	}
 
-	addAlias(alias: string, tagId: number, user: AuthUser): Promise<void> {
+	async resolveId(name: string): Promise<number> {
+		const ids = await this.tags.resolveTagIds([name]);
+
+		if (!ids.length) throw new NotFoundError('Tag no encontrado');
+
+		return ids[0];
+	}
+
+	async addAlias(alias: string, name: string, user: AuthUser): Promise<void> {
 		this.assertEditor(user);
-		return this.tags.addAlias(alias, tagId, user.id);
+		const tagId = await this.resolveId(name);
+
+		await this.tags.addAlias(alias, tagId, user.id);
 	}
 
 	listAliases(limit = 100, offset = 0) {

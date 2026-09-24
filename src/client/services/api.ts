@@ -10,6 +10,7 @@
 
 import {
 	AutocompleteResponseSchema,
+	TagEditResponseSchema,
 	BrowseTagsResponseSchema,
 	CommentListResponseSchema,
 	CommunityListResponseSchema,
@@ -118,6 +119,7 @@ export class MemesBooruApi {
 
 	readonly tags = {
 		autocomplete: (query: string) => this.get(`/api/tags/autocomplete?q=${encodeURIComponent(query)}`, AutocompleteResponseSchema),
+		get: (id: number) => this.get(`/api/tags/by-id/${id}`, TagEditResponseSchema),
 		browse: (per = 25) => this.get(`/api/tags/browse?per=${per}`, BrowseTagsResponseSchema),
 		list: (limit = 100, offset = 0) => this.get(`/api/tags/?limit=${limit}&offset=${offset}`, CommunityListResponseSchema),
 		aliases: () => this.get('/api/tags/aliases', CommunityListResponseSchema),

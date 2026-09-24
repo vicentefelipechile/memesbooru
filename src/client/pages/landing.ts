@@ -4,6 +4,7 @@
 // =========================================================================================================
 
 import { navigate } from '../app/router.js';
+import { bindTagAutocomplete, renderTagAutocompleteField } from '../components/tag-autocomplete.js';
 
 export function renderLanding(): string {
 	return `<section class="landing" aria-labelledby="landing-title">
@@ -14,7 +15,7 @@ export function renderLanding(): string {
 		<form id="landing-search" class="landing-search">
 			<label for="landing-tag-input">Buscar memes</label>
 			<div class="landing-search-row">
-				<input id="landing-tag-input" name="tags" type="search" placeholder="wojak pepe reaction" autocomplete="off" />
+				${renderTagAutocompleteField('<input id="landing-tag-input" name="tags" type="search" placeholder="wojak pepe reaction" autocomplete="off" />')}
 				<button type="submit" class="primary">Buscar</button>
 			</div>
 			<p class="landing-hint">Separa las etiquetas con espacios. Usa <code>-</code> para excluir una etiqueta.</p>
@@ -32,6 +33,7 @@ export function bindLanding(): void {
 
 	if (!(form instanceof HTMLFormElement) || !(input instanceof HTMLInputElement)) return;
 
+	bindTagAutocomplete(input);
 	form.addEventListener('submit', (event) => {
 		event.preventDefault();
 		const tags = input.value.trim().split(/\s+/).filter(Boolean);

@@ -1,3 +1,7 @@
+// =========================================================================================================
+// Profile summary and editable display name.
+// =========================================================================================================
+
 import { store } from '../state/store.js';
 import { api, loginUrl } from '../services/api.js';
 
@@ -7,16 +11,14 @@ export async function renderProfile(): Promise<string> {
 	const status = user.status ?? 'active';
 	const display = user.display_name && user.display_name !== user.username ? user.display_name : user.username;
 	return `
-    <div class="page-head"><h1>${escapeHtml(display)}</h1></div>
+    <div class="page-head"><h1 id="profile-name">${escapeHtml(display)}</h1></div>
     <section class="settings-section">
-      <dl class="stat-grid">
-        <dt>Usuario</dt><dd>@${escapeHtml(user.username)}</dd>
+      <dl class="stat-grid profile-summary">
         <dt>Rango</dt><dd>${escapeHtml(user.rank)}</dd>
         <dt>Estado</dt><dd>${escapeHtml(status)}</dd>
       </dl>
     </section>
-    <form id="profile-form" class="form-stack"><label for="display-name">Nombre visible</label><input id="display-name" maxlength="100" value="${escapeHtml(user.display_name ?? '')}"><button class="primary" type="submit">Guardar perfil</button><p id="profile-status" class="form-msg" aria-live="polite"></p></form>
-    <p class="small muted"><a href="/settings" data-link>Configuración</a></p>
+    <form id="profile-form" class="form-stack"><label for="display-name">Nombre visible<input id="display-name" maxlength="100" value="${escapeHtml(user.display_name ?? '')}"></label><button class="primary" type="submit">Guardar perfil</button><p id="profile-status" class="form-msg" aria-live="polite"></p></form>
   `;
 }
 
@@ -29,10 +31,16 @@ export function bindProfile(): void {
 		const status = document.getElementById('profile-status');
 		if (!(input instanceof HTMLInputElement) || !status) return;
 		try {
-			await api.auth.updateProfile(input.value.trim() || null);
+			const displayName = input.value.trim() || null;
+			await api.auth.updateProfile(displayName);
+			const user = store.get().user;
+			if (user) store.set({ user: { ...user, display_name: displayName } });
+			const heading = document.getElementById('profile-name');
+			if (heading && user) heading.textContent = displayName || user.username;
 			status.textContent = 'Perfil actualizado.';
 			status.className = 'form-msg ok';
-		} catch {
+		} catch (error) {
+			console.error('Profile update failed', error);
 			status.textContent = 'No se pudo actualizar.';
 			status.className = 'form-msg err';
 		}

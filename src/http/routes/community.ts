@@ -17,7 +17,7 @@ const artistAliasSchema = z.object({ artist_id: z.number().int().positive(), ali
 const postArtistSchema = z.object({ post_id: z.number().int().positive(), artist_id: z.number().int().positive() });
 const poolSchema = z.object({ name: z.string().trim().min(1).max(120), description: z.string().max(2000).nullable().optional() });
 const topicSchema = z.object({ category_id: z.number().int().positive(), title: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(5000) });
-const wikiSchema = z.object({ tag_id: z.number().int().positive(), title: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(10000) });
+const wikiSchema = z.object({ tag: z.string().trim().min(1).max(100), title: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(10000) });
 const replySchema = z.object({ topic_id: z.number().int().positive(), body: z.string().trim().min(1).max(5000) });
 const poolPostSchema = z.object({ pool_id: z.number().int().positive(), post_id: z.number().int().positive() });
 const wikiRevisionSchema = z.object({ body: z.string().trim().min(1).max(10000), reason: z.string().trim().max(200).nullable().optional() });
@@ -101,7 +101,7 @@ router.post('/wiki', requireAuth, async (c) => {
 	if (!body.ok) return body.response;
 	const parsed = wikiSchema.safeParse(body.data);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).createWiki(c.get('user'), parsed.data.tag_id, parsed.data.title, parsed.data.body);
+	await new CommunityService(c.env.DB).createWiki(c.get('user'), parsed.data.tag, parsed.data.title, parsed.data.body);
 	return c.json({ ok: true }, 201);
 });
 

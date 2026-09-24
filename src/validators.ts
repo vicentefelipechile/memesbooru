@@ -17,6 +17,11 @@ export const USER_RANKS = ['new', 'normal', 'trusted', 'restricted', 'banned'] a
 export const POST_STATUSES = ['uploading', 'processing', 'available', 'duplicate', 'rejected', 'hidden'] as const satisfies readonly string[];
 export const MEDIA_TYPES = ['image', 'gif', 'video'] as const satisfies readonly string[];
 export const TAG_CATEGORIES = ['reaction', 'source', 'people', 'character', 'meta'] as const satisfies readonly string[];
+export const TagDisplayNameSchema = z
+	.string()
+	.min(1)
+	.max(100)
+	.regex(/^[a-z0-9]+(?:_[a-z0-9]+)*(?:_\([a-z0-9]+(?:_[a-z0-9]+)*\))?$/, 'Usa minúsculas, números y guiones bajos; opcionalmente _(tipo).');
 
 // =========================================================================================================
 // Helpers
@@ -173,6 +178,7 @@ export const PaginationSchema = z.object({
 export const HealthResponseSchema = z.object({ status: z.string(), version: z.string(), db: z.string() });
 export const UserResponseSchema = z.object({ user: z.object({ id: z.number(), username: z.string(), rank: z.string(), display_name: z.string().nullable().optional(), status: z.string().optional() }).nullable() });
 export const AutocompleteResponseSchema = z.object({ tags: z.array(z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number().optional() })) });
+export const TagEditResponseSchema = z.object({ id: z.number(), normalized_name: z.string(), display_name: z.string().nullable(), category: z.enum(TAG_CATEGORIES) });
 export const TagItemSchema = z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number() });
 export const BrowseTagsQuerySchema = z.object({
 	category: z.enum(TAG_CATEGORIES).optional().catch(undefined),

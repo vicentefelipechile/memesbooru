@@ -25,12 +25,18 @@ const routes: Route[] = [
 	{ pattern: /^\/$/, render: () => Promise.resolve(renderLanding()), bind: () => bindLanding() },
 	{ pattern: /^\/posts$/, render: () => renderHome(), bind: () => bindHome() },
 	{ pattern: /^\/post\/([^/]+)$/, render: (m) => renderPost(m[1]), bind: (m) => bindPost(m[1]) },
-	{ pattern: /^\/upload$/, render: () => renderUpload(), bind: () => bindUpload() },
+	{
+		pattern: /^\/upload(?:\/video)?$/,
+		render: (match) => {
+			if (match[0] === '/upload/video') history.replaceState(null, '', '/upload');
+			return renderUpload();
+		},
+		bind: () => bindUpload(),
+	},
 	{ pattern: /^\/favorites$/, render: () => renderFavorites(new URL(location.href).searchParams.get('cursor') ?? undefined), bind: () => bindFavorites() },
 	{ pattern: /^\/settings$/, render: () => renderSettings(), bind: () => bindSettings() },
 	{ pattern: /^\/profile$/, render: () => renderProfile(), bind: () => bindProfile() },
 	{ pattern: /^\/random$/, render: () => renderRandom(new URL(location.href).searchParams.get('tags') ?? undefined), bind: () => bindRandom() },
-	{ pattern: /^\/upload\/video$/, render: () => renderUpload(true), bind: () => bindUpload() },
 	{ pattern: /^\/comments$/, render: () => renderSection('comments'), bind: () => bindSection('comments') },
 	{ pattern: /^\/(wiki|aliases|artists|pools|forum)\/create$/, render: (m) => renderSection(m[1], 'create'), bind: (m) => bindSection(m[1]) },
 	{ pattern: /^\/tags\/edit$/, render: () => renderSection('tags', 'edit'), bind: () => bindSection('tags') },
