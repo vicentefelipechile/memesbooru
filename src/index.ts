@@ -23,6 +23,8 @@ import commentRoutes from './http/routes/comments';
 import interactionRoutes from './http/routes/interactions';
 import moderationRoutes from './http/routes/moderation';
 import communityRoutes from './http/routes/community';
+import profileRoutes from './http/routes/profiles';
+import permissionRoutes from './http/routes/permissions';
 import { handleQueue } from './queues/processor';
 import type { QueueMessage } from './types';
 
@@ -61,6 +63,8 @@ app.route('/api/comments', commentRoutes);
 app.route('/api', interactionRoutes);
 app.route('/api/moderation', moderationRoutes);
 app.route('/api/community', communityRoutes);
+app.route('/api/profiles', profileRoutes);
+app.route('/api/permissions', permissionRoutes);
 
 // =========================================================================================================
 // 404

@@ -32,12 +32,12 @@ import { spawnSync } from 'node:child_process';
 
 const DEFAULT_DB = 'memesbooru' as const;
 const MINIMAL_USERS = [
-	{ id: 1, username: 'admin', display_name: 'Admin', rank: 'trusted', status: 'active', trust_score: 100 },
-	{ id: 2, username: 'meme_lord', display_name: 'Meme Lord', rank: 'normal', status: 'active', trust_score: 10 },
-	{ id: 3, username: 'nuevo_user', display_name: 'Nuevo', rank: 'new', status: 'active', trust_score: 0 },
-	{ id: 4, username: 'neko_artist', display_name: 'Neko Artist', rank: 'normal', status: 'active', trust_score: 25 },
-	{ id: 5, username: 'mod_pepe', display_name: 'Mod Pepe', rank: 'trusted', status: 'active', trust_score: 80 },
-] as const satisfies readonly { id: number; username: string; display_name: string; rank: string; status: string; trust_score: number }[];
+	{ id: 1, username: 'admin', display_name: 'Admin', role_id: 1, status: 'active' },
+	{ id: 2, username: 'meme_lord', display_name: 'Meme Lord', role_id: 3, status: 'active' },
+	{ id: 3, username: 'nuevo_user', display_name: 'Nuevo', role_id: 4, status: 'active' },
+	{ id: 4, username: 'neko_artist', display_name: 'Neko Artist', role_id: 3, status: 'active' },
+	{ id: 5, username: 'mod_pepe', display_name: 'Mod Pepe', role_id: 2, status: 'active' },
+] as const satisfies readonly { id: number; username: string; display_name: string; role_id: number; status: string }[];
 
 const MINIMAL_TAGS = [
 	{ id: 1, normalized_name: 'pepe', display_name: 'Pepe', category: 'character', usage_count: 120 },
@@ -173,7 +173,7 @@ const MINIMAL_POSTS: readonly MinimalPostSeed[] = [
 		author_id: 3,
 		media_type: 'video',
 		title: 'Coffin dance remix',
-		description: 'video solo visible para trusted',
+		description: 'video con permiso de acceso',
 		score: 12.0,
 		rating_count: 3,
 		favorite_count: 5,
@@ -323,7 +323,8 @@ export function generateMinimalSql(): string {
 	// Users
 	sql += `-- Users (${MINIMAL_USERS.length})\n`;
 	for (const u of MINIMAL_USERS) {
-		sql += `INSERT OR IGNORE INTO users (id, username, display_name, rank, status, trust_score, created_at) VALUES (${u.id}, ${escapeSqlText(u.username)}, ${u.display_name ? escapeSqlText(u.display_name) : 'NULL'}, ${escapeSqlText(u.rank)}, ${escapeSqlText(u.status)}, ${u.trust_score}, ${nowUnix()});\n`;
+		sql += `INSERT OR IGNORE INTO users (id, username, display_name, status, created_at) VALUES (${u.id}, ${escapeSqlText(u.username)}, ${u.display_name ? escapeSqlText(u.display_name) : 'NULL'}, ${escapeSqlText(u.status)}, ${nowUnix()});\n`;
+		sql += `INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (${u.id}, ${u.role_id});\n`;
 	}
 	// User activity
 	sql += `\n-- User activity\n`;

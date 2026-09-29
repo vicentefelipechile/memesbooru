@@ -14,6 +14,7 @@ import type { AuthUser, CreatedReportResult } from '../types';
 import type { ReportInput, ModerationActionInput } from '../validators';
 import type { ReportRow, ModerationActionRow } from '../db/schema';
 import { ModerationRepository } from '../repositories/moderation-repository';
+import { PermissionService } from './permission-service';
 
 // =========================================================================================================
 // Service
@@ -26,11 +27,12 @@ export class ModerationService {
 		this.moderation = new ModerationRepository(db);
 	}
 
-	private assertTrusted(viewer: AuthUser): void {
-		if (!viewer.isAdmin) throw new ForbiddenError('solo trusted');
+	private assertModerator(viewer: AuthUser): void {
+		new PermissionService(this.db).require(viewer, 'moderate');
 	}
 
 	async report(viewer: AuthUser, input: ReportInput): Promise<CreatedReportResult> {
+		new PermissionService(this.db).require(viewer, 'report');
 		const id = await this.moderation.createReport({
 			reporterId: viewer.id,
 			targetType: input.target_type,
@@ -42,7 +44,8 @@ export class ModerationService {
 	}
 
 	async act(viewer: AuthUser, input: ModerationActionInput): Promise<Pick<ModerationActionRow, 'id'>> {
-		this.assertTrusted(viewer);
+		this.assertModerator(viewer);
+		if (input.target_type === 'user' && input.action === 'ban' && (await new PermissionService(this.db).userRolesForLogin(input.target_id)).some((role) => role.id === 1)) throw new ForbiddenError('Revoke administrator role before banning');
 
 		const allowed = ['hide', 'reject', 'ban', 'restrict', 'approve'] as const;
 
@@ -60,7 +63,7 @@ export class ModerationService {
 	}
 
 	async listReports(viewer: AuthUser): Promise<ReportRow[]> {
-		this.assertTrusted(viewer);
+		this.assertModerator(viewer);
 
 		return this.moderation.listOpenReports();
 	}

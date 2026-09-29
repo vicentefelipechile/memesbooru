@@ -3,7 +3,7 @@
 // =========================================================================================================
 
 import { Hono } from 'hono';
-import { optionalAuth, requireAuth, type AuthVariables } from '../middleware/auth';
+import { requireAuth, type AuthVariables } from '../middleware/auth';
 import { parseJsonBody } from '../../helpers/http';
 import { fail } from '../responses';
 import { z } from 'zod';
@@ -22,8 +22,7 @@ const replySchema = z.object({ topic_id: z.number().int().positive(), body: z.st
 const poolPostSchema = z.object({ pool_id: z.number().int().positive(), post_id: z.number().int().positive() });
 const wikiRevisionSchema = z.object({ body: z.string().trim().min(1).max(10000), reason: z.string().trim().max(200).nullable().optional() });
 const wikiRevertSchema = z.object({ revision_id: z.number().int().positive() });
-const contactSchema = z.object({ email: z.string().email().max(320), subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(10000) });
-const mailSchema = z.object({ recipient_id: z.number().int().positive(), subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(10000) });
+const contactSchema = z.object({ subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(10000) });
 const poolOrderSchema = z.object({ pool_id: z.number().int().positive(), post_id: z.number().int().positive(), position: z.number().int().positive() });
 const topicEditSchema = z.object({ topic_id: z.number().int().positive(), title: z.string().trim().min(1).max(200) });
 const topicStatusSchema = z.object({ topic_id: z.number().int().positive(), status: z.enum(['open', 'locked', 'hidden']), pinned: z.boolean() });
@@ -39,7 +38,6 @@ router.get('/wiki/:id/revisions', async (c) => c.json({ data: await new Communit
 router.get('/pools/:id/posts', async (c) => c.json({ data: await new CommunityService(c.env.DB).listPoolPosts(Number(c.req.param('id'))) }));
 router.get('/forum/topics/:id/posts', async (c) => c.json({ data: await new CommunityService(c.env.DB).listForumPosts(Number(c.req.param('id'))) }));
 router.get('/forum/topics/:id', async (c) => c.json(await new CommunityService(c.env.DB).getTopic(Number(c.req.param('id')))));
-router.get('/mail', requireAuth, async (c) => c.json({ data: await new CommunityService(c.env.DB).listMail(c.get('user'), limitSchema.parse(c.req.query('limit'))) }));
 
 router.post('/artists', requireAuth, async (c) => {
 	const body = await parseJsonBody(c);
@@ -60,7 +58,7 @@ router.patch('/artists/:id/status', requireAuth, async (c) => {
 router.post('/artist-aliases', requireAuth, async (c) => {
 	const parsed = artistAliasSchema.safeParse(await c.req.json().catch(() => null));
 	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).addArtistAlias(parsed.data.artist_id, parsed.data.alias);
+	await new CommunityService(c.env.DB).addArtistAlias(c.get('user'), parsed.data.artist_id, parsed.data.alias);
 	return c.json({ ok: true }, 201);
 });
 
@@ -139,22 +137,12 @@ router.post('/wiki/:id/revert', requireAuth, async (c) => {
 	return c.json({ ok: true });
 });
 
-router.post('/mail', requireAuth, async (c) => {
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const parsed = mailSchema.safeParse(body.data);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).createMail(c.get('user'), parsed.data.subject, parsed.data.body, parsed.data.recipient_id);
-	return c.json({ ok: true }, 201);
-});
-
-router.post('/contact', optionalAuth, async (c) => {
+router.post('/contact', requireAuth, async (c) => {
 	const body = await parseJsonBody(c);
 	if (!body.ok) return body.response;
 	const parsed = contactSchema.safeParse(body.data);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	const user = c.get('user');
-	await new CommunityService(c.env.DB).createContact(parsed.data.email, parsed.data.subject, parsed.data.body, user?.id ?? null);
+	await new CommunityService(c.env.DB).createContact(c.get('user'), parsed.data.subject, parsed.data.body);
 	return c.json({ ok: true }, 201);
 });
 

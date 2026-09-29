@@ -14,6 +14,7 @@ import type { AuthUser } from '../types';
 import type { RatingInput } from '../validators';
 import type { FavoriteListingRow } from '../db/schema';
 import { PostRepository } from '../repositories/post-repository';
+import { PermissionService } from './permission-service';
 
 // =========================================================================================================
 // Service
@@ -27,6 +28,7 @@ export class InteractionService {
 	}
 
 	async rate(viewer: AuthUser, publicId: string, value: RatingInput['value'], queue?: Queue): Promise<void> {
+		new PermissionService(this.db).require(viewer, 'vote');
 		const postId = await this.posts.findPostIdByPublicId(publicId);
 
 		if (!postId) throw new NotFoundError('post not found');
@@ -37,6 +39,7 @@ export class InteractionService {
 	}
 
 	async favorite(viewer: AuthUser, publicId: string): Promise<void> {
+		new PermissionService(this.db).require(viewer, 'favorite');
 		const postId = await this.posts.findPostIdByPublicId(publicId);
 
 		if (!postId) throw new NotFoundError('post not found');

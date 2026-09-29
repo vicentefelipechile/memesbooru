@@ -13,7 +13,40 @@ import { ValidationError } from './domain/errors';
 
 const MAX_SANITIZE_LENGTH = 100_000;
 
-export const USER_RANKS = ['new', 'normal', 'trusted', 'restricted', 'banned'] as const satisfies readonly string[];
+export const PERMISSIONS = [
+	'manage_roles',
+	'moderate',
+	'edit_tags',
+	'manage_artists',
+	'manage_forum',
+	'upload_video',
+	'view_video',
+	'upload_without_cooldown',
+	'upload_post',
+	'comment',
+	'vote',
+	'favorite',
+	'report',
+	'create_pool',
+	'create_topic',
+	'edit_wiki',
+	'contact',
+] as const satisfies readonly string[];
+export const PermissionSchema = z.enum(PERMISSIONS);
+export const CreateRoleSchema = z.object({
+	name: z
+		.string()
+		.trim()
+		.min(2)
+		.max(40)
+		.regex(/^[a-zA-Z0-9 _-]+$/),
+	permissions: z.array(PermissionSchema).max(PERMISSIONS.length),
+});
+export const UpdateRoleSchema = CreateRoleSchema.partial();
+export const RoleAssignmentSchema = z.object({ role_id: z.number().int().positive() });
+export const RoleSchema = z.object({ id: z.number(), name: z.string(), position: z.number(), managed: z.number(), permissions: z.array(PermissionSchema) });
+export const RolesResponseSchema = z.object({ data: z.array(RoleSchema) });
+export const UserRolesResponseSchema = z.object({ data: z.array(RoleSchema.omit({ permissions: true })) });
 export const POST_STATUSES = ['uploading', 'processing', 'available', 'duplicate', 'rejected', 'hidden'] as const satisfies readonly string[];
 export const MEDIA_TYPES = ['image', 'gif', 'video'] as const satisfies readonly string[];
 export const TAG_CATEGORIES = ['reaction', 'source', 'people', 'character', 'meta'] as const satisfies readonly string[];
@@ -111,18 +144,31 @@ export const ModerationActionSchema = z.object({
 });
 
 export const TotpVerifySchema = z.object({ code: z.string().length(6) });
-export const PasswordLoginSchema = z.object({ email: z.string().email().max(254), password: z.string().min(8).max(128) });
+export const TurnstileActionSchema = z.enum(['login', 'signup']);
+export const TurnstileSiteverifySchema = z.object({ success: z.boolean(), action: TurnstileActionSchema.optional(), hostname: z.string().optional() });
+const AccountUsernameSchema = z
+	.string()
+	.trim()
+	.regex(/^[a-zA-Z0-9_]{3,24}$/);
+export const PasswordLoginSchema = z.object({ username: AccountUsernameSchema, password: z.string().min(8).max(128), turnstile_token: z.string().min(1).max(2048) });
 export const RegisterSchema = z.object({
-	username: z
-		.string()
-		.trim()
-		.regex(/^[a-zA-Z0-9_]{3,24}$/),
-	email: z.string().email().max(254),
+	username: AccountUsernameSchema,
 	password: z.string().min(8).max(128),
+	turnstile_token: z.string().min(1).max(2048),
 });
-export const EmailChangeSchema = z.object({ email: z.string().email().max(254) });
 export const PasswordChangeSchema = z.object({ current_password: z.string().min(1).max(128), password: z.string().min(8).max(128) });
-export const ProfileSchema = z.object({ display_name: z.string().trim().max(100).nullable() });
+export const ProfileSchema = z.object({
+	display_name: z.string().trim().min(1).max(100).nullable(),
+	bio: z.string().trim().max(500).nullable(),
+	avatar_url: z
+		.url()
+		.max(500)
+		.refine((url) => new URL(url).protocol === 'https:', 'Use an HTTPS image URL')
+		.nullable(),
+});
+export const ProfileUsernameSchema = z.string().regex(/^[a-zA-Z0-9_]{3,24}$/);
+export const ProfileCursorSchema = z.object({ created_at: z.number().int().nonnegative(), id: z.number().int().positive() });
+export const ProfilePostsQuerySchema = z.object({ cursor: z.string().max(200).optional(), limit: z.coerce.number().int().min(1).max(40).default(20) });
 
 export const SearchCursorSchema = z.object({ id: z.number().int().positive(), score: z.number().optional(), published_at: z.number().optional() });
 
@@ -176,7 +222,16 @@ export const PaginationSchema = z.object({
 // =========================================================================================================
 
 export const HealthResponseSchema = z.object({ status: z.string(), version: z.string(), db: z.string() });
-export const UserResponseSchema = z.object({ user: z.object({ id: z.number(), username: z.string(), rank: z.string(), display_name: z.string().nullable().optional(), status: z.string().optional() }).nullable() });
+export const UserResponseSchema = z.object({
+	user: z.object({ id: z.number(), username: z.string(), roles: z.array(z.string()).optional(), permissions: z.array(PermissionSchema).optional(), display_name: z.string().nullable().optional(), status: z.string().optional() }).nullable(),
+});
+export const TurnstileConfigResponseSchema = z.object({ siteKey: z.string().min(1) });
+export const PublicProfileSchema = z.object({ id: z.number(), username: z.string(), display_name: z.string().nullable(), avatar_url: z.string().nullable(), bio: z.string().nullable(), roles: z.array(z.string()), created_at: z.number() });
+export const ProfileResponseSchema = z.object({ profile: PublicProfileSchema });
+export const ProfilePostsResponseSchema = z.object({
+	data: z.array(z.object({ public_id: z.string(), low_variant_key: z.string(), score: z.number(), favorite_count: z.number(), media_type: z.string() })),
+	nextCursor: z.string().nullable(),
+});
 export const AutocompleteResponseSchema = z.object({ tags: z.array(z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number().optional() })) });
 export const TagEditResponseSchema = z.object({ id: z.number(), normalized_name: z.string(), display_name: z.string().nullable(), category: z.enum(TAG_CATEGORIES) });
 export const TagItemSchema = z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number() });
@@ -232,3 +287,9 @@ export type PaginationInput = z.infer<typeof PaginationSchema>;
 export type TotpVerifyInput = z.infer<typeof TotpVerifySchema>;
 export type BrowseTagsQueryInput = z.infer<typeof BrowseTagsQuerySchema>;
 export type BrowseTagsResponse = z.infer<typeof BrowseTagsResponseSchema>;
+export type TurnstileAction = z.infer<typeof TurnstileActionSchema>;
+export type ProfileInput = z.infer<typeof ProfileSchema>;
+export type ProfilePostsQueryInput = z.infer<typeof ProfilePostsQuerySchema>;
+export type Permission = z.infer<typeof PermissionSchema>;
+export type CreateRoleInput = z.infer<typeof CreateRoleSchema>;
+export type UpdateRoleInput = z.infer<typeof UpdateRoleSchema>;

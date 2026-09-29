@@ -17,15 +17,6 @@ import type { UserRow, GoogleIdentityRow, UserActivityRow, NextIdRow, CountRow }
 
 export type { UserRow };
 
-export type InsertUserStatementData = {
-	id: UserRow['id'];
-	username: UserRow['username'];
-	rank: UserRow['rank'];
-	status: UserRow['status'];
-	trustScore: UserRow['trust_score'];
-	createdAt: UserRow['created_at'];
-};
-
 export type InsertGoogleIdentityStatementData = {
 	userId: GoogleIdentityRow['user_id'];
 	googleSubject: GoogleIdentityRow['google_subject'];
@@ -79,10 +70,6 @@ export class UserRepository {
 	// Builders
 	// =========================================================================================================
 
-	buildInsertUserStatement(row: InsertUserStatementData): D1PreparedStatement {
-		return this.db.prepare('INSERT INTO users (id, username, rank, status, trust_score, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(row.id, row.username, row.rank, row.status, row.trustScore, row.createdAt);
-	}
-
 	buildInsertGoogleIdentityStatement(row: InsertGoogleIdentityStatementData): D1PreparedStatement {
 		return this.db.prepare('INSERT INTO google_identities (user_id, google_subject, created_at) VALUES (?, ?, ?)').bind(row.userId, row.googleSubject, row.createdAt);
 	}
@@ -95,12 +82,12 @@ export class UserRepository {
 	// Commands
 	// =========================================================================================================
 
-	async createFromGoogle(sub: string, username: string): Promise<UserRow> {
+	async createFromGoogle(sub: string, username: string, email: string): Promise<UserRow> {
 		const now = Date.now();
 		const nextId = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM users', []))?.v ?? 1;
 
 		await batch(this.db, [
-			this.buildInsertUserStatement({ id: nextId, username, rank: 'new', status: 'active', trustScore: 0, createdAt: now }),
+			this.db.prepare('INSERT INTO users (id, username, email, status, created_at) VALUES (?, ?, ?, ?, ?)').bind(nextId, username, email, 'active', now),
 			this.buildInsertGoogleIdentityStatement({ userId: nextId, googleSubject: sub, createdAt: now }),
 			this.buildInsertUserActivityStatement({ userId: nextId, updatedAt: now }),
 		]);
@@ -112,11 +99,11 @@ export class UserRepository {
 		return created;
 	}
 
-	async createLocal(username: string, email: string, passwordHash: ArrayBuffer): Promise<UserRow> {
+	async createLocal(username: string, passwordHash: ArrayBuffer): Promise<UserRow> {
 		const now = Date.now();
 		const nextId = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM users', []))?.v ?? 1;
 		await batch(this.db, [
-			this.db.prepare('INSERT INTO users (id, username, email, password_hash, rank, status, trust_score, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(nextId, username, email, passwordHash, 'new', 'active', 0, now),
+			this.db.prepare('INSERT INTO users (id, username, password_hash, status, created_at) VALUES (?, ?, ?, ?, ?)').bind(nextId, username, passwordHash, 'active', now),
 			this.buildInsertUserActivityStatement({ userId: nextId, updatedAt: now }),
 		]);
 		const created = await this.findById(nextId);
@@ -124,11 +111,11 @@ export class UserRepository {
 		return created;
 	}
 
-	async updateLastLogin(userId: number): Promise<void> {
+	async updateLastLogin(userId: number, email: string): Promise<void> {
 		const now = Date.now();
 
 		await batch(this.db, [
-			this.db.prepare('UPDATE users SET last_login_at = ?, last_activity_at = ? WHERE id = ?').bind(now, now, userId),
+			this.db.prepare('UPDATE users SET email = ?, last_login_at = ?, last_activity_at = ? WHERE id = ?').bind(email, now, now, userId),
 			this.db.prepare('UPDATE google_identities SET last_login_at = ? WHERE user_id = ?').bind(now, userId),
 		]);
 	}

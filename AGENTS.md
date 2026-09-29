@@ -15,7 +15,7 @@ Memesbooru is a booru-style meme catalog (Spanish-first) optimized for read spee
 ```
 Hono (src/index.ts / src/http/routes/*)
   -> Controller (thin Hono handler: auth + Zod safeParse + service call + response)
-    -> Service (src/services/*: business rules, permissions, ranking, Queue jobs; throws DomainError)
+    -> Service (src/services/*: business rules, permissions, Queue jobs; throws DomainError)
       -> Repository (src/repositories/*: ONLY place with SQL / D1 / R2)
         -> Cloudflare Binding (D1Database / R2Bucket / Queue) via src/db/client.ts
 ```
@@ -38,7 +38,7 @@ src/
   http/          # routes/* (posts, comments, tags, auth, moderation, interactions, health) + middleware/auth,security + responses.ts, rate-limits.ts
   queues/        # processor.ts (typed QueueMessage, idempotent)
   repositories/  # class-based post, tag, comment, media, user, session, auth, moderation, activity repositories
-  services/      # class-based post, comment, interaction, moderation, ranking, auth services
+  services/      # class-based post, comment, interaction, moderation, permission, auth services
   validators.ts  # single Zod validator monolith
   types.ts       # single type monolith (DTOs + branded ids + helpers)
   index.ts       # Hono app
@@ -58,7 +58,7 @@ Central query projections (never inline `{ v: number }` / `{ c: number }`): `Nex
 **Do NOT duplicate types elsewhere.** Frontend has its own copy (`src/client` never imports `src/types`).
 
 Contains:
-- Enums as `as const satisfies` unions: `UserRank`, `UserStatus`, `PostStatus`, `MediaType`
+- Enums as `as const satisfies` unions: `Permission`, `UserStatus`, `PostStatus`, `MediaType`
 - DTOs: `UserDTO`, `PostDTO` (`DeepReadonly<CamelCased<Omit<PostRow>>>`), `TagDTO`, `CommentDTO` (`CommentId`/`PostId` branded)
 - `AuthUser { id: UserId }`, `PaginatedResponse<T>`
 - Branded ids: `Brand<T,B>`, `UserId/PostId/PublicId/TagId/CommentId` + constructors `toUserId(n)` etc. (`src/types.ts:89`). Use at boundaries, never mix raw `number`.
@@ -66,7 +66,7 @@ Contains:
 - `PostDetailResult` = `PostListingRow` + `author_id/author_username/title/description/canonical_post_id/tags` (tags are `PostTagResult[]` = `{name,category,count}`, enriched for the booru sidebar)
 - `CommentResult` = `CommentRow` + `author_username` (joined in `comment-repository.listByPost`)
 - Derived: `EntityId = Pick<ReportRow,'id'>`, `CreatedPostResult = { publicId: PublicId; postId: PostId }`
-- Service results (never inline `Promise<{...}>`): `SearchResult { data: PostSearchResult[]; nextCursor; hasMore }`, `TagItem { name; display; usage }`, `TagItemsResult { tags: TagItem[] }`, `BrowseParams { perCategoryLimit? }`, `BrowseCategoryParams { limit?; offset? }`, `SessionTokenPair { token; hash }`, `GoogleTokens { id_token; access_token }`, `AuthUserBrief { id; username; rank }`, `SessionVerification { userId }`
+- Service results (never inline `Promise<{...}>`): `SearchResult { data: PostSearchResult[]; nextCursor; hasMore }`, `TagItem { name; display; usage }`, `TagItemsResult { tags: TagItem[] }`, `BrowseParams { perCategoryLimit? }`, `BrowseCategoryParams { limit?; offset? }`, `SessionTokenPair { token; hash }`, `GoogleTokens { id_token; access_token }`, `AuthUserBrief { id; username; roles; permissions }`
 - Re-exports: `ReportInput`, `CreatePostInput` etc. from `validators.ts` — never inline anonymous `{id:number}`
 
 ### 4.3 `src/validators.ts` — Zod is the only validator
@@ -83,7 +83,7 @@ Backend scope is `src/db|domain|helpers|http|queues|repositories|services` (+ `i
 - `as unknown as X` hides branded mismatches → use `toUserId/toPostId/toPublicId` + `satisfies` (`src/services/post-service.ts:59`).
 - Pre-Zod JSON body `unknown` → use `JsonValue` default `parseJsonBody<T extends JsonValue = JsonValue>` (`src/helpers/http.ts:9`) then `Schema.safeParse`. `parseJsonBody` returns named `ParseJsonResult<T>`, never inline union.
 - `UPDATE`/`INSERT` without `RETURNING` → use `execute`, never `queryOne` without generic (untyped `queryOne` infers `unknown`). 8 sites migrated (`post/media/auth/activity` repos).
-- DB `rank`/`status` strings → fail-closed guards `toUserRank/toUserStatus` (`src/http/middleware/auth.ts`), never bare `as UserRank`.
+- DB `status` strings → fail-closed guard `toUserStatus` (`src/http/middleware/auth.ts`). Effective permissions are loaded per request through `PermissionService`.
 
 **Only `unknown` allowed in backend is the string literal `'unknown'` for IP fallback** (`src/helpers/net.ts:30`, `src/http/rate-limits.ts:20,29,37`).
 
@@ -95,7 +95,7 @@ Rules:
 
 **Beyond `Pick/Omit/Partial`:**
 - `Indexed Access` `PostRow['id']` for params (`src/repositories/post-repository.ts:189`)
-- `keyof / typeof` `typeof USER_RANKS[number]` → `UserRank`
+- `keyof / typeof` `typeof PERMISSIONS[number]` → `Permission`
 - `ReturnType / Parameters / Awaited` (`AwaitedReturn` in `types.ts`)
 - `Exclude/Extract/NonNullable`, `Record`, `Required/Readonly`
 - `Mapped Types + key remapping (as)` `CamelCased<T>` (`SnakeToCamel` with `Capitalize`)
@@ -217,6 +217,14 @@ Light utilitarian base (no dark-mode reflex), self-hosted `@fontsource/ibm-plex-
 ### 11.9 Tag browse endpoint
 
 `GET /api/tags/browse?per=25` returns `BrowseTagsResponse = { groups: Record<Category, {tags: TagItem[]}> }` (one query via `ROW_NUMBER() OVER (PARTITION BY category)` over `tags WHERE status='active'`, ordered by `normalized_name ASC`). Cached `public, max-age=300`. Pagination per category is `GET /api/tags/browse/:category?limit&offset`. Migration 0002 rebuilds the `tags` table to enforce the 5-category `CHECK`.
+
+### Roles and permissions (migration 0009)
+
+`users.rank`, `trust_score`, and `user_rank_history` are removed. `roles`, `role_permissions`, and `user_roles` store additive capabilities; every new user receives `Member` via a DB trigger. Existing privileged accounts migrate to `Administrator`, regular accounts to `Contributor`, and new accounts to `Member`. `Administrator` and `Member` are protected roles; `manage_roles` is reserved to `Administrator` and the last administrator cannot be removed. Moderation cannot ban an administrator until its administrator role is revoked.
+
+`src/repositories/permission-repository.ts` owns role SQL; `src/services/permission-service.ts` checks privileges and handles role management. `src/http/routes/permissions.ts` exposes role CRUD and user role assignment. `/settings` shows role controls for administrators. `AuthUser.permissions` is recomputed per request, so revocation takes effect without a new session. Use `PermissionService.require(user, permission)` in services for privileged actions; do not reintroduce rank checks.
+
+Cloudflare D1 check (2026-09-28, https://developers.cloudflare.com/d1/worker-api/d1-database/#batch): **fact:** `batch()` executes statements sequentially in a transaction and rolls back on failure. **Decision:** role permissions are replaced in one batch. **Inference:** a subsequent request to the primary reads changed roles. **Unknown:** behavior under future read replication without Sessions API is `no confirmado`; replication is not configured.
 
 ## 12. Cloudflare Verification Rule
 

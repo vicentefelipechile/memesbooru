@@ -11,6 +11,7 @@
 import type { DB } from '../db/client';
 import { CommentRepository } from '../repositories/comment-repository';
 import { PostRepository } from '../repositories/post-repository';
+import { PermissionService } from './permission-service';
 import { NotFoundError } from '../domain/errors';
 import type { AuthUser, CreatedCommentResult } from '../types';
 import type { CommentInput } from '../validators';
@@ -41,6 +42,7 @@ export class CommentService {
 	}
 
 	async create(viewer: AuthUser, publicId: string, input: CommentInput): Promise<CreatedCommentResult> {
+		new PermissionService(this.db).require(viewer, 'comment');
 		const postId = await this.posts.findPostIdByPublicId(publicId);
 
 		if (!postId) throw new NotFoundError('post not found');
@@ -51,7 +53,7 @@ export class CommentService {
 	}
 
 	async remove(viewer: AuthUser, commentId: number): Promise<void> {
-		const isModerator = viewer.isAdmin;
+		const isModerator = new PermissionService(this.db).has(viewer, 'moderate');
 		await this.comments.softDelete(commentId, viewer.id, isModerator);
 	}
 }

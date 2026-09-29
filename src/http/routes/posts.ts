@@ -15,9 +15,9 @@ import { PostService } from '../../services/post-service';
 import { fail } from '../responses';
 import { CreatePostSchema, SearchQuerySchema, parseQueryWithArrays } from '../../validators';
 import { ValidationError } from '../../domain/errors';
-import { ForbiddenError } from '../../domain/errors';
 import { detectMime, imageDimensions, validateFileSize } from '../../helpers/file-validation';
 import { parseJsonBody } from '../../helpers/http';
+import { PermissionService } from '../../services/permission-service';
 
 // =========================================================================================================
 // Endpoints
@@ -91,7 +91,7 @@ router.get('/:publicId', optionalAuth, async (c) => {
 	try {
 		const result = await service.detail(publicId, viewer ?? null);
 
-		c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+		c.header('Cache-Control', result.media_type === 'video' ? 'private, no-store' : 'public, max-age=60, stale-while-revalidate=120');
 
 		return c.json(result);
 	} catch (e) {
@@ -162,7 +162,7 @@ router.post('/', requireAuth, async (c) => {
 
 router.post('/video/upload-url', requireAuth, async (c) => {
 	const viewer = c.get('user');
-	if (viewer.rank !== 'trusted') throw new ForbiddenError('videos solo para trusted');
+	new PermissionService(c.env.DB).require(viewer, 'upload_video');
 	const body = await parseJsonBody(c);
 	if (!body.ok) return body.response;
 	const metadata = z.object({ title: z.string().trim().max(120).nullable().optional(), tags: z.array(z.string().trim().min(1).max(100)).max(50) }).safeParse(body.data);
@@ -177,7 +177,7 @@ router.post('/video/upload-url', requireAuth, async (c) => {
 
 router.post('/video/complete', requireAuth, async (c) => {
 	const viewer = c.get('user');
-	if (viewer.rank !== 'trusted') throw new ForbiddenError('videos solo para trusted');
+	new PermissionService(c.env.DB).require(viewer, 'upload_video');
 
 	const body = await parseJsonBody(c);
 	if (!body.ok) return body.response;
@@ -209,7 +209,7 @@ router.get('/:publicId/variants/:variant', optionalAuth, async (c) => {
 	const object = await c.env.MEDIA_BUCKET.get(`media/${publicId}/${variant === 'original' ? 'original' : `${variant}.avif`}`);
 	if (!object) return fail(c, 'variante no disponible', 404);
 
-	if (variant === 'original') c.header('Cache-Control', 'private, no-store');
+	if (variant === 'original' || post.media_type === 'video') c.header('Cache-Control', 'private, no-store');
 	else c.header('Cache-Control', 'public, max-age=31536000, immutable');
 
 	if (object.httpMetadata?.contentType) c.header('Content-Type', object.httpMetadata.contentType);

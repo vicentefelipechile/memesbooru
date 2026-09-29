@@ -8,6 +8,7 @@ import { TagService } from './tag-service';
 import { normalizeTag } from '../validators';
 import type { AuthUser } from '../types';
 import { ForbiddenError } from '../domain/errors';
+import { PermissionService } from './permission-service';
 
 export class CommunityService {
 	private readonly community: CommunityRepository;
@@ -33,14 +34,17 @@ export class CommunityService {
 	}
 
 	createArtist(user: AuthUser, name: string): Promise<void> {
+		new PermissionService(this.db).require(user, 'manage_artists');
 		return this.community.createArtist(name, normalizeTag(name), user.id);
 	}
 
 	setArtistStatus(id: number, status: 'active' | 'deleted', user: AuthUser): Promise<void> {
+		new PermissionService(this.db).require(user, 'manage_artists');
 		return this.community.setArtistStatus(id, status, user.id);
 	}
 
-	addArtistAlias(artistId: number, alias: string): Promise<void> {
+	addArtistAlias(user: AuthUser, artistId: number, alias: string): Promise<void> {
+		new PermissionService(this.db).require(user, 'manage_artists');
 		return this.community.addArtistAlias(artistId, alias);
 	}
 
@@ -49,24 +53,27 @@ export class CommunityService {
 	}
 
 	addPostArtist(user: AuthUser, postId: number, artistId: number): Promise<void> {
-		if (!user.isAdmin && user.rank !== 'trusted') throw new ForbiddenError('se requiere rango trusted');
+		new PermissionService(this.db).require(user, 'manage_artists');
 		return this.community.addPostArtist(postId, artistId, user.id);
 	}
 
 	removePostArtist(user: AuthUser, postId: number, artistId: number): Promise<void> {
-		if (!user.isAdmin && user.rank !== 'trusted') throw new ForbiddenError('se requiere rango trusted');
+		new PermissionService(this.db).require(user, 'manage_artists');
 		return this.community.removePostArtist(postId, artistId);
 	}
 
 	createPool(user: AuthUser, name: string, description: string | null): Promise<void> {
+		new PermissionService(this.db).require(user, 'create_pool');
 		return this.community.createPool(crypto.randomUUID().replaceAll('-', '').slice(0, 12), name, description, user.id);
 	}
 
 	createTopic(user: AuthUser, categoryId: number, title: string, body: string): Promise<void> {
+		new PermissionService(this.db).require(user, 'create_topic');
 		return this.community.createTopic(categoryId, title, user.id, body);
 	}
 
 	async createWiki(user: AuthUser, tagName: string, title: string, body: string): Promise<void> {
+		new PermissionService(this.db).require(user, 'edit_wiki');
 		const tagId = await new TagService(this.db).resolveId(tagName);
 
 		await this.community.createWiki(tagId, title, body, user.id);
@@ -98,7 +105,7 @@ export class CommunityService {
 
 	private async assertPoolOwner(user: AuthUser, poolId: number): Promise<void> {
 		const pool = await this.community.getPool(poolId);
-		if (!pool || (pool.creator_id !== user.id && !user.isAdmin)) throw new ForbiddenError('pool permission denied');
+		if (!pool || (pool.creator_id !== user.id && !new PermissionService(this.db).has(user, 'manage_roles'))) throw new ForbiddenError('pool permission denied');
 	}
 
 	private async changePool(user: AuthUser, poolId: number, action: () => Promise<void>): Promise<void> {
@@ -111,7 +118,7 @@ export class CommunityService {
 	}
 
 	setTopicStatus(user: AuthUser, topicId: number, status: 'open' | 'locked' | 'hidden', pinned: boolean): Promise<void> {
-		if (!user.isAdmin && user.rank !== 'trusted') throw new ForbiddenError('se requiere rango trusted');
+		new PermissionService(this.db).require(user, 'manage_forum');
 		return this.community.setTopicStatus(topicId, status, pinned);
 	}
 
@@ -124,10 +131,12 @@ export class CommunityService {
 	}
 
 	reviseWiki(user: AuthUser, id: number, body: string, reason: string | null): Promise<void> {
+		new PermissionService(this.db).require(user, 'edit_wiki');
 		return this.community.reviseWiki(id, body, reason, user.id);
 	}
 
 	async revertWiki(user: AuthUser, pageId: number, revisionId: number): Promise<void> {
+		new PermissionService(this.db).require(user, 'edit_tags');
 		const revision = await this.community.getWikiRevision(revisionId);
 		if (!revision || revision.wiki_page_id !== pageId) throw new ForbiddenError('revision not found');
 		await this.community.reviseWiki(pageId, revision.body, 'revert', user.id);
@@ -149,19 +158,12 @@ export class CommunityService {
 		return this.community.editForumPost(id, body, user.id);
 	}
 
-	createContact(email: string, subject: string, body: string, requesterId: number | null): Promise<void> {
-		return this.community.createContact(email, subject, body, requesterId);
+	createContact(user: AuthUser, subject: string, body: string): Promise<void> {
+		new PermissionService(this.db).require(user, 'contact');
+		return this.community.createContact(subject, body, user.id);
 	}
 
 	listContacts(limit: number) {
 		return this.community.listContacts(limit);
-	}
-
-	createMail(user: AuthUser, subject: string, body: string, recipientId: number): Promise<void> {
-		return this.community.createMail(subject, body, user.id, recipientId);
-	}
-
-	listMail(user: AuthUser, limit: number) {
-		return this.community.listMail(user.id, limit);
 	}
 }

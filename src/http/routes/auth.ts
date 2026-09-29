@@ -11,15 +11,17 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { z } from 'zod';
-import { requireAuth, type AuthVariables } from '../middleware/auth';
+import { getAuthUser, requireAuth, type AuthVariables } from '../middleware/auth';
 import { AuthService } from '../../services/auth-service';
 import { fail } from '../responses';
 import { hashToken } from '../../helpers/crypto';
 import { SessionRepository } from '../../repositories/session-repository';
 import { AuthRepository } from '../../repositories/auth-repository';
-import { EmailChangeSchema, PasswordChangeSchema, PasswordLoginSchema, ProfileSchema, RegisterSchema, TotpVerifySchema } from '../../validators';
+import { PasswordChangeSchema, PasswordLoginSchema, RegisterSchema, TotpVerifySchema } from '../../validators';
 import type { JsonValue } from '../../types';
 import { isAllowedOrigin } from '../../helpers/net';
+import { verifyTurnstile } from '../../helpers/turnstile';
+import { PermissionService } from '../../services/permission-service';
 
 // =========================================================================================================
 // Endpoints
@@ -31,14 +33,21 @@ type OAuthState = { returnTo: string };
 
 const stateStore = new Map<string, OAuthState>();
 
+router.get('/turnstile', (c) => {
+	if (!c.env.TURNSTILE_SITE_KEY || !c.env.TURNSTILE_SECRET_KEY) return fail(c, 'Turnstile not configured', 503);
+
+	return c.json({ siteKey: c.env.TURNSTILE_SITE_KEY });
+});
+
 router.post('/login', async (c) => {
 	const body = await c.req.json<JsonValue>().catch(() => null);
 	const parsed = PasswordLoginSchema.safeParse(body);
 
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+	if (!(await verifyTurnstile(c.env.TURNSTILE_SECRET_KEY, parsed.data.turnstile_token, 'login', new URL(c.req.url).hostname, c.req.header('cf-connecting-ip')))) return fail(c, 'Verification failed', 403);
 
 	const service = new AuthService(c.env.DB);
-	const user = await service.authenticatePassword(parsed.data.email.toLowerCase(), parsed.data.password);
+	const user = await service.authenticatePassword(parsed.data.username, parsed.data.password);
 
 	if (!user) return fail(c, 'Credenciales invalidas', 401);
 
@@ -52,8 +61,9 @@ router.post('/register', async (c) => {
 	const body = await c.req.json<JsonValue>().catch(() => null);
 	const parsed = RegisterSchema.safeParse(body);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+	if (!(await verifyTurnstile(c.env.TURNSTILE_SECRET_KEY, parsed.data.turnstile_token, 'signup', new URL(c.req.url).hostname, c.req.header('cf-connecting-ip')))) return fail(c, 'Verification failed', 403);
 	const service = new AuthService(c.env.DB);
-	const user = await service.register(parsed.data.username, parsed.data.email.toLowerCase(), parsed.data.password);
+	const user = await service.register(parsed.data.username, parsed.data.password);
 	setCookie(c, 'session', await service.createSession(user.id), { httpOnly: true, secure: true, sameSite: 'None', path: '/', maxAge: 30 * 24 * 3600 });
 	return c.json({ user }, 201);
 });
@@ -70,22 +80,6 @@ router.post('/password', requireAuth, async (c) => {
 
 	await service.setPassword(user.id, parsed.data.password);
 
-	return c.json({ ok: true });
-});
-
-router.post('/email', requireAuth, async (c) => {
-	const body = await c.req.json<JsonValue>().catch(() => null);
-	const parsed = EmailChangeSchema.safeParse(body);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new AuthService(c.env.DB).setEmail(c.get('user').id, parsed.data.email);
-	return c.json({ ok: true });
-});
-
-router.patch('/profile', requireAuth, async (c) => {
-	const body = await c.req.json<JsonValue>().catch(() => null);
-	const parsed = ProfileSchema.safeParse(body);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new AuthService(c.env.DB).setDisplayName(c.get('user').id, parsed.data.display_name);
 	return c.json({ ok: true });
 });
 
@@ -142,8 +136,8 @@ router.get('/google/callback', async (c) => {
 	const env = c.env;
 
 	const tokens = await service.exchangeCodeForTokens(env, code);
-	const sub = service.decodeIdTokenSub(tokens.id_token);
-	const user = await service.findOrCreateUserBySub(sub);
+	const { sub, email } = await service.getGoogleUserInfo(tokens.access_token);
+	const user = await service.findOrCreateUserBySub(sub, email);
 	const sessionToken = await service.createSession(user.id);
 
 	setCookie(c, 'session', sessionToken, { httpOnly: true, secure: true, sameSite: 'None', path: '/', maxAge: 30 * 24 * 3600 });
@@ -177,19 +171,14 @@ router.post('/logout', async (c) => {
 // =========================================================================================================
 
 router.get('/me', async (c) => {
-	const token = getCookie(c, 'session');
-
-	if (!token) return c.json({ user: null });
-
+	const user = await getAuthUser(c);
+	if (!user) return c.json({ user: null });
 	const db = c.env.DB;
-	const service = new AuthService(db);
-	const sess = await service.verifySession(token);
+	const row = await new AuthRepository(db).findUserPublicById(user.id);
 
-	if (!sess) return c.json({ user: null });
-
-	const row = await new AuthRepository(db).findUserPublicById(sess.userId);
-
-	return c.json({ user: row });
+	if (!row) return c.json({ user: null });
+	const permissions = new PermissionService(db);
+	return c.json({ user: { ...row, roles: (await permissions.userRolesForLogin(user.id)).map((role) => role.name), permissions: user.permissions } });
 });
 
 // =========================================================================================================

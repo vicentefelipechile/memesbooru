@@ -8,12 +8,12 @@
 // Imports
 // =========================================================================================================
 
-import type { ReportRow, CommentRow, PostRow, PostListingRow } from './db/schema';
+import type { ReportRow, CommentRow, PostRow, PostListingRow, UserRow } from './db/schema';
 import type { ZodIssue } from 'zod';
+import type { Permission } from './validators';
 
 export type { SqlParam } from './db/client';
 
-export type UserRank = 'new' | 'normal' | 'trusted' | 'restricted' | 'banned';
 export type UserStatus = 'active' | 'restricted' | 'banned';
 export type PostStatus = 'uploading' | 'processing' | 'available' | 'duplicate' | 'rejected' | 'hidden';
 export type MediaType = 'image' | 'gif' | 'video';
@@ -22,9 +22,8 @@ export interface UserDTO {
 	id: UserId;
 	username: string;
 	displayName: string | null;
-	rank: UserRank;
+	roles: string[];
 	status: UserStatus;
-	trustScore: number;
 	createdAt: number;
 }
 
@@ -76,9 +75,8 @@ export interface PaginatedResponse<T> {
 export interface AuthUser {
 	id: UserId;
 	username: string;
-	rank: UserRank;
+	permissions: readonly Permission[];
 	status: UserStatus;
-	isAdmin: boolean;
 }
 
 // =========================================================================================================
@@ -154,6 +152,10 @@ export type SearchResult = {
 	hasMore: boolean;
 };
 
+export type PublicProfile = Pick<UserRow, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> & { roles: string[] };
+export type ProfilePost = Pick<PostListingRow, 'public_id' | 'low_variant_key' | 'score' | 'favorite_count' | 'media_type'>;
+export type ProfilePostsResult = { data: ProfilePost[]; nextCursor: string | null };
+
 export type TagItem = {
 	name: string;
 	display: string | null;
@@ -186,11 +188,8 @@ export type GoogleTokens = {
 export type AuthUserBrief = {
 	id: number;
 	username: string;
-	rank: string;
-};
-
-export type SessionVerification = {
-	userId: number;
+	roles: string[];
+	permissions: readonly Permission[];
 };
 
 // =========================================================================================================

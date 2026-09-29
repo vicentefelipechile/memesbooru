@@ -10,12 +10,12 @@
 
 import type { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
-import { UnauthorizedError, ForbiddenError } from '../../domain/errors';
+import { UnauthorizedError } from '../../domain/errors';
 import { hashToken } from '../../helpers/crypto';
 import { SessionRepository } from '../../repositories/session-repository';
-import type { AuthUser, UserRank, UserStatus } from '../../types';
+import { PermissionService } from '../../services/permission-service';
+import type { AuthUser, UserStatus } from '../../types';
 import { toUserId } from '../../types';
-import { USER_RANKS } from '../../validators';
 
 // =========================================================================================================
 // Types
@@ -33,10 +33,6 @@ const USER_STATUSES = ['active', 'restricted', 'banned'] as const;
 // Helpers
 // =========================================================================================================
 
-function toUserRank(value: string): UserRank | null {
-	return (USER_RANKS as readonly string[]).includes(value) ? (value as UserRank) : null;
-}
-
 function toUserStatus(value: string): UserStatus | null {
 	return (USER_STATUSES as readonly string[]).includes(value) ? (value as UserStatus) : null;
 }
@@ -52,17 +48,16 @@ export async function getAuthUser(c: Context<{ Bindings: Env; Variables: AuthVar
 
 	if (!row || row.revoked_at || row.expires_at < Date.now()) return null;
 
-	const rank = toUserRank(row.rank);
 	const status = toUserStatus(row.status);
 
-	if (!rank || !status) return null;
+	if (!status || status === 'banned') return null;
+	const id = toUserId(row.user_id);
 
 	return {
-		id: toUserId(row.user_id),
+		id,
 		username: row.username,
-		rank,
 		status,
-		isAdmin: rank === 'trusted',
+		permissions: await new PermissionService(db).forUser(id),
 	};
 }
 
@@ -74,18 +69,6 @@ export async function requireAuth(c: Context<{ Bindings: Env; Variables: AuthVar
 	const user = await getAuthUser(c);
 
 	if (!user) throw new UnauthorizedError();
-
-	c.set('user', user);
-
-	await next();
-}
-
-export async function requireAdmin(c: Context<{ Bindings: Env; Variables: AuthVariables }>, next: Next) {
-	const user = await getAuthUser(c);
-
-	if (!user) throw new UnauthorizedError();
-
-	if (!user.isAdmin) throw new ForbiddenError();
 
 	c.set('user', user);
 

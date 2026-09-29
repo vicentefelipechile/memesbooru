@@ -15,7 +15,7 @@ import type { UserRow, UserTotpRow } from '../db/schema';
 // Types
 // =========================================================================================================
 
-export type UserPublic = Pick<UserRow, 'id' | 'username' | 'display_name' | 'rank' | 'status'>;
+export type UserPublic = Pick<UserRow, 'id' | 'username' | 'display_name' | 'status'>;
 
 // =========================================================================================================
 // Queries
@@ -29,23 +29,11 @@ export class AuthRepository {
 	}
 
 	async findUserPublicById(id: number): Promise<UserPublic | null> {
-		return queryOne<UserPublic>(this.db, 'SELECT id, username, display_name, rank, status FROM users WHERE id = ?', [id]);
-	}
-
-	async findUserByEmail(email: string): Promise<UserRow | null> {
-		return queryOne<UserRow>(this.db, 'SELECT * FROM users WHERE email = ?', [email]);
+		return queryOne<UserPublic>(this.db, 'SELECT id, username, display_name, status FROM users WHERE id = ?', [id]);
 	}
 
 	async setPassword(userId: number, passwordHash: ArrayBuffer): Promise<void> {
 		await execute(this.db, 'UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
-	}
-
-	async setEmail(userId: number, email: string): Promise<void> {
-		await execute(this.db, 'UPDATE users SET email = ?, email_verified_at = NULL WHERE id = ?', [email, userId]);
-	}
-
-	async setDisplayName(userId: number, displayName: string | null): Promise<void> {
-		await execute(this.db, 'UPDATE users SET display_name = ? WHERE id = ?', [displayName, userId]);
 	}
 
 	async getTotpSecret(userId: number): Promise<Uint8Array | null> {

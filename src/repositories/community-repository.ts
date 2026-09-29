@@ -5,7 +5,7 @@
 // =========================================================================================================
 
 import { execute, queryAll, queryOne, type DB } from '../db/client';
-import type { ArtistRow, ContactTicketRow, ForumPostRow, ForumTopicRow, MailMessageRow, PoolRow, TagRow, WikiPageRow, WikiRevisionRow } from '../db/schema';
+import type { ArtistRow, ContactTicketRow, ForumPostRow, ForumTopicRow, PoolRow, TagRow, WikiPageRow, WikiRevisionRow } from '../db/schema';
 
 export class CommunityRepository {
 	constructor(private readonly db: DB) {}
@@ -186,10 +186,9 @@ export class CommunityRepository {
 		await execute(this.db, 'UPDATE forum_posts SET body = ?, updated_at = ?, edited_at = ? WHERE id = ? AND author_id = ?', [body, Date.now(), Date.now(), id, userId]);
 	}
 
-	async createContact(email: string, subject: string, body: string, requesterId: number | null): Promise<void> {
-		await execute(this.db, 'INSERT INTO contact_tickets (id, requester_id, email, subject, body, created_at, updated_at) VALUES (COALESCE((SELECT MAX(id) + 1 FROM contact_tickets), 1), ?, ?, ?, ?, ?, ?)', [
+	async createContact(subject: string, body: string, requesterId: number): Promise<void> {
+		await execute(this.db, 'INSERT INTO contact_tickets (id, requester_id, subject, body, created_at, updated_at) VALUES (COALESCE((SELECT MAX(id) + 1 FROM contact_tickets), 1), ?, ?, ?, ?, ?)', [
 			requesterId,
-			email,
 			subject,
 			body,
 			Date.now(),
@@ -198,26 +197,6 @@ export class CommunityRepository {
 	}
 
 	listContacts(limit: number): Promise<ContactTicketRow[]> {
-		return queryAll<ContactTicketRow>(this.db, 'SELECT id, requester_id, email, subject, body, status, created_at, updated_at FROM contact_tickets ORDER BY updated_at DESC, id DESC LIMIT ?', [limit]);
-	}
-
-	async createMail(subject: string, body: string, senderId: number, recipientId: number): Promise<void> {
-		const now = Date.now();
-		const threadId = (await queryOne<{ v: number }>(this.db, 'SELECT COALESCE(MAX(id), 0) + 1 AS v FROM mail_threads', []))?.v ?? 1;
-		const messageId = (await queryOne<{ v: number }>(this.db, 'SELECT COALESCE(MAX(id), 0) + 1 AS v FROM mail_messages', []))?.v ?? 1;
-		await this.db.batch([
-			this.db.prepare('INSERT INTO mail_threads (id, subject, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').bind(threadId, subject, senderId, now, now),
-			this.db.prepare('INSERT INTO mail_thread_users (thread_id, user_id, last_read_at) VALUES (?, ?, ?)').bind(threadId, senderId, now),
-			this.db.prepare('INSERT INTO mail_thread_users (thread_id, user_id) VALUES (?, ?)').bind(threadId, recipientId),
-			this.db.prepare('INSERT INTO mail_messages (id, thread_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)').bind(messageId, threadId, senderId, body, now),
-		]);
-	}
-
-	listMail(userId: number, limit: number): Promise<MailMessageRow[]> {
-		return queryAll<MailMessageRow>(
-			this.db,
-			'SELECT m.id, m.thread_id, m.sender_id, m.body, m.created_at FROM mail_messages m JOIN mail_thread_users u ON u.thread_id = m.thread_id WHERE u.user_id = ? ORDER BY m.created_at DESC, m.id DESC LIMIT ?',
-			[userId, limit],
-		);
+		return queryAll<ContactTicketRow>(this.db, 'SELECT id, requester_id, subject, body, status, created_at, updated_at FROM contact_tickets ORDER BY updated_at DESC, id DESC LIMIT ?', [limit]);
 	}
 }

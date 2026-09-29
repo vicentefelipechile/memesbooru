@@ -15,8 +15,7 @@ import type { SessionRow, UserRow } from '../db/schema';
 // Types
 // =========================================================================================================
 
-export type SessionMeta = Pick<SessionRow, 'user_id' | 'expires_at' | 'revoked_at'>;
-export type SessionWithUser = Pick<SessionRow, 'user_id' | 'expires_at' | 'revoked_at'> & Pick<UserRow, 'username' | 'rank' | 'status'>;
+export type SessionWithUser = Pick<SessionRow, 'user_id' | 'expires_at' | 'revoked_at'> & Pick<UserRow, 'username' | 'status'>;
 
 export type InsertSessionStatementData = {
 	userId: SessionRow['user_id'];
@@ -33,12 +32,8 @@ export type InsertSessionStatementData = {
 export class SessionRepository {
 	constructor(private readonly db: DB) {}
 
-	async findByTokenHash(hash: ArrayBuffer): Promise<SessionMeta | null> {
-		return queryOne<SessionMeta>(this.db, 'SELECT user_id, expires_at, revoked_at FROM sessions WHERE token_hash = ?', [hash]);
-	}
-
 	async findSessionWithUser(hash: ArrayBuffer): Promise<SessionWithUser | null> {
-		return queryOne<SessionWithUser>(this.db, 'SELECT s.user_id, s.expires_at, s.revoked_at, u.username, u.rank, u.status FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?', [hash]);
+		return queryOne<SessionWithUser>(this.db, 'SELECT s.user_id, s.expires_at, s.revoked_at, u.username, u.status FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?', [hash]);
 	}
 
 	// =========================================================================================================

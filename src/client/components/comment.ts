@@ -15,7 +15,7 @@ export function renderCommentList(items: CommentItem[]): string {
 	return items
 		.map(
 			(c) => `<article class="comment">
-    <div class="byline"><span class="author">${c.author_username ? escapeHtml(c.author_username) : `user #${c.author_id}`}</span>${c.created_at ? ` · ${formatDate(c.created_at)}` : ''}</div>
+    <div class="byline">${c.author_username ? `<a class="author" href="/users/${encodeURIComponent(c.author_username)}" data-link>${escapeHtml(c.author_username)}</a>` : `<span class="author">user #${c.author_id}</span>`}${c.created_at ? ` · ${formatDate(c.created_at)}` : ''}</div>
     <div class="body">${escapeHtml(c.body)}</div>
   </article>`,
 		)

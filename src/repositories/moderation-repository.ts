@@ -75,7 +75,7 @@ export class ModerationRepository {
 		}
 
 		if (data.targetType === 'user' && data.action === 'ban') {
-			stmts.push(this.db.prepare("UPDATE users SET status = 'banned', rank = 'banned' WHERE id = ?").bind(data.targetId));
+			stmts.push(this.db.prepare("UPDATE users SET status = 'banned' WHERE id = ?").bind(data.targetId));
 		}
 
 		await batch(this.db, stmts);

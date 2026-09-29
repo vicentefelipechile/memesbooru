@@ -8,6 +8,7 @@ import { api, loginUrl } from '../services/api.js';
 import { store } from '../state/store.js';
 import { bindTagAutocomplete, renderTagAutocompleteField } from '../components/tag-autocomplete.js';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../components/sidebar.js';
+import { mountTurnstile, type TurnstileWidget } from '../components/turnstile.js';
 
 const CONTENT: Record<string, { title: string; body: string }> = {
 	wiki: { title: 'Wiki', body: 'La wiki documenta tags, fuentes y contexto de los memes.' },
@@ -22,8 +23,6 @@ const CONTENT: Record<string, { title: string; body: string }> = {
 	contact: { title: 'Contacto', body: 'Para soporte, reportes legales o consultas de la comunidad, contacta a los moderadores.' },
 	dmca: { title: 'DMCA', body: 'Las solicitudes de retirada deben incluir la obra, la URL afectada y los datos del titular.' },
 	tos: { title: 'Términos de servicio', body: 'Memesbooru acepta únicamente contenido SFW y acciones realizadas de buena fe.' },
-	account: { title: 'Mi cuenta', body: 'Administra tu perfil, seguridad, favoritos y preferencias.' },
-	mail: { title: 'My Mail', body: 'La mensajería interna permite contactar a otros usuarios de forma privada.' },
 	moderation: { title: 'Moderación', body: 'Panel reservado para moderadores.' },
 };
 
@@ -32,7 +31,8 @@ function esc(value: string | number | null | undefined): string {
 }
 
 function form(name: string, fields: string, submit: string): string {
-	return `<form id="create" class="form-stack section-form" data-section-form="${name}">${fields}<button class="primary" type="submit">${submit}</button><p class="form-msg" data-form-status></p></form>`;
+	const widget = name === 'login' || name === 'register' ? '<div data-turnstile aria-label="Verificación antibots"></div>' : '';
+	return `<form id="create" class="form-stack section-form" data-section-form="${name}">${fields}${widget}<button class="primary" type="submit" ${widget ? 'disabled' : ''}>${submit}</button><p class="form-msg" data-form-status></p></form>`;
 }
 
 export async function renderSection(name: string, mode: 'list' | 'create' | 'edit' = 'list'): Promise<string> {
@@ -86,13 +86,14 @@ export async function renderSection(name: string, mode: 'list' | 'create' | 'edi
 	}
 
 	if (name === 'contact') {
-		return `<section class="page-head"><h1>Contacto</h1><p>Envía una consulta al equipo de Memesbooru.</p></section>${form('contact', '<label>Correo<input name="email" type="email" required maxlength="320"></label><label>Asunto<input name="subject" required maxlength="200"></label><label>Mensaje<textarea name="body" required maxlength="10000"></textarea></label>', 'Enviar')}`;
+		if (!store.get().user) return '<section class="page-head"><h1>Contacto</h1><p>Entra para enviar una consulta al equipo.</p></section><p><a href="/login" data-link>Entrar</a></p>';
+		return `<section class="page-head"><h1>Contacto</h1><p>Envía una consulta al equipo de Memesbooru.</p></section>${form('contact', '<label>Asunto<input name="subject" required maxlength="200"></label><label>Mensaje<textarea name="body" required maxlength="10000"></textarea></label>', 'Enviar')}`;
 	}
 
 	if (name === 'login')
-		return `<section class="page-head"><h1>Entrar</h1><p>Accede con correo y contraseña o Google.</p></section>${form('login', '<label>Correo<input name="email" type="email" required></label><label>Contraseña<input name="password" type="password" required minlength="8"></label>', 'Entrar')}<p><a href="/register" data-link>Crear cuenta</a> · <a href="${loginUrl()}">Google</a></p>`;
+		return `<section class="page-head"><h1>Entrar</h1><p>Accede con usuario y contraseña o Google.</p></section>${form('login', '<label>Usuario<input name="username" required minlength="3" maxlength="24" autocomplete="username"></label><label>Contraseña<input name="password" type="password" required minlength="8" autocomplete="current-password"></label>', 'Entrar')}<p><a href="/register" data-link>Crear cuenta</a> · <a href="${loginUrl()}">Google</a></p>`;
 	if (name === 'register')
-		return `<section class="page-head"><h1>Crear cuenta</h1></section>${form('register', '<label>Usuario<input name="username" required minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+"></label><label>Correo<input name="email" type="email" required></label><label>Contraseña<input name="password" type="password" required minlength="8"></label>', 'Registrarse')}`;
+		return `<section class="page-head"><h1>Crear cuenta</h1></section>${form('register', '<label>Usuario<input name="username" required minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+" autocomplete="username"></label><label>Contraseña<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>', 'Registrarse')}`;
 
 	if (name === 'artists') {
 		const result = await api.community.artists().catch(() => ({ data: [] }));
@@ -133,12 +134,6 @@ export async function renderSection(name: string, mode: 'list' | 'create' | 'edi
 			)
 			.join('');
 		return `<section class="page-head"><h1>Tags</h1><p>Listado y categorías de tags.</p></section><table class="data-table"><thead><tr><th>Nombre</th><th>Categoría</th><th>Posts</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No hay tags.</td></tr>'}</tbody></table>`;
-	}
-
-	if (name === 'mail') {
-		const result = await api.community.mail().catch(() => ({ data: [] }));
-		const rows = result.data.map((item) => `<tr><td>${esc(item.thread_id)}</td><td>${esc(item.sender_id)}</td><td>${esc(item.body)}</td><td>${esc(item.created_at)}</td></tr>`).join('');
-		return `<section class="page-head"><h1>My Mail</h1><p>Mensajería interna.</p></section>${form('mail', '<label>Destinatario ID<input name="recipient_id" type="number" min="1" required></label><label>Asunto<input name="subject" required maxlength="200"></label><label>Mensaje<textarea name="body" required maxlength="10000"></textarea></label>', 'Enviar mensaje')}<table class="data-table"><tbody>${rows || '<tr><td>No hay mensajes.</td></tr>'}</tbody></table>`;
 	}
 
 	if (name === 'moderation') {
@@ -198,6 +193,23 @@ export function bindSection(name: string): void {
 	}
 	const formElement = document.querySelector<HTMLFormElement>('[data-section-form]');
 	if (!formElement) return;
+	let widget: TurnstileWidget | null = null;
+	if (name === 'login' || name === 'register') {
+		void api.auth
+			.turnstile()
+			.then(({ siteKey }) => mountTurnstile(formElement, siteKey, name === 'register' ? 'signup' : 'login'))
+			.then((mounted) => {
+				if (!mounted || !formElement.isConnected) return;
+				widget = mounted;
+				const button = formElement.querySelector<HTMLButtonElement>('button[type="submit"]');
+				if (button) button.disabled = false;
+			})
+			.catch((error) => {
+				console.error('Turnstile setup failed', error);
+				const status = formElement.querySelector<HTMLElement>('[data-form-status]');
+				if (status) status.textContent = 'No se pudo cargar la verificación. Vuelve a intentar más tarde.';
+			});
+	}
 	const tagInput = formElement.querySelector<HTMLInputElement>('[name="tag"]');
 	if (tagInput) bindTagAutocomplete(tagInput);
 	formElement.addEventListener('submit', async (event) => {
@@ -208,24 +220,25 @@ export function bindSection(name: string): void {
 			if (typeof value === 'string') data[key] = value;
 		});
 		try {
+			const token = name === 'login' || name === 'register' ? widget?.token() : undefined;
+			if ((name === 'login' || name === 'register') && !token) throw new Error('Completa la verificación para continuar.');
 			if (name === 'contact') await api.community.createContact(data);
 			else if (name === 'login') {
-				const result = await api.auth.login(data.email, data.password);
+				const result = await api.auth.login(data.username, data.password, token!);
 				store.set({ user: result.user });
 				history.pushState(null, '', '/');
-				window.dispatchEvent(new PopStateEvent('popstate'));
+				window.dispatchEvent(new Event('session-changed'));
 				return;
 			} else if (name === 'register') {
-				const result = await api.auth.register(data.username, data.email, data.password);
+				const result = await api.auth.register(data.username, data.password, token!);
 				store.set({ user: result.user });
 				history.pushState(null, '', '/');
-				window.dispatchEvent(new PopStateEvent('popstate'));
+				window.dispatchEvent(new Event('session-changed'));
 				return;
 			} else if (name === 'artist') await api.community.createArtist(data);
 			else if (name === 'pool') await api.community.createPool(data);
 			else if (name === 'topic') await api.community.createTopic({ ...data, category_id: Number(data.category_id) });
 			else if (name === 'wiki') await api.community.createWiki(data);
-			else if (name === 'mail') await api.community.createMail({ ...data, recipient_id: Number(data.recipient_id) });
 			else if (name === 'alias') await api.tags.addAlias(data);
 			else if (name === 'tag') {
 				if (!Number.isSafeInteger(Number(data.id)) || Number(data.id) < 1) throw new Error('Selecciona un tag de la lista.');
@@ -235,6 +248,8 @@ export function bindSection(name: string): void {
 			if (name !== 'tag') formElement.reset();
 		} catch (error) {
 			if (status) status.textContent = error instanceof Error ? error.message : 'No se pudo guardar.';
+		} finally {
+			if (name === 'login' || name === 'register') widget?.reset();
 		}
 	});
 }

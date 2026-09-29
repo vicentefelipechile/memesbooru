@@ -1,0 +1,24 @@
+/* ======================================================================================================= */
+/* Account configuration with section navigation and a readable form column.                                */
+/* ======================================================================================================= */
+
+.settings-layout { display: grid; grid-template-columns: 150px minmax(0, 580px); align-items: start; gap: 24px; max-width: 800px; }
+.settings-side { display: grid; gap: 4px; position: sticky; top: 12px; font-size: 13px; }
+.settings-side a { padding: 5px 8px; }
+.settings-side a:hover, .settings-side a:focus-visible { background: var(--bg-alt); }
+.settings-main { min-width: 0; }
+.settings-main .page-head { margin: 0 0 24px; }
+.settings-main .page-head h1 { margin: 0 0 4px; }
+.settings-main .page-head p, .settings-help { color: var(--fg-muted); font-size: 13px; margin: 0 0 14px; }
+.settings-main .settings-section { border-top: 1px solid var(--border); padding: 18px 0 24px; margin: 0; scroll-margin-top: 16px; }
+.settings-main .settings-section h2 { font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--fg); margin: 0 0 12px; }
+.settings-main .settings-section h3 { font-size: 13px; margin: 20px 0 12px; }
+.settings-main .settings-section h3:first-of-type { margin-top: 0; }
+.settings-main .form-stack { gap: 12px; max-width: 520px; }
+.settings-main .form-stack > button { align-self: flex-start; }
+
+@media (max-width: 650px) {
+	.settings-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+	.settings-side { position: static; display: flex; flex-wrap: wrap; gap: 4px 8px; }
+	.settings-side a { padding: 3px 4px; }
+}

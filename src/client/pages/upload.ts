@@ -37,7 +37,7 @@ export async function renderUpload(): Promise<string> {
       <button type="submit" class="primary">Subir</button>
     </form>
     <div id="upload-status" class="form-msg" aria-live="polite"></div>
-    <p class="hint" style="margin-top:1rem">Cuentas nuevas: 1 subida por hora. Los videos requieren rango trusted. Se generan variantes low/medium automaticamente.</p>
+    <p class="hint" style="margin-top:1rem">Las cuentas sin permiso de subida libre tienen un límite de 1 subida por hora. Los videos requieren permisos específicos. Se generan variantes low/medium automáticamente.</p>
   `;
 }
 

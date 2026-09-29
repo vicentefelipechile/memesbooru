@@ -5,11 +5,8 @@
 
 const LINKS: Record<string, [string, string][]> = {
 	account: [
-		['Inicio', '/account'],
-		['Perfil', '/profile'],
 		['Favoritos', '/favorites'],
-		['Configuración', '/settings'],
-		['Correo', '/mail'],
+		['Configuracion', '/settings'],
 	],
 	posts: [
 		['Catálogo', '/posts'],
@@ -58,19 +55,27 @@ export function navigationSection(pathname: string): string {
 	const section = pathname.split('/')[1];
 
 	if (['post', 'upload', 'favorites', 'random', 'top'].includes(section)) return 'posts';
-	if (['profile', 'settings', 'mail', 'login', 'register', 'moderation'].includes(section)) return 'account';
+	if (['users', 'account', 'profile', 'settings', 'login', 'register', 'moderation'].includes(section)) return 'account';
 	if (['contact', 'about', 'dmca', 'tos'].includes(section)) return 'help';
 
 	return section in LINKS ? section : '';
 }
 
-export function renderSubNav(pathname: string): string {
+export function renderSubNav(pathname: string, username?: string): string {
 	const section = navigationSection(pathname);
-	const links = LINKS[section] ?? [
-		['Inicio', '/'],
-		['Catálogo', '/posts'],
-		['Aleatorio', '/random'],
-	];
+	const links: [string, string][] =
+		section === 'account'
+			? username
+				? [['Perfil', `/users/${encodeURIComponent(username)}`], ...LINKS.account]
+				: [
+						['Entrar', '/login'],
+						['Crear cuenta', '/register'],
+					]
+			: (LINKS[section] ?? [
+					['Inicio', '/'],
+					['Catálogo', '/posts'],
+					['Aleatorio', '/random'],
+				]);
 
 	return `<nav class="site-subnav" aria-label="${section ? `Opciones de ${section}` : 'Inicio'}">${links.map(([label, href]) => `<a href="${href}" data-link>${label}</a>`).join('')}</nav>`;
 }

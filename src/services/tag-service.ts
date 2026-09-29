@@ -13,7 +13,8 @@ import type { TagRow } from '../db/schema';
 import { TagRepository } from '../repositories/tag-repository';
 import type { BrowseTagsResponse } from '../validators';
 import type { AuthUser, BrowseCategoryParams, BrowseParams, TagItemsResult } from '../types';
-import { ForbiddenError, NotFoundError } from '../domain/errors';
+import { NotFoundError } from '../domain/errors';
+import { PermissionService } from './permission-service';
 
 // =========================================================================================================
 // Service
@@ -95,6 +96,6 @@ export class TagService {
 	}
 
 	private assertEditor(user: AuthUser): void {
-		if (!user.isAdmin && user.rank !== 'trusted') throw new ForbiddenError('se requiere rango trusted');
+		new PermissionService(this.db).require(user, 'edit_tags');
 	}
 }

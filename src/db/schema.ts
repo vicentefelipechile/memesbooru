@@ -12,15 +12,31 @@ export interface UserRow {
 	id: number;
 	username: string;
 	display_name: string | null;
+	avatar_url: string | null;
+	bio: string | null;
 	email: string | null;
-	email_verified_at: number | null;
 	password_hash: ArrayBuffer | null;
-	rank: string;
 	status: string;
-	trust_score: number;
 	created_at: number;
 	last_login_at: number | null;
 	last_activity_at: number | null;
+}
+
+export interface RoleRow {
+	id: number;
+	name: string;
+	position: number;
+	managed: number;
+}
+
+export interface RolePermissionRow {
+	role_id: number;
+	permission: string;
+}
+
+export interface UserRoleRow {
+	user_id: number;
+	role_id: number;
 }
 
 export interface GoogleIdentityRow {
@@ -272,26 +288,9 @@ export interface ForumPostRow {
 	edited_at: number | null;
 }
 
-export interface MailThreadRow {
-	id: number;
-	subject: string;
-	created_by: number;
-	created_at: number;
-	updated_at: number;
-}
-
-export interface MailMessageRow {
-	id: number;
-	thread_id: number;
-	sender_id: number;
-	body: string;
-	created_at: number;
-}
-
 export interface ContactTicketRow {
 	id: number;
 	requester_id: number | null;
-	email: string;
 	subject: string;
 	body: string;
 	status: string;

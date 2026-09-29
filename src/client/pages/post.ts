@@ -49,9 +49,10 @@ export async function renderPost(publicId: string): Promise<string> {
       </aside>
       <section class="post-main">
         <div class="post-media">
-		  ${restricted ? `<p class="restricted">Este video es solo para usuarios trusted. Gana confianza publicando y participando.</p>` : data.media_type === 'video' ? '<div id="video-player"></div>' : `<img src="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`)}" alt="post ${publicId}" loading="eager" />`}
+		  ${restricted ? `<p class="restricted">No tienes permiso para ver este video.</p>` : data.media_type === 'video' ? '<div id="video-player"></div>' : `<img src="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`)}" alt="post ${publicId}" loading="eager" />`}
         </div>
         <h1 class="post-title">${data.title ? escapeHtml(data.title) : `Post ${publicId}`}</h1>
+        ${data.author_username ? `<p>Publicado por <a href="/users/${encodeURIComponent(data.author_username)}" data-link>${escapeHtml(data.author_username)}</a></p>` : ''}
         <div class="post-actions">
           <span id="score-line">${renderScore(data.score ?? 0, data.favorite_count ?? 0, data.comment_count ?? 0)}</span>
           <button id="vote-up">+1</button>

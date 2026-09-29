@@ -9,7 +9,7 @@ export const THEMES: readonly ThemeName[] = ['cyan', 'solarized', 'gruvbox', 'no
 const THEME_KEY = 'memesbooru.theme';
 
 type State = {
-	user: { id: number; username: string; rank: string; display_name?: string | null; status?: string } | null;
+	user: { id: number; username: string; roles?: string[]; permissions?: string[]; display_name?: string | null; status?: string } | null;
 	query: string;
 	sort: 'recent' | 'popular';
 	tags: string[];

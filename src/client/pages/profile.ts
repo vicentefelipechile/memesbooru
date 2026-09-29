@@ -1,52 +1,43 @@
 // =========================================================================================================
-// Profile summary and editable display name.
+// Public profile and authored posts.
 // =========================================================================================================
 
-import { store } from '../state/store.js';
-import { api, loginUrl } from '../services/api.js';
+import { renderGrid } from '../components/grid.js';
+import { api, ApiError } from '../services/api.js';
 
-export async function renderProfile(): Promise<string> {
-	const user = store.get().user;
-	if (!user) return `<div class="empty">Necesitas entrar para ver tu perfil.<div class="detail"><a href="${loginUrl()}">Entrar con Google</a></div></div>`;
-	const status = user.status ?? 'active';
-	const display = user.display_name && user.display_name !== user.username ? user.display_name : user.username;
-	return `
-    <div class="page-head"><h1 id="profile-name">${escapeHtml(display)}</h1></div>
-    <section class="settings-section">
-      <dl class="stat-grid profile-summary">
-        <dt>Rango</dt><dd>${escapeHtml(user.rank)}</dd>
-        <dt>Estado</dt><dd>${escapeHtml(status)}</dd>
-      </dl>
-    </section>
-    <form id="profile-form" class="form-stack"><label for="display-name">Nombre visible<input id="display-name" maxlength="100" value="${escapeHtml(user.display_name ?? '')}"></label><button class="primary" type="submit">Guardar perfil</button><p id="profile-status" class="form-msg" aria-live="polite"></p></form>
-  `;
+function escapeHtml(value: string): string {
+	return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
 }
 
-export function bindProfile(): void {
-	const form = document.getElementById('profile-form');
-	if (!(form instanceof HTMLFormElement)) return;
-	form.addEventListener('submit', async (event) => {
-		event.preventDefault();
-		const input = document.getElementById('display-name');
-		const status = document.getElementById('profile-status');
-		if (!(input instanceof HTMLInputElement) || !status) return;
-		try {
-			const displayName = input.value.trim() || null;
-			await api.auth.updateProfile(displayName);
-			const user = store.get().user;
-			if (user) store.set({ user: { ...user, display_name: displayName } });
-			const heading = document.getElementById('profile-name');
-			if (heading && user) heading.textContent = displayName || user.username;
-			status.textContent = 'Perfil actualizado.';
-			status.className = 'form-msg ok';
-		} catch (error) {
-			console.error('Profile update failed', error);
-			status.textContent = 'No se pudo actualizar.';
-			status.className = 'form-msg err';
-		}
+function avatarMarkup(url: string | null, username: string): string {
+	return url
+		? `<img class="profile-avatar" src="${escapeHtml(url)}" alt="Avatar de ${escapeHtml(username)}" referrerpolicy="no-referrer">`
+		: `<span class="profile-avatar profile-initial" aria-hidden="true">${escapeHtml(username.charAt(0).toUpperCase())}</span>`;
+}
+
+export async function renderProfile(username: string): Promise<string> {
+	const cursor = new URL(location.href).searchParams.get('cursor') ?? undefined;
+	const [result, posts] = await Promise.all([api.profiles.get(username), api.profiles.posts(username, cursor)]).catch((error: Error) => {
+		if (error instanceof ApiError && error.status === 404) return [null, null] as const;
+		throw error;
 	});
-}
+	if (!result || !posts) return '<p class="empty">Perfil no encontrado.</p>';
 
-function escapeHtml(s: string): string {
-	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+	const profile = result.profile;
+	const next = posts.nextCursor ? `/users/${encodeURIComponent(profile.username)}?cursor=${encodeURIComponent(posts.nextCursor)}` : null;
+
+	return `
+	<div class="profile-layout">
+		<aside class="profile-side">
+			${avatarMarkup(profile.avatar_url, profile.username)}
+			<h1>${escapeHtml(profile.display_name || profile.username)}</h1>
+			${profile.display_name && profile.display_name !== profile.username ? `<p class="profile-handle">Usuario ${escapeHtml(profile.username)}</p>` : ''}
+			<p class="profile-bio">${profile.bio ? escapeHtml(profile.bio) : 'Sin biografia.'}</p>
+			<dl class="profile-facts"><dt>Roles</dt><dd>${profile.roles.map(escapeHtml).join(', ')}</dd><dt>Miembro desde</dt><dd><time datetime="${new Date(profile.created_at).toISOString()}">${new Date(profile.created_at).toLocaleDateString('es-ES')}</time></dd></dl>
+		</aside>
+		<section class="profile-posts" aria-label="Publicaciones de ${escapeHtml(profile.username)}"><h2>Publicaciones</h2>
+			${posts.data.length ? renderGrid(posts.data) : '<p class="empty">Todavia no hay publicaciones.</p>'}
+			${next ? `<p class="profile-more"><a href="${escapeHtml(next)}" data-link>Ver publicaciones anteriores</a></p>` : ''}
+		</section>
+	</div>`;
 }

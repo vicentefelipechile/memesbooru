@@ -12,6 +12,7 @@ import type { DB } from '../db/client';
 import { PostRepository } from '../repositories/post-repository';
 import { TagRepository } from '../repositories/tag-repository';
 import { UserRepository } from '../repositories/user-repository';
+import { PermissionService } from './permission-service';
 import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors';
 import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult, SearchResult, JsonValue } from '../types';
 import { toPostId, toPublicId, toUserId } from '../types';
@@ -99,6 +100,9 @@ export class PostService {
 	}
 
 	async createStreamPost(user: AuthUser, title: string | null, tags: string[], streamUid: string): Promise<CreatedPostResult> {
+		const permissions = new PermissionService(this.db);
+		permissions.require(user, 'upload_post');
+		permissions.require(user, 'upload_video');
 		const existing = await this.posts.findStreamPost(streamUid);
 		if (existing) return { publicId: toPublicId(existing.public_id), postId: toPostId(existing.id) };
 
@@ -118,7 +122,7 @@ export class PostService {
 			if (canonPublicId) throw new ValidationError('Duplicate', { redirectTo: canonPublicId });
 		}
 
-		const canSeeVideo = viewer?.rank === 'trusted';
+		const canSeeVideo = new PermissionService(this.db).has(viewer, 'view_video');
 
 		if (row.media_type === 'video' && !canSeeVideo) {
 			return {
@@ -148,10 +152,11 @@ export class PostService {
 	async create(viewer: AuthUser, input: CreatePostServiceInput): Promise<CreatedPostResult> {
 		if (viewer.status !== 'active') throw new ForbiddenError('cuenta restringida');
 
-		if (input.mediaType === 'video' && viewer.rank !== 'trusted') throw new ForbiddenError('videos solo para trusted');
+		const permissions = new PermissionService(this.db);
+		permissions.require(viewer, 'upload_post');
+		if (input.mediaType === 'video') permissions.require(viewer, 'upload_video');
 
-		// ranking cooldown check
-		if (viewer.rank === 'new') {
+		if (!permissions.has(viewer, 'upload_without_cooldown')) {
 			const last = (await this.posts.getLastUploadAt(viewer.id)) ?? 0;
 
 			if (Date.now() - last < 3600 * 1000) {

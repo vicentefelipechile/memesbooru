@@ -1,0 +1,28 @@
+/* ======================================================================================================= */
+/* Public profile, account editing and authored posts.                                                       */
+/* ======================================================================================================= */
+
+.profile-layout { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 24px; max-width: 1100px; }
+.profile-side { min-width: 0; }
+.profile-avatar { display: flex; align-items: center; justify-content: center; width: 112px; height: 112px; object-fit: cover; background: var(--bg-alt); border: 1px solid var(--border); font-size: 48px; font-weight: 600; color: var(--fg-muted); }
+.profile-side h1 { margin: 12px 0 0; overflow-wrap: anywhere; }
+.profile-handle { color: var(--fg-muted); margin: 0; overflow-wrap: anywhere; }
+.profile-bio { white-space: pre-wrap; overflow-wrap: anywhere; margin: 12px 0 18px; }
+.profile-facts { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; margin: 0 0 20px; font-size: 12px; }
+.profile-facts dt { color: var(--fg-muted); }
+.profile-facts dd { margin: 0; }
+.profile-main { min-width: 0; }
+.profile-posts h2 { font-size: 15px; margin: 0 0 12px; }
+.profile-posts .empty { padding: 12px 0; }
+.profile-more { margin-top: 16px; }
+
+@media (max-width: 650px) {
+	.profile-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+	.profile-side { display: grid; grid-template-columns: 80px minmax(0, 1fr); column-gap: 12px; align-items: start; }
+	.profile-side > .profile-avatar { grid-row: span 2; }
+	.profile-avatar { width: 80px; height: 80px; font-size: 36px; }
+	.profile-side h1 { margin: 0; }
+	.profile-handle { margin: 0; }
+	.profile-bio, .profile-facts { grid-column: 1 / -1; }
+	.profile-bio { margin: 12px 0; }
+}

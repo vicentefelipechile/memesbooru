@@ -8,6 +8,7 @@
 // Imports
 // =========================================================================================================
 
+import { z } from 'zod';
 import type { DB } from '../db/client';
 import { UserRepository } from '../repositories/user-repository';
 import { AuthRepository } from '../repositories/auth-repository';
@@ -16,13 +17,18 @@ import { normalizeTag } from '../validators';
 import { ValidationError } from '../domain/errors';
 import { b64url, encodePassword, hashToken, verifyPassword } from '../helpers/crypto';
 import { totpVerifyCode, generateTotpSecretValue } from './auth-totp';
-import type { AuthUserBrief, GoogleTokens, SessionTokenPair, SessionVerification } from '../types';
+import { PermissionService } from './permission-service';
+import type { AuthUserBrief, GoogleTokens, SessionTokenPair } from '../types';
+import type { UserRow } from '../db/schema';
+import { toUserId } from '../types';
 
 // =========================================================================================================
 // Types
 // =========================================================================================================
 
 export type GoogleEnv = { GOOGLE_CLIENT_ID: string; GOOGLE_CLIENT_SECRET: string; GOOGLE_REDIRECT_URI: string };
+
+const GoogleUserInfoSchema = z.object({ sub: z.string().min(1), email: z.email().max(254) });
 
 // =========================================================================================================
 // Helpers
@@ -92,18 +98,14 @@ export class AuthService {
 		return { id_token: data.id_token, access_token: data.access_token };
 	}
 
-	decodeIdTokenSub(idToken: string): string {
-		const parts = idToken.split('.');
+	async getGoogleUserInfo(accessToken: string): Promise<z.infer<typeof GoogleUserInfoSchema>> {
+		const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization: `Bearer ${accessToken}` } });
+		if (!response.ok) throw new ValidationError('Google user info failed');
 
-		if (parts.length !== 3) throw new ValidationError('invalid id_token');
+		const parsed = GoogleUserInfoSchema.safeParse(await response.json());
+		if (!parsed.success) throw new ValidationError('Invalid Google user info');
 
-		const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-
-		if (!payload.sub) throw new ValidationError('id_token without sub');
-
-		if (typeof payload.sub !== 'string') throw new ValidationError('id_token without sub');
-
-		return payload.sub;
+		return parsed.data;
 	}
 
 	generateUsernameFromSub(sub: string): string {
@@ -112,13 +114,13 @@ export class AuthService {
 		return normalizeTag(base).slice(0, 20) || `user_${Date.now().toString(36)}`;
 	}
 
-	async findOrCreateUserBySub(sub: string): Promise<AuthUserBrief> {
+	async findOrCreateUserBySub(sub: string, email: string): Promise<AuthUserBrief> {
 		const user = await this.users.findByGoogleSubject(sub);
 
 		if (user) {
-			await this.users.updateLastLogin(user.id);
+			await this.users.updateLastLogin(user.id, email);
 
-			return { id: user.id, username: user.username, rank: user.rank };
+			return this.toBrief(user);
 		}
 
 		let username = this.generateUsernameFromSub(sub);
@@ -131,9 +133,9 @@ export class AuthService {
 			username = `${username}_${Math.random().toString(36).slice(2, 4)}`;
 		}
 
-		const created = await this.users.createFromGoogle(sub, username);
+		const created = await this.users.createFromGoogle(sub, username, email);
 
-		return { id: created.id, username: created.username, rank: created.rank };
+		return this.toBrief(created);
 	}
 
 	async createSession(userId: number): Promise<string> {
@@ -145,47 +147,30 @@ export class AuthService {
 		return token;
 	}
 
-	async authenticatePassword(email: string, password: string): Promise<AuthUserBrief | null> {
-		const user = await new AuthRepository(this.db).findUserByEmail(email);
-		if (!user?.password_hash || !(await verifyPassword(password, user.password_hash))) return null;
-		return { id: user.id, username: user.username, rank: user.rank };
+	async authenticatePassword(username: string, password: string): Promise<AuthUserBrief | null> {
+		const user = await this.users.findByUsername(username);
+		if (!user?.password_hash || user.status === 'banned' || !(await verifyPassword(password, user.password_hash))) return null;
+		return this.toBrief(user);
 	}
 
-	async register(username: string, email: string, password: string): Promise<AuthUserBrief> {
-		if ((await this.users.findByUsername(username)) || (await new AuthRepository(this.db).findUserByEmail(email))) throw new ValidationError('username or email already in use');
-		const user = await this.users.createLocal(username, email, await encodePassword(password));
-		return { id: user.id, username: user.username, rank: user.rank };
+	async register(username: string, password: string): Promise<AuthUserBrief> {
+		if (await this.users.findByUsername(username)) throw new ValidationError('username already in use');
+		const user = await this.users.createLocal(username, await encodePassword(password));
+		return this.toBrief(user);
+	}
+
+	private async toBrief(user: UserRow): Promise<AuthUserBrief> {
+		const permissions = new PermissionService(this.db);
+		return { id: user.id, username: user.username, roles: (await permissions.userRolesForLogin(user.id)).map((role) => role.name), permissions: await permissions.forUser(toUserId(user.id)) };
 	}
 
 	async setPassword(userId: number, password: string): Promise<void> {
 		await new AuthRepository(this.db).setPassword(userId, await encodePassword(password));
 	}
 
-	async setEmail(userId: number, email: string): Promise<void> {
-		const normalized = email.trim().toLowerCase();
-		const existing = await new AuthRepository(this.db).findUserByEmail(normalized);
-		if (existing && existing.id !== userId) throw new ValidationError('email already in use');
-		await new AuthRepository(this.db).setEmail(userId, normalized);
-	}
-
-	setDisplayName(userId: number, displayName: string | null): Promise<void> {
-		return new AuthRepository(this.db).setDisplayName(userId, displayName?.trim() || null);
-	}
-
 	async verifyCurrentPassword(userId: number, password: string): Promise<boolean> {
 		const user = await new AuthRepository(this.db).findUserById(userId);
 		return user?.password_hash ? verifyPassword(password, user.password_hash) : false;
-	}
-
-	async verifySession(token: string): Promise<SessionVerification | null> {
-		const hash = await hashToken(token);
-		const row = await this.sessions.findByTokenHash(hash);
-
-		if (!row || row.revoked_at) return null;
-
-		if (row.expires_at < Date.now()) return null;
-
-		return { userId: row.user_id };
 	}
 
 	async totpVerify(secretBase32: string, token: string, window = 1): Promise<boolean> {

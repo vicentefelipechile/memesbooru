@@ -15,11 +15,10 @@ import { renderPost, bindPost } from '../pages/post.js';
 import { renderUpload, bindUpload } from '../pages/upload.js';
 import { renderFavorites, bindFavorites } from '../pages/favorites.js';
 import { renderSettings, bindSettings } from '../pages/settings.js';
-import { renderProfile, bindProfile } from '../pages/profile.js';
+import { renderProfile } from '../pages/profile.js';
 import { renderRandom, bindRandom } from '../pages/random.js';
 import { renderLanding, bindLanding } from '../pages/landing.js';
 import { bindSection, renderSection } from '../pages/sections.js';
-import { api } from '../services/api.js';
 
 const routes: Route[] = [
 	{ pattern: /^\/$/, render: () => Promise.resolve(renderLanding()), bind: () => bindLanding() },
@@ -35,7 +34,7 @@ const routes: Route[] = [
 	},
 	{ pattern: /^\/favorites$/, render: () => renderFavorites(new URL(location.href).searchParams.get('cursor') ?? undefined), bind: () => bindFavorites() },
 	{ pattern: /^\/settings$/, render: () => renderSettings(), bind: () => bindSettings() },
-	{ pattern: /^\/profile$/, render: () => renderProfile(), bind: () => bindProfile() },
+	{ pattern: /^\/users\/([^/]+)$/, render: (m) => renderProfile(decodeURIComponent(m[1])) },
 	{ pattern: /^\/random$/, render: () => renderRandom(new URL(location.href).searchParams.get('tags') ?? undefined), bind: () => bindRandom() },
 	{ pattern: /^\/comments$/, render: () => renderSection('comments'), bind: () => bindSection('comments') },
 	{ pattern: /^\/(wiki|aliases|artists|pools|forum)\/create$/, render: (m) => renderSection(m[1], 'create'), bind: (m) => bindSection(m[1]) },
@@ -47,8 +46,6 @@ const routes: Route[] = [
 	{ pattern: /^\/pools(?:\/[^/]+)?$/, render: () => renderSection('pools'), bind: () => bindSection('pools') },
 	{ pattern: /^\/forum(?:\/[^/]+)?$/, render: () => renderSection('forum'), bind: () => bindSection('forum') },
 	{ pattern: /^\/top$/, render: () => renderSection('top') },
-	{ pattern: /^\/account$/, render: () => renderSection('account') },
-	{ pattern: /^\/mail$/, render: () => renderSection('mail'), bind: () => bindSection('mail') },
 	{ pattern: /^\/help$/, render: () => renderSection('help') },
 	{ pattern: /^\/about$/, render: () => renderSection('about') },
 	{ pattern: /^\/contact$/, render: () => renderSection('contact'), bind: () => bindSection('contact') },
@@ -67,7 +64,13 @@ async function renderRoute(path: string): Promise<void> {
 
 	if (!page) return;
 
-	const pathname = new URL(path, location.origin).pathname;
+	let pathname = new URL(path, location.origin).pathname;
+	if (pathname === '/account' || pathname === '/profile') {
+		const user = store.get().user;
+		const destination = user ? `/users/${encodeURIComponent(user.username)}${location.search}` : '/login';
+		history.replaceState(null, '', destination);
+		pathname = new URL(destination, location.origin).pathname;
+	}
 	const match = routes.find((r) => r.pattern.test(pathname));
 	updateNavigation(pathname);
 
@@ -96,7 +99,7 @@ async function renderRoute(path: string): Promise<void> {
 
 function updateNavigation(pathname: string): void {
 	const subnav = document.querySelector('.site-subnav');
-	if (subnav) subnav.outerHTML = renderSubNav(pathname);
+	if (subnav) subnav.outerHTML = renderSubNav(pathname, store.get().user?.username);
 
 	const section = navigationSection(pathname);
 	for (const link of Array.from(document.querySelectorAll<HTMLAnchorElement>('.site-nav a[data-link], .site-subnav a[data-link]'))) {
@@ -121,6 +124,10 @@ export function initApp(): void {
 	bindHomeGlobal();
 
 	document.addEventListener('click', onDocLinkClick);
+	window.addEventListener('session-changed', () => {
+		renderShell();
+		void renderRoute(location.pathname + location.search);
+	});
 	window.addEventListener('popstate', () => void renderRoute(location.pathname + location.search));
 
 	void renderRoute(location.pathname + location.search);
@@ -135,15 +142,6 @@ function renderShell(): void {
 	const user = store.get().user;
 
 	app.innerHTML = sanitizeMarkup(`${renderHeader(user)}<main id="page" class="site-main" tabindex="-1"></main>`);
-
-	document.getElementById('logout-btn')?.addEventListener('click', async () => {
-		await api.auth.logout().catch(() => undefined);
-
-		store.set({ user: null });
-		renderShell();
-
-		void renderRoute(location.pathname + location.search);
-	});
 }
 
 // Delegated link handling so re-rendered content keeps working without re-binding.

@@ -19,10 +19,15 @@ import {
 	FavoritesResponseSchema,
 	HealthResponseSchema,
 	PostResponseSchema,
+	ProfilePostsResponseSchema,
+	ProfileResponseSchema,
 	SearchResponseSchema,
 	TotpSetupResponseSchema,
 	TotpVerifyResponseSchema,
+	TurnstileConfigResponseSchema,
 	UserResponseSchema,
+	RolesResponseSchema,
+	UserRolesResponseSchema,
 } from '../../validators';
 import type { JsonValue } from '../../types';
 
@@ -72,14 +77,13 @@ export class MemesBooruApi {
 
 	readonly auth = {
 		me: () => this.get('/api/auth/me', UserResponseSchema),
-		login: (email: string, password: string) => this.post('/api/auth/login', { email, password }, UserResponseSchema),
-		register: (username: string, email: string, password: string) => this.post('/api/auth/register', { username, email, password }, UserResponseSchema),
+		turnstile: () => this.get('/api/auth/turnstile', TurnstileConfigResponseSchema),
+		login: (username: string, password: string, turnstile_token: string) => this.post('/api/auth/login', { username, password, turnstile_token }, UserResponseSchema),
+		register: (username: string, password: string, turnstile_token: string) => this.post('/api/auth/register', { username, password, turnstile_token }, UserResponseSchema),
 		logout: () => this.request('/api/auth/logout', { method: 'POST' }),
 		totpSetup: () => this.post('/api/auth/totp/setup', {}, TotpSetupResponseSchema),
 		totpVerify: (code: string) => this.post('/api/auth/totp/verify', { code }, TotpVerifyResponseSchema),
-		changeEmail: (email: string) => this.post('/api/auth/email', { email }),
 		changePassword: (current_password: string, password: string) => this.post('/api/auth/password', { current_password, password }),
-		updateProfile: (display_name: string | null) => this.request('/api/auth/profile', { method: 'PATCH', body: { display_name } }),
 	};
 
 	readonly posts = {
@@ -144,8 +148,6 @@ export class MemesBooruApi {
 		createWiki: (input: JsonValue) => this.post('/api/community/wiki', input),
 		createReply: (input: JsonValue) => this.post('/api/community/forum/replies', input),
 		createContact: (input: JsonValue) => this.post('/api/community/contact', input),
-		createMail: (input: JsonValue) => this.post('/api/community/mail', input),
-		mail: (limit = 50) => this.get(`/api/community/mail?limit=${limit}`, CommunityListResponseSchema),
 		categories: () => this.get('/api/community/forum/categories', CommunityListResponseSchema),
 		topic: (id: number) => this.getJson(`/api/community/forum/topics/${id}`),
 		topicPosts: (id: number) => this.get(`/api/community/forum/topics/${id}/posts`, CommunityListResponseSchema),
@@ -158,10 +160,27 @@ export class MemesBooruApi {
 		list: (cursor?: string) => this.get(`/api/favorites?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, FavoritesResponseSchema),
 	};
 
+	readonly profiles = {
+		get: (username: string) => this.get(`/api/profiles/${encodeURIComponent(username)}`, ProfileResponseSchema),
+		posts: (username: string, cursor?: string) => this.get(`/api/profiles/${encodeURIComponent(username)}/posts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, ProfilePostsResponseSchema),
+		update: (input: { display_name: string | null; bio: string | null; avatar_url: string | null }) =>
+			this.request('/api/profiles/me', { method: 'PUT', body: input }).then((result) => this.parse('/api/profiles/me', ProfileResponseSchema, result)),
+	};
+
 	readonly moderation = {
 		report: (input: ReportInput) => this.post('/api/moderation/reports', input),
 		reports: () => this.get('/api/moderation/reports', CommunityListResponseSchema),
 		action: (input: JsonValue) => this.post('/api/moderation/actions', input),
+	};
+
+	readonly permissions = {
+		list: () => this.get('/api/permissions/roles', RolesResponseSchema),
+		userRoles: (userId: number) => this.get(`/api/permissions/users/${userId}/roles`, UserRolesResponseSchema),
+		create: (name: string, permissions: string[]) => this.post('/api/permissions/roles', { name, permissions }),
+		update: (roleId: number, name: string, permissions: string[]) => this.request(`/api/permissions/roles/${roleId}`, { method: 'PATCH', body: { name, permissions } }),
+		delete: (roleId: number) => this.request(`/api/permissions/roles/${roleId}`, { method: 'DELETE' }),
+		assign: (userId: number, roleId: number) => this.post(`/api/permissions/users/${userId}/roles`, { role_id: roleId }),
+		revoke: (userId: number, roleId: number) => this.request(`/api/permissions/users/${userId}/roles/${roleId}`, { method: 'DELETE' }),
 	};
 
 	private async request(path: string, init: RequestInitWithBody = {}): Promise<JsonValue> {

@@ -12,6 +12,7 @@ import { TagService } from '../../src/services/tag-service';
 import { CommunityService } from '../../src/services/community-service';
 import { toUserId } from '../../src/types';
 import { SearchQuerySchema, TagDisplayNameSchema } from '../../src/validators';
+import { applyPermissions } from './apply-permissions';
 
 beforeAll(async () => {
 	const statements = `${initialSql}\n${communitySql}\n${tagDescriptionsSql}`
@@ -21,6 +22,7 @@ beforeAll(async () => {
 		.filter(Boolean);
 	await env.DB.batch(statements.map((sql) => env.DB.prepare(sql)));
 	await env.DB.prepare("INSERT INTO users (id, username, created_at) VALUES (1, 'tester', 1)").run();
+	await applyPermissions(env.DB);
 	await env.DB.batch([
 		env.DB.prepare("INSERT INTO tags (id, normalized_name, category, usage_count, created_at, updated_at) VALUES (1, 'dog', 'character', 3, 1, 1), (2, 'falling', 'meta', 1, 1, 1), (3, 'cat', 'character', 1, 1, 1)"),
 		env.DB.prepare("INSERT INTO tag_aliases (id, alias_normalized, tag_id, created_by, created_at) VALUES (1, 'puppy', 1, 1, 1)"),
@@ -69,7 +71,7 @@ describe('contextual catalog', () => {
 	});
 
 	it('resolves tag names for aliases and wiki creation without numeric input', async () => {
-		const user = { id: toUserId(1), username: 'tester', rank: 'trusted', status: 'active', isAdmin: false } as const;
+		const user = { id: toUserId(1), username: 'tester', permissions: ['edit_tags', 'edit_wiki'] as const, status: 'active' } as const;
 		const tags = new TagService(env.DB);
 
 		await expect(tags.resolveId('DOG')).resolves.toBe(1);
@@ -85,7 +87,7 @@ describe('contextual catalog', () => {
 		for (const name of ['curitoons', 'carl_jhonson_(personaje)', 'cj_(personaje)']) expect(TagDisplayNameSchema.safeParse(name).success).toBe(true);
 		for (const name of ['asdasd asdas', 'Pepe', 'tag-evil', 'tag__broken', 'tag_(bad space)']) expect(TagDisplayNameSchema.safeParse(name).success).toBe(false);
 
-		const user = { id: toUserId(1), username: 'tester', rank: 'trusted', status: 'active', isAdmin: false } as const;
+		const user = { id: toUserId(1), username: 'tester', permissions: ['edit_tags'] as const, status: 'active' } as const;
 		await env.DB.prepare("UPDATE tags SET description = 'existing description' WHERE id = 1").run();
 		await new TagService(env.DB).update(1, 'cj_(personaje)', undefined, 'character', user);
 		expect(await env.DB.prepare('SELECT display_name, description FROM tags WHERE id = 1').first()).toMatchObject({ display_name: 'cj_(personaje)', description: 'existing description' });
