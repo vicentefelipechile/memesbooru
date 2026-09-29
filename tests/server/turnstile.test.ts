@@ -23,6 +23,10 @@ describe('Turnstile', () => {
 		const request = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ success: true, hostname: 'memesbooru.cl', action: 'login' })));
 		vi.stubGlobal('fetch', request);
 		expect(await verifyTurnstile('secret', 'token', 'login', 'memesbooru.cl')).toBe(true);
+		request.mockImplementation(async () => new Response(JSON.stringify({ success: true, hostname: 'memesbooru.vicentefelipechile.workers.dev', action: 'login' })));
+		expect(await verifyTurnstile('secret', 'token', 'login', 'memesbooru.vicentefelipechile.workers.dev')).toBe(true);
+		expect(await verifyTurnstile('secret', 'token', 'login', 'memesbooru.cl')).toBe(false);
+		request.mockImplementation(async () => new Response(JSON.stringify({ success: true, hostname: 'memesbooru.cl', action: 'login' })));
 		expect(await verifyTurnstile('secret', 'token', 'signup', 'memesbooru.cl')).toBe(false);
 		request.mockImplementation(async () => new Response(JSON.stringify({ success: true, hostname: 'localhost', action: 'login' })));
 		expect(await verifyTurnstile('secret', 'token', 'login', 'memesbooru.cl')).toBe(false);

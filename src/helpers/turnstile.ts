@@ -19,7 +19,7 @@ export async function verifyTurnstile(secret: string, token: string, action: Tur
 	if (!secret || !token || token.length > 2048) return false;
 
 	// Local origins are only accepted for requests to a local Worker; production never trusts localhost tokens.
-	const allowed = hostname === 'localhost' || hostname === '127.0.0.1' ? [hostname] : ['memesbooru.cl', 'memesbooru.pages.dev'];
+	const allowed = ['localhost', '127.0.0.1', 'memesbooru.cl', 'memesbooru.pages.dev', 'memesbooru.vicentefelipechile.workers.dev'];
 	const body = new URLSearchParams({ secret, response: token });
 	if (clientIp) body.set('remoteip', clientIp);
 
@@ -33,7 +33,7 @@ export async function verifyTurnstile(secret: string, token: string, action: Tur
 		if (!response.ok) return false;
 
 		const parsed = TurnstileSiteverifySchema.safeParse(await response.json());
-		return parsed.success && parsed.data.success && parsed.data.action === action && !!parsed.data.hostname && allowed.includes(parsed.data.hostname);
+		return parsed.success && parsed.data.success && parsed.data.action === action && allowed.includes(hostname) && parsed.data.hostname === hostname;
 	} catch (error) {
 		console.error('Turnstile verification failed', error instanceof Error ? error.message : String(error));
 		return false;

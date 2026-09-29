@@ -3,19 +3,6 @@
 -- Remaps old values: general→reaction, copyright/series→source, artist→meta.
 -- Rebuilds table because CHECK constraint change requires it in SQLite.
 
-PRAGMA foreign_keys = OFF;
-
-BEGIN TRANSACTION;
-
--- Remap existing categories to new set (safe even if empty)
-UPDATE tags
-SET category = CASE
-  WHEN category = 'general' THEN 'reaction'
-  WHEN category IN ('copyright', 'series') THEN 'source'
-  WHEN category = 'artist' THEN 'meta'
-  ELSE category
-END;
-
 -- Rebuild table with new CHECK (category set for memes)
 CREATE TABLE tags_new (
   id INTEGER PRIMARY KEY,
@@ -30,7 +17,12 @@ CREATE TABLE tags_new (
 ) STRICT;
 
 INSERT INTO tags_new (id, normalized_name, display_name, category, usage_count, status, created_by, created_at, updated_at)
-SELECT id, normalized_name, display_name, category, usage_count, status, created_by, created_at, updated_at FROM tags;
+SELECT id, normalized_name, display_name, CASE
+  WHEN category = 'general' THEN 'reaction'
+  WHEN category IN ('copyright', 'series') THEN 'source'
+  WHEN category = 'artist' THEN 'meta'
+  ELSE category
+END, usage_count, status, created_by, created_at, updated_at FROM tags;
 
 DROP TABLE tags;
 ALTER TABLE tags_new RENAME TO tags;
@@ -39,7 +31,3 @@ ALTER TABLE tags_new RENAME TO tags;
 CREATE INDEX idx_tags_normalized_prefix ON tags(normalized_name);
 CREATE INDEX idx_tags_usage ON tags(usage_count DESC, normalized_name ASC);
 CREATE INDEX idx_tags_category_usage ON tags(category, usage_count DESC, normalized_name ASC);
-
-COMMIT;
-
-PRAGMA foreign_keys = ON;

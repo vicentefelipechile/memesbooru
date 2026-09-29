@@ -55,12 +55,6 @@
 			"0 * * * *"
 		]
 	},
-	"vars": {
-		"GOOGLE_CLIENT_ID": "placeholder",
-		"GOOGLE_CLIENT_SECRET": "placeholder",
-		"GOOGLE_REDIRECT_URI": "http://localhost:5173/api/auth/google/callback",
-		"SESSION_SECRET": "placeholder"
-	},
 	"ratelimits": [
 		{
 			"name": "RL_GLOBAL",
