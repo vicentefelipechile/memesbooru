@@ -113,6 +113,16 @@ export class TagRepository {
 		return queryOne<Pick<TagRow, 'id'>>(this.db, 'SELECT id FROM tags WHERE normalized_name = ?', [name]);
 	}
 
+	findUnavailableName(names: string[]): Promise<Pick<TagRow, 'normalized_name'> | null> {
+		if (!names.length) return Promise.resolve(null);
+		const placeholders = names.map(() => '?').join(',');
+		return queryOne(
+			this.db,
+			`SELECT normalized_name FROM tags WHERE normalized_name IN (${placeholders}) AND status != 'active' UNION SELECT alias_normalized AS normalized_name FROM tag_aliases a JOIN tags t ON t.id = a.tag_id WHERE alias_normalized IN (${placeholders}) AND t.status != 'active' LIMIT 1`,
+			[...names, ...names],
+		);
+	}
+
 	findAlias(id: number): Promise<(TagAliasRow & Pick<TagRow, 'normalized_name'>) | null> {
 		return queryOne<TagAliasRow & Pick<TagRow, 'normalized_name'>>(this.db, 'SELECT a.id, a.alias_normalized, a.tag_id, a.created_by, a.created_at, t.normalized_name FROM tag_aliases a JOIN tags t ON t.id = a.tag_id WHERE a.id = ?', [id]);
 	}

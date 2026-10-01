@@ -49,8 +49,6 @@ router.post('/login', async (c) => {
 	const service = new AuthService(c.env.DB);
 	const user = await service.authenticatePassword(parsed.data.username, parsed.data.password);
 
-	if (!user) return fail(c, 'Credenciales invalidas', 401);
-
 	const token = await service.createSession(user.id);
 	setCookie(c, 'session', token, { httpOnly: true, secure: true, sameSite: 'None', path: '/', maxAge: 30 * 24 * 3600 });
 
@@ -76,9 +74,7 @@ router.post('/password', requireAuth, async (c) => {
 
 	const user = c.get('user');
 	const service = new AuthService(c.env.DB);
-	if (!(await service.verifyCurrentPassword(user.id, parsed.data.current_password))) return fail(c, 'Credenciales invalidas', 401);
-
-	await service.setPassword(user.id, parsed.data.password);
+	await service.changePassword(user.id, parsed.data.current_password, parsed.data.password);
 
 	return c.json({ ok: true });
 });
@@ -103,15 +99,9 @@ router.get('/google', async (c) => {
 	stateStore.set(state, { returnTo });
 	setTimeout(() => stateStore.delete(state), 10 * 60 * 1000);
 
-	try {
-		const url = service.getGoogleAuthUrl(env, state);
+	const url = service.getGoogleAuthUrl(env, state);
 
-		return c.redirect(url);
-	} catch (e) {
-		const message = e instanceof Error ? e.message : String(e);
-
-		return fail(c, message, 500);
-	}
+	return c.redirect(url);
 });
 
 // =========================================================================================================
@@ -219,16 +209,7 @@ router.post('/totp/verify', requireAuth, async (c) => {
 	const user = c.get('user');
 	const db = c.env.DB;
 	const service = new AuthService(db);
-	const enc = await new AuthRepository(db).getTotpSecret(user.id);
-
-	if (!enc) return fail(c, 'no totp', 400);
-
-	const secret = new TextDecoder().decode(enc);
-	const ok = await service.totpVerify(secret, parsed.data.code);
-
-	if (!ok) return fail(c, 'invalid code', 400);
-
-	await new AuthRepository(db).verifyTotp(user.id);
+	await service.verifyTotpSetup(user.id, parsed.data.code);
 
 	const codes: string[] = [];
 

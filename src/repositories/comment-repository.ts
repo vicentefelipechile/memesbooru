@@ -11,7 +11,6 @@
 import { queryOne, queryAll, batch, type DB } from '../db/client';
 import type { CommentRow, NextIdRow } from '../db/schema';
 import { decodeCursor, type CommentCursor } from '../helpers/cursor';
-import { NotFoundError, ForbiddenError } from '../domain/errors';
 import type { CommentResult } from '../types';
 
 // =========================================================================================================
@@ -60,8 +59,8 @@ export class CommentRepository {
 		return queryAll<CommentResult>(this.db, "SELECT c.*, u.username AS author_username FROM comments c LEFT JOIN users u ON u.id = c.author_id WHERE c.status = 'visible' ORDER BY c.created_at DESC, c.id DESC LIMIT ?", [limit]);
 	}
 
-	async findById(id: number): Promise<CommentRow | null> {
-		return queryOne<CommentRow>(this.db, 'SELECT * FROM comments WHERE id = ?', [id]);
+	async findById(id: number): Promise<Pick<CommentRow, 'author_id' | 'post_id' | 'parent_id' | 'status'> | null> {
+		return queryOne(this.db, 'SELECT author_id, post_id, parent_id, status FROM comments WHERE id = ?', [id]);
 	}
 
 	// =========================================================================================================
@@ -80,11 +79,6 @@ export class CommentRepository {
 
 	async create(data: CreateCommentData): Promise<CommentRow['id']> {
 		const now = Date.now();
-
-		if (data.parentId) {
-			await this.assertReplyDepth(data.parentId);
-		}
-
 		const nextId = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM comments', []))?.v ?? 1;
 
 		await batch(this.db, [
@@ -106,33 +100,7 @@ export class CommentRepository {
 		return nextId;
 	}
 
-	async assertReplyDepth(parentId: number): Promise<void> {
-		const parent = await queryOne<Pick<CommentRow, 'id' | 'parent_id'>>(this.db, 'SELECT id, parent_id FROM comments WHERE id = ?', [parentId]);
-
-		if (!parent) throw new NotFoundError('parent not found');
-
-		let depth = 1;
-		let cur: number | null = parentId;
-
-		while (cur) {
-			const row: Pick<CommentRow, 'parent_id'> | null = await queryOne<Pick<CommentRow, 'parent_id'>>(this.db, 'SELECT parent_id FROM comments WHERE id = ?', [cur]);
-
-			if (!row?.parent_id) break;
-
-			depth++;
-			cur = row.parent_id;
-
-			if (depth > 2) throw new ForbiddenError('max depth exceeded');
-		}
-	}
-
-	async softDelete(commentId: number, requesterId: number, isModerator: boolean): Promise<void> {
-		const c = await queryOne<Pick<CommentRow, 'author_id'>>(this.db, 'SELECT author_id FROM comments WHERE id = ?', [commentId]);
-
-		if (!c) throw new NotFoundError('comment not found');
-
-		if (c.author_id !== requesterId && !isModerator) throw new ForbiddenError('forbidden');
-
+	async softDelete(commentId: number): Promise<void> {
 		await batch(this.db, [this.db.prepare("UPDATE comments SET status = 'hidden', deleted_at = ?, updated_at = ? WHERE id = ?").bind(Date.now(), Date.now(), commentId)]);
 	}
 }

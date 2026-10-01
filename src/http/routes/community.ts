@@ -11,6 +11,7 @@ import { CommunityService } from '../../services/community-service';
 
 const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 const limitSchema = z.coerce.number().int().min(1).max(100).catch(50);
+const idSchema = z.coerce.number().int().positive();
 const artistSchema = z.object({ name: z.string().trim().min(1).max(100) });
 const artistStatusSchema = z.object({ status: z.enum(['active', 'deleted']) });
 const artistAliasSchema = z.object({ artist_id: z.number().int().positive(), alias: z.string().trim().min(1).max(100) });
@@ -29,15 +30,35 @@ const topicStatusSchema = z.object({ topic_id: z.number().int().positive(), stat
 const forumPostEditSchema = z.object({ post_id: z.number().int().positive(), body: z.string().trim().min(1).max(5000) });
 
 router.get('/artists', async (c) => c.json({ data: await new CommunityService(c.env.DB).listArtists(limitSchema.parse(c.req.query('limit'))) }));
-router.get('/post-artists/:postId', async (c) => c.json({ data: await new CommunityService(c.env.DB).listPostArtists(Number(c.req.param('postId'))) }));
+router.get('/post-artists/:postId', async (c) => {
+	const id = idSchema.safeParse(c.req.param('postId'));
+	if (!id.success) return fail(c, 'Invalid post ID', 400, id.error.issues);
+	return c.json({ data: await new CommunityService(c.env.DB).listPostArtists(id.data) });
+});
 router.get('/pools', async (c) => c.json({ data: await new CommunityService(c.env.DB).listPools(limitSchema.parse(c.req.query('limit'))) }));
 router.get('/forum/topics', async (c) => c.json({ data: await new CommunityService(c.env.DB).listTopics(limitSchema.parse(c.req.query('limit'))) }));
 router.get('/forum/categories', async (c) => c.json({ data: await new CommunityService(c.env.DB).listCategories() }));
 router.get('/wiki', async (c) => c.json({ data: await new CommunityService(c.env.DB).listWiki(limitSchema.parse(c.req.query('limit'))) }));
-router.get('/wiki/:id/revisions', async (c) => c.json({ data: await new CommunityService(c.env.DB).listWikiRevisions(Number(c.req.param('id'))) }));
-router.get('/pools/:id/posts', async (c) => c.json({ data: await new CommunityService(c.env.DB).listPoolPosts(Number(c.req.param('id'))) }));
-router.get('/forum/topics/:id/posts', async (c) => c.json({ data: await new CommunityService(c.env.DB).listForumPosts(Number(c.req.param('id'))) }));
-router.get('/forum/topics/:id', async (c) => c.json(await new CommunityService(c.env.DB).getTopic(Number(c.req.param('id')))));
+router.get('/wiki/:id/revisions', async (c) => {
+	const id = idSchema.safeParse(c.req.param('id'));
+	if (!id.success) return fail(c, 'Invalid wiki ID', 400, id.error.issues);
+	return c.json({ data: await new CommunityService(c.env.DB).listWikiRevisions(id.data) });
+});
+router.get('/pools/:id/posts', async (c) => {
+	const id = idSchema.safeParse(c.req.param('id'));
+	if (!id.success) return fail(c, 'Invalid pool ID', 400, id.error.issues);
+	return c.json({ data: await new CommunityService(c.env.DB).listPoolPosts(id.data) });
+});
+router.get('/forum/topics/:id/posts', async (c) => {
+	const id = idSchema.safeParse(c.req.param('id'));
+	if (!id.success) return fail(c, 'Invalid topic ID', 400, id.error.issues);
+	return c.json({ data: await new CommunityService(c.env.DB).listForumPosts(id.data) });
+});
+router.get('/forum/topics/:id', async (c) => {
+	const id = idSchema.safeParse(c.req.param('id'));
+	if (!id.success) return fail(c, 'Invalid topic ID', 400, id.error.issues);
+	return c.json(await new CommunityService(c.env.DB).getTopic(id.data));
+});
 
 router.post('/artists', requireAuth, async (c) => {
 	const body = await parseJsonBody(c);
@@ -49,9 +70,11 @@ router.post('/artists', requireAuth, async (c) => {
 });
 
 router.patch('/artists/:id/status', requireAuth, async (c) => {
+	const id = idSchema.safeParse(c.req.param('id'));
+	if (!id.success) return fail(c, 'Invalid artist ID', 400, id.error.issues);
 	const parsed = artistStatusSchema.safeParse(await c.req.json().catch(() => null));
 	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).setArtistStatus(Number(c.req.param('id')), parsed.data.status, c.get('user'));
+	await new CommunityService(c.env.DB).setArtistStatus(id.data, parsed.data.status, c.get('user'));
 	return c.json({ ok: true });
 });
 
@@ -122,18 +145,22 @@ router.post('/pools/posts', requireAuth, async (c) => {
 });
 
 router.post('/wiki/:id/revisions', requireAuth, async (c) => {
+	const id = idSchema.safeParse(c.req.param('id'));
+	if (!id.success) return fail(c, 'Invalid wiki ID', 400, id.error.issues);
 	const body = await parseJsonBody(c);
 	if (!body.ok) return body.response;
 	const parsed = wikiRevisionSchema.safeParse(body.data);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).reviseWiki(c.get('user'), Number(c.req.param('id')), parsed.data.body, parsed.data.reason ?? null);
+	await new CommunityService(c.env.DB).reviseWiki(c.get('user'), id.data, parsed.data.body, parsed.data.reason ?? null);
 	return c.json({ ok: true }, 201);
 });
 
 router.post('/wiki/:id/revert', requireAuth, async (c) => {
+	const id = idSchema.safeParse(c.req.param('id'));
+	if (!id.success) return fail(c, 'Invalid wiki ID', 400, id.error.issues);
 	const parsed = wikiRevertSchema.safeParse(await c.req.json().catch(() => null));
 	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).revertWiki(c.get('user'), Number(c.req.param('id')), parsed.data.revision_id);
+	await new CommunityService(c.env.DB).revertWiki(c.get('user'), id.data, parsed.data.revision_id);
 	return c.json({ ok: true });
 });
 

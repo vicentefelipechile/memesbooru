@@ -62,7 +62,7 @@ export class GoneError extends DomainError {
 }
 
 export class RateLimitedError extends DomainError {
-	constructor(msg = 'Rate limited') {
-		super(msg, 429);
+	constructor(msg = 'Rate limited', details?: ErrorDetails) {
+		super(msg, 429, details);
 	}
 }

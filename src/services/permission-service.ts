@@ -84,7 +84,10 @@ export class PermissionService {
 		this.require(user, 'manage_roles');
 		if (!(await this.roles.findUser(userId))) throw new NotFoundError('User not found');
 		if (!(await this.roles.findRole(roleId))) throw new NotFoundError('Role not found');
-		if (!(await this.roles.revoke(userId, roleId))) throw new ForbiddenError('Cannot revoke the base role or the last administrator');
+		if (!(await this.roles.revoke(userId, roleId))) {
+			if (!(await this.roles.userRoles(userId)).some((role) => role.id === roleId)) throw new NotFoundError('Role assignment not found');
+			throw new ForbiddenError('Cannot revoke the base role or the last administrator');
+		}
 	}
 
 	private assertEditablePermissions(permissions: readonly Permission[]): void {

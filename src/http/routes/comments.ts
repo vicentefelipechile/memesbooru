@@ -9,6 +9,7 @@
 // =========================================================================================================
 
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { requireAuth, type AuthVariables } from '../middleware/auth';
 import { CommentService } from '../../services/comment-service';
 import { CommentSchema, PaginationSchema } from '../../validators';
@@ -77,14 +78,14 @@ router.post('/post/:publicId', requireAuth, async (c) => {
 
 router.delete('/:id', requireAuth, async (c) => {
 	const db = c.env.DB;
-	const id = parseInt(c.req.param('id')!, 10);
+	const parsed = z.coerce.number().int().positive().safeParse(c.req.param('id'));
 
-	if (Number.isNaN(id)) return fail(c, 'Invalid id', 400);
+	if (!parsed.success) return fail(c, 'Invalid id', 400, parsed.error.issues);
 
 	const viewer = c.get('user');
 	const service = new CommentService(db);
 
-	await service.remove(viewer, id);
+	await service.remove(viewer, parsed.data);
 
 	return c.json({ ok: true });
 });

@@ -12,7 +12,7 @@ import type { DB } from '../db/client';
 import { CommentRepository } from '../repositories/comment-repository';
 import { PostRepository } from '../repositories/post-repository';
 import { PermissionService } from './permission-service';
-import { NotFoundError } from '../domain/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../domain/errors';
 import type { AuthUser, CreatedCommentResult } from '../types';
 import type { CommentInput } from '../validators';
 
@@ -47,13 +47,31 @@ export class CommentService {
 
 		if (!postId) throw new NotFoundError('post not found');
 
+		if (input.parent_id) {
+			let parentId: number | null = input.parent_id;
+			let depth = 0;
+
+			while (parentId) {
+				const parent = await this.comments.findById(parentId);
+				if (!parent || parent.status !== 'visible') throw new NotFoundError('parent not found');
+				if (parent.post_id !== postId) throw new ValidationError('parent belongs to another post');
+				if (++depth > 2) throw new ValidationError('max depth exceeded');
+				parentId = parent.parent_id;
+			}
+		}
+
 		const id = await this.comments.create({ postId, authorId: viewer.id, body: input.body, parentId: input.parent_id ?? null });
 
 		return { id };
 	}
 
 	async remove(viewer: AuthUser, commentId: number): Promise<void> {
+		const comment = await this.comments.findById(commentId);
+		if (!comment) throw new NotFoundError('comment not found');
+
 		const isModerator = new PermissionService(this.db).has(viewer, 'moderate');
-		await this.comments.softDelete(commentId, viewer.id, isModerator);
+		if (comment.author_id !== viewer.id && !isModerator) throw new ForbiddenError('forbidden');
+
+		await this.comments.softDelete(commentId);
 	}
 }

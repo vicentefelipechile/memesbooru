@@ -13,7 +13,7 @@ import { PostRepository } from '../repositories/post-repository';
 import { TagRepository } from '../repositories/tag-repository';
 import { UserRepository } from '../repositories/user-repository';
 import { PermissionService } from './permission-service';
-import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors';
+import { ConflictError, NotFoundError, ForbiddenError, RateLimitedError, ValidationError } from '../domain/errors';
 import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult, SearchResult, JsonValue } from '../types';
 import { toPostId, toPublicId, toUserId } from '../types';
 import { decodeCursor, encodeCursor as encodeCursorHelper, type PostCursor } from '../helpers/cursor';
@@ -99,12 +99,14 @@ export class PostService {
 		return this.posts.listTop(Math.min(100, Math.max(1, limit)), age ? Date.now() - age : 0, sort);
 	}
 
-	async createStreamPost(user: AuthUser, title: string | null, tags: string[], streamUid: string): Promise<CreatedPostResult> {
+	async createStreamPost(user: AuthUser, title: string | null, tags: string[], streamUid: string, creator: string | null): Promise<CreatedPostResult> {
 		const permissions = new PermissionService(this.db);
 		permissions.require(user, 'upload_post');
 		permissions.require(user, 'upload_video');
+		if (creator !== String(user.id)) throw new ForbiddenError('upload no autorizado');
 		const existing = await this.posts.findStreamPost(streamUid);
 		if (existing) return { publicId: toPublicId(existing.public_id), postId: toPostId(existing.id) };
+		await this.assertTagsAvailable(tags);
 
 		const publicId = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
 		const postId = await this.posts.createStreamPost({ publicId, authorId: user.id, title, tags, streamUid });
@@ -155,14 +157,14 @@ export class PostService {
 		const permissions = new PermissionService(this.db);
 		permissions.require(viewer, 'upload_post');
 		if (input.mediaType === 'video') permissions.require(viewer, 'upload_video');
-
 		if (!permissions.has(viewer, 'upload_without_cooldown')) {
 			const last = (await this.posts.getLastUploadAt(viewer.id)) ?? 0;
 
 			if (Date.now() - last < 3600 * 1000) {
-				throw new ValidationError('cooldown 1h para cuentas nuevas', { retryAfter: 3600 * 1000 - (Date.now() - last) });
+				throw new RateLimitedError('cooldown 1h para cuentas nuevas', { retryAfter: 3600 * 1000 - (Date.now() - last) });
 			}
 		}
+		await this.assertTagsAvailable(input.tags);
 
 		const publicId = toPublicId(crypto.randomUUID().slice(0, 8));
 		const originalKey = `media/${publicId}/original` as const satisfies `media/${string}/original`;
@@ -191,6 +193,11 @@ export class PostService {
 		if (!post || post.status !== 'available') throw new NotFoundError('Post not found');
 		if (viewer.status !== 'active' || (viewer.id !== post.author_id && !new PermissionService(this.db).has(viewer, 'edit_tags'))) throw new ForbiddenError('Permission denied');
 		if (!names.length || names.length > (post.media_type === 'video' ? 50 : 20) || names.some((name) => !TagInputSchema.safeParse(name).success)) throw new ValidationError('Invalid post tags');
+		await this.assertTagsAvailable(names);
 		await this.posts.replaceTags(post.id, names, viewer.id);
+	}
+
+	private async assertTagsAvailable(names: string[]): Promise<void> {
+		if (await this.tags.findUnavailableName(names.map(normalizeTag))) throw new ConflictError('Tag not active');
 	}
 }

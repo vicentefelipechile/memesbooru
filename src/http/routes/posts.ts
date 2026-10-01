@@ -14,7 +14,7 @@ import { requireAuth, optionalAuth, type AuthVariables } from '../middleware/aut
 import { PostService } from '../../services/post-service';
 import { fail } from '../responses';
 import { CreatePostSchema, SearchQuerySchema, TagInputSchema, parseQueryWithArrays } from '../../validators';
-import { ValidationError } from '../../domain/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../../domain/errors';
 import { detectMime, imageDimensions, validateFileSize } from '../../helpers/file-validation';
 import { parseJsonBody } from '../../helpers/http';
 import { PermissionService } from '../../services/permission-service';
@@ -187,9 +187,7 @@ router.post('/video/complete', requireAuth, async (c) => {
 	if (!parsed.success) return fail(c, 'datos invalidos', 400, parsed.error.issues);
 
 	const video = await c.env.STREAM.video(parsed.data.id).details();
-	if (video.creator !== String(viewer.id)) return fail(c, 'upload no autorizado', 403);
-
-	const result = await new PostService(c.env.DB).createStreamPost(viewer, parsed.data.title ?? null, parsed.data.tags, parsed.data.id);
+	const result = await new PostService(c.env.DB).createStreamPost(viewer, parsed.data.title ?? null, parsed.data.tags, parsed.data.id, video.creator);
 	return c.json({ publicId: result.publicId, postId: result.postId, status: 'processing' }, 201);
 });
 
@@ -212,11 +210,11 @@ router.get('/:publicId/variants/:variant', optionalAuth, async (c) => {
 	if (!['low', 'medium', 'original'].includes(variant)) return fail(c, 'variant invalido', 400);
 
 	const post = await new PostService(c.env.DB).detail(publicId, c.get('user') ?? null);
-	if (post.restricted) return fail(c, 'contenido restringido', 403);
+	if (post.restricted) throw new ForbiddenError('contenido restringido');
 	if (post.media_type === 'video' && post.lowVariantKey?.startsWith('stream/')) return c.redirect(`https://iframe.videodelivery.net/${post.lowVariantKey.slice(7)}`, 302);
 
 	const object = await c.env.MEDIA_BUCKET.get(`media/${publicId}/${variant === 'original' ? 'original' : `${variant}.avif`}`);
-	if (!object) return fail(c, 'variante no disponible', 404);
+	if (!object) throw new NotFoundError('variante no disponible');
 
 	if (variant === 'original' || post.media_type === 'video') c.header('Cache-Control', 'private, no-store');
 	else c.header('Cache-Control', 'public, max-age=31536000, immutable');

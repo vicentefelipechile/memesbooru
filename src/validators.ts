@@ -128,7 +128,7 @@ export const CreatePostSchema = z.object({
 
 export const CommentSchema = z.object({
 	body: sanitizedString(2000).refine((v) => v.trim().length > 0, 'body requerido'),
-	parent_id: z.number().int().nullable().optional(),
+	parent_id: z.number().int().positive().nullable().optional(),
 });
 
 export const RatingSchema = z.object({

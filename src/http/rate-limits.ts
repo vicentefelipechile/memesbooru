@@ -10,6 +10,7 @@
 
 import type { Hono } from 'hono';
 import type { BareHeaderReader } from '../helpers/net';
+import { RateLimitedError } from '../domain/errors';
 
 // =========================================================================================================
 // Helpers
@@ -32,7 +33,7 @@ export function registerRateLimits(app: Hono<{ Bindings: Env }>) {
 		if (isLocalRequest(c)) return next();
 		const key = c.req.header('cf-connecting-ip') ?? 'unknown';
 		const { success } = await c.env.RL_GLOBAL.limit({ key: `global:${key}` });
-		if (!success) return c.json({ error: 'Rate limited' }, 429);
+		if (!success) throw new RateLimitedError();
 		await next();
 	});
 
@@ -41,7 +42,7 @@ export function registerRateLimits(app: Hono<{ Bindings: Env }>) {
 		if (isLocalRequest(c)) return next();
 		const key = c.req.header('cf-connecting-ip') ?? 'unknown';
 		const { success } = await c.env.RL_STRICT.limit({ key: `strict:${key}` });
-		if (!success) return c.json({ error: 'Rate limited - slow down' }, 429);
+		if (!success) throw new RateLimitedError('Rate limited - slow down');
 		await next();
 	});
 
@@ -49,7 +50,7 @@ export function registerRateLimits(app: Hono<{ Bindings: Env }>) {
 		if (isLocalRequest(c)) return next();
 		const key = c.req.header('cf-connecting-ip') ?? 'unknown';
 		const { success } = await c.env.RL_LOGIN.limit({ key: `login:${key}` });
-		if (!success) return c.json({ error: 'Too many login attempts' }, 429);
+		if (!success) throw new RateLimitedError('Too many login attempts');
 		await next();
 	});
 }

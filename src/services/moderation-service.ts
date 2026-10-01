@@ -9,7 +9,7 @@
 // =========================================================================================================
 
 import type { DB } from '../db/client';
-import { ForbiddenError } from '../domain/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../domain/errors';
 import type { AuthUser, CreatedReportResult } from '../types';
 import type { ReportInput, ModerationActionInput } from '../validators';
 import type { ReportRow, ModerationActionRow } from '../db/schema';
@@ -33,6 +33,8 @@ export class ModerationService {
 
 	async report(viewer: AuthUser, input: ReportInput): Promise<CreatedReportResult> {
 		new PermissionService(this.db).require(viewer, 'report');
+		await this.assertTargetExists(input.target_type, input.target_id);
+
 		const id = await this.moderation.createReport({
 			reporterId: viewer.id,
 			targetType: input.target_type,
@@ -45,11 +47,10 @@ export class ModerationService {
 
 	async act(viewer: AuthUser, input: ModerationActionInput): Promise<Pick<ModerationActionRow, 'id'>> {
 		this.assertModerator(viewer);
+		if (!((input.target_type === 'post' && (input.action === 'hide' || input.action === 'reject')) || (input.target_type === 'user' && input.action === 'ban'))) throw new ValidationError('Unsupported moderation action');
+		await this.assertTargetExists(input.target_type, input.target_id);
+
 		if (input.target_type === 'user' && input.action === 'ban' && (await new PermissionService(this.db).userRolesForLogin(input.target_id)).some((role) => role.id === 1)) throw new ForbiddenError('Revoke administrator role before banning');
-
-		const allowed = ['hide', 'reject', 'ban', 'restrict', 'approve'] as const;
-
-		if (!(allowed as readonly string[]).includes(input.action)) throw new ForbiddenError('accion no permitida');
 
 		const id = await this.moderation.createAction({
 			targetType: input.target_type,
@@ -66,5 +67,9 @@ export class ModerationService {
 		this.assertModerator(viewer);
 
 		return this.moderation.listOpenReports();
+	}
+
+	private async assertTargetExists(type: ReportInput['target_type'], id: number): Promise<void> {
+		if (!(await this.moderation.findTarget(type, id))) throw new NotFoundError('Target not found');
 	}
 }

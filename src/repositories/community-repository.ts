@@ -42,6 +42,30 @@ export class CommunityRepository {
 		);
 	}
 
+	getArtist(id: number): Promise<Pick<ArtistRow, 'id' | 'status'> | null> {
+		return queryOne(this.db, 'SELECT id, status FROM artists WHERE id = ?', [id]);
+	}
+
+	findArtistName(name: string): Promise<Pick<ArtistRow, 'id'> | null> {
+		return queryOne(this.db, 'SELECT id FROM artists WHERE normalized_name = ? OR name = ? UNION SELECT artist_id AS id FROM artist_aliases WHERE normalized_alias = ? LIMIT 1', [name, name, name]);
+	}
+
+	findCategory(id: number): Promise<Pick<ForumTopicRow, 'id'> | null> {
+		return queryOne(this.db, "SELECT id FROM forum_categories WHERE id = ? AND status = 'visible'", [id]);
+	}
+
+	findWikiByTagId(tagId: number): Promise<Pick<WikiPageRow, 'id'> | null> {
+		return queryOne(this.db, 'SELECT id FROM wiki_pages WHERE tag_id = ?', [tagId]);
+	}
+
+	getForumPost(id: number): Promise<Pick<ForumPostRow, 'id' | 'author_id'> | null> {
+		return queryOne(this.db, 'SELECT id, author_id FROM forum_posts WHERE id = ?', [id]);
+	}
+
+	getPoolPost(poolId: number, postId: number): Promise<Pick<PoolRow, 'id'> | null> {
+		return queryOne(this.db, 'SELECT pool_id AS id FROM pool_posts WHERE pool_id = ? AND post_id = ?', [poolId, postId]);
+	}
+
 	async createArtist(name: string, normalizedName: string, userId: number): Promise<void> {
 		await execute(this.db, 'INSERT INTO artists (id, name, normalized_name, updated_by, created_at, updated_at) VALUES (COALESCE((SELECT MAX(id) + 1 FROM artists), 1), ?, ?, ?, ?, ?)', [
 			name,
@@ -56,8 +80,8 @@ export class CommunityRepository {
 		await execute(this.db, 'UPDATE artists SET status = ?, updated_by = ?, updated_at = ? WHERE id = ?', [status, userId, Date.now(), id]);
 	}
 
-	async addArtistAlias(artistId: number, alias: string): Promise<void> {
-		await execute(this.db, 'INSERT INTO artist_aliases (artist_id, alias, normalized_alias, created_at) VALUES (?, ?, ?, ?)', [artistId, alias, alias.trim().toLowerCase(), Date.now()]);
+	async addArtistAlias(artistId: number, alias: string, normalized: string): Promise<void> {
+		await execute(this.db, 'INSERT INTO artist_aliases (artist_id, alias, normalized_alias, created_at) VALUES (?, ?, ?, ?)', [artistId, alias, normalized, Date.now()]);
 	}
 
 	listPostArtists(postId: number): Promise<{ artist_id: number; name: string }[]> {

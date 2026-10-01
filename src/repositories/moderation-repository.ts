@@ -10,6 +10,9 @@
 
 import { queryAll, queryOne, batch, type DB } from '../db/client';
 import type { ReportRow, ModerationActionRow, NextIdRow } from '../db/schema';
+import type { ReportInput } from '../types';
+
+const TARGET_TABLES = { post: 'posts', comment: 'comments', user: 'users', tag: 'tags' } as const satisfies Record<ReportInput['target_type'], string>;
 
 // =========================================================================================================
 // Repository input types — derived from Row via indexed access / Omit (never re-declare primitives)
@@ -36,6 +39,10 @@ export type CreateActionData = {
 
 export class ModerationRepository {
 	constructor(private readonly db: DB) {}
+
+	findTarget(type: ReportInput['target_type'], id: number): Promise<Pick<ReportRow, 'id'> | null> {
+		return queryOne(this.db, `SELECT id FROM ${TARGET_TABLES[type]} WHERE id = ?`, [id]);
+	}
 
 	async listOpenReports(limit = 50): Promise<ReportRow[]> {
 		return queryAll<ReportRow>(this.db, "SELECT id, reporter_id, target_type, target_id, reason, status, created_at FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT ?", [limit]);

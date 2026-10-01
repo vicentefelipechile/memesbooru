@@ -14,7 +14,7 @@ import { UserRepository } from '../repositories/user-repository';
 import { AuthRepository } from '../repositories/auth-repository';
 import { SessionRepository } from '../repositories/session-repository';
 import { normalizeTag } from '../validators';
-import { ValidationError } from '../domain/errors';
+import { ConflictError, UnauthorizedError, ValidationError } from '../domain/errors';
 import { b64url, encodePassword, hashToken, verifyPassword } from '../helpers/crypto';
 import { totpVerifyCode, generateTotpSecretValue } from './auth-totp';
 import { PermissionService } from './permission-service';
@@ -56,7 +56,7 @@ export class AuthService {
 	}
 
 	getGoogleAuthUrl(env: GoogleEnv, state: string): string {
-		if (!env.GOOGLE_CLIENT_ID) throw new ValidationError('Google not configured');
+		if (!env.GOOGLE_CLIENT_ID) throw new Error('Google not configured');
 
 		const p = new URLSearchParams({
 			client_id: env.GOOGLE_CLIENT_ID,
@@ -83,16 +83,17 @@ export class AuthService {
 				grant_type: 'authorization_code',
 			}),
 		});
-		if (!res.ok) throw new ValidationError(`google token exchange failed: ${res.status}`);
+		if (res.status >= 500) throw new Error(`Google token exchange failed: ${res.status}`);
+		if (!res.ok) throw new ValidationError('Invalid Google authorization code');
 
 		const data = await res.json();
 
 		if (typeof data !== 'object' || data === null || !('id_token' in data) || !('access_token' in data)) {
-			throw new ValidationError('invalid token response');
+			throw new Error('Invalid Google token response');
 		}
 
 		if (typeof data.id_token !== 'string' || typeof data.access_token !== 'string') {
-			throw new ValidationError('invalid token response');
+			throw new Error('Invalid Google token response');
 		}
 
 		return { id_token: data.id_token, access_token: data.access_token };
@@ -100,10 +101,10 @@ export class AuthService {
 
 	async getGoogleUserInfo(accessToken: string): Promise<z.infer<typeof GoogleUserInfoSchema>> {
 		const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization: `Bearer ${accessToken}` } });
-		if (!response.ok) throw new ValidationError('Google user info failed');
+		if (!response.ok) throw new Error(`Google user info failed: ${response.status}`);
 
 		const parsed = GoogleUserInfoSchema.safeParse(await response.json());
-		if (!parsed.success) throw new ValidationError('Invalid Google user info');
+		if (!parsed.success) throw new Error('Invalid Google user info');
 
 		return parsed.data;
 	}
@@ -147,14 +148,15 @@ export class AuthService {
 		return token;
 	}
 
-	async authenticatePassword(username: string, password: string): Promise<AuthUserBrief | null> {
+	async authenticatePassword(username: string, password: string): Promise<AuthUserBrief> {
 		const user = await this.users.findByUsername(username);
-		if (!user?.password_hash || user.status === 'banned' || !(await verifyPassword(password, user.password_hash))) return null;
+		if (!user?.password_hash || user.status === 'banned' || !(await verifyPassword(password, user.password_hash))) throw new UnauthorizedError('Credenciales invalidas');
+
 		return this.toBrief(user);
 	}
 
 	async register(username: string, password: string): Promise<AuthUserBrief> {
-		if (await this.users.findByUsername(username)) throw new ValidationError('username already in use');
+		if (await this.users.findByUsername(username)) throw new ConflictError('username already in use');
 		const user = await this.users.createLocal(username, await encodePassword(password));
 		return this.toBrief(user);
 	}
@@ -171,6 +173,23 @@ export class AuthService {
 	async verifyCurrentPassword(userId: number, password: string): Promise<boolean> {
 		const user = await new AuthRepository(this.db).findUserById(userId);
 		return user?.password_hash ? verifyPassword(password, user.password_hash) : false;
+	}
+
+	async changePassword(userId: number, currentPassword: string, password: string): Promise<void> {
+		if (!(await this.verifyCurrentPassword(userId, currentPassword))) throw new UnauthorizedError('Credenciales invalidas');
+
+		await this.setPassword(userId, password);
+	}
+
+	async verifyTotpSetup(userId: number, code: string): Promise<void> {
+		const auth = new AuthRepository(this.db);
+		const encrypted = await auth.getTotpSecret(userId);
+		if (!encrypted) throw new ValidationError('no totp');
+
+		const secret = new TextDecoder().decode(encrypted);
+		if (!(await this.totpVerify(secret, code))) throw new ValidationError('invalid code');
+
+		await auth.verifyTotp(userId);
 	}
 
 	async totpVerify(secretBase32: string, token: string, window = 1): Promise<boolean> {

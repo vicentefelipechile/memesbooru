@@ -36,7 +36,7 @@ describe('account email boundary', () => {
 		const service = new AuthService(env.DB);
 		const user = await service.register('only_username', 'password123');
 		expect(await service.authenticatePassword('only_username', 'password123')).toMatchObject(user);
-		expect(await service.authenticatePassword('only_username', 'wrongpass')).toBeNull();
+		await expect(service.authenticatePassword('only_username', 'wrongpass')).rejects.toMatchObject({ status: 401 });
 		const row = await env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(user.id).first<{ email: string | null }>();
 		expect(row?.email).toBeNull();
 	});

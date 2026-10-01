@@ -54,6 +54,10 @@ export class PostRepository {
 		return queryOne<PostRow>(this.db, 'SELECT * FROM posts WHERE id = ?', [id]);
 	}
 
+	findPostIdById(id: number): Promise<Pick<PostRow, 'id'> | null> {
+		return queryOne(this.db, 'SELECT id FROM posts WHERE id = ?', [id]);
+	}
+
 	findPostForTags(publicId: string): Promise<Pick<PostRow, 'id' | 'author_id' | 'media_type' | 'status'> | null> {
 		return queryOne(this.db, 'SELECT id, author_id, media_type, status FROM posts WHERE public_id = ?', [publicId]);
 	}
