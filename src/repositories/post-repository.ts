@@ -54,6 +54,16 @@ export class PostRepository {
 		return queryOne<PostRow>(this.db, 'SELECT * FROM posts WHERE id = ?', [id]);
 	}
 
+	findPostForTags(publicId: string): Promise<Pick<PostRow, 'id' | 'author_id' | 'media_type' | 'status'> | null> {
+		return queryOne(this.db, 'SELECT id, author_id, media_type, status FROM posts WHERE public_id = ?', [publicId]);
+	}
+
+	async replaceTags(postId: number, names: string[], userId: number): Promise<void> {
+		const ids = await new tagRepo.TagRepository(this.db).ensureTags(names.map(normalizeTag), userId);
+		const now = Date.now();
+		await batch(this.db, [this.db.prepare('DELETE FROM post_tags WHERE post_id = ?').bind(postId), ...ids.map((tagId) => tagRepo.buildInsertPostTagStatement(this.db, { postId, tagId, addedBy: userId, createdAt: now }))]);
+	}
+
 	async findPublicIdById(id: number): Promise<string | null> {
 		const row = await queryOne<Pick<PostRow, 'public_id'>>(this.db, 'SELECT public_id FROM posts WHERE id = ?', [id]);
 		return row?.public_id ?? null;

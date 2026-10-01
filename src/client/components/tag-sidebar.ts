@@ -20,7 +20,7 @@ export function renderTagged(tags: SidebarTag[]): string {
 		if (!items.length) return '';
 
 		return `<section class="sidebar-cat" data-cat="${category}"><h3>${CATEGORY_LABELS[category]}</h3><ul>${items
-			.map((tag) => `<li><a href="/?tags=${encodeURIComponent(tag.name)}" data-link>${escapeHtml(tag.name.replaceAll('_', ' '))}</a> <span class="count">${tag.count}</span></li>`)
+			.map((tag) => `<li><a href="/posts?tags=${encodeURIComponent(tag.name)}" data-link>${escapeHtml(tag.name.replaceAll('_', ' '))}</a> <span class="count">${tag.count}</span></li>`)
 			.join('')}</ul></section>`;
 	}).join('');
 }

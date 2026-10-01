@@ -32,7 +32,7 @@ const LINKS: Record<string, [string, string][]> = {
 	],
 	tags: [
 		['Lista', '/tags'],
-		['Editar', '/tags/edit'],
+		['Crear', '/tags/create'],
 	],
 	pools: [
 		['Lista', '/pools'],
@@ -61,7 +61,7 @@ export function navigationSection(pathname: string): string {
 	return section in LINKS ? section : '';
 }
 
-export function renderSubNav(pathname: string, username?: string): string {
+export function renderSubNav(pathname: string, username?: string, canEditTags = false): string {
 	const section = navigationSection(pathname);
 	const links: [string, string][] =
 		section === 'account'
@@ -77,5 +77,8 @@ export function renderSubNav(pathname: string, username?: string): string {
 					['Aleatorio', '/random'],
 				]);
 
-	return `<nav class="site-subnav" aria-label="${section ? `Opciones de ${section}` : 'Inicio'}">${links.map(([label, href]) => `<a href="${href}" data-link>${label}</a>`).join('')}</nav>`;
+	return `<nav class="site-subnav" aria-label="${section ? `Opciones de ${section}` : 'Inicio'}">${links
+		.filter(([, href]) => canEditTags || !['/aliases/create', '/tags/create'].includes(href))
+		.map(([label, href]) => `<a href="${href}" data-link>${label}</a>`)
+		.join('')}</nav>`;
 }

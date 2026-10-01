@@ -57,9 +57,9 @@ async function resolveViaAliases(db: DB, normalized: string[]): Promise<ResolveA
 			tag_id,
 			alias_normalized
 		FROM
-			tag_aliases
+			tag_aliases a JOIN tags t ON t.id = a.tag_id
 		WHERE
-			alias_normalized
+			t.status = 'active' AND alias_normalized
 		IN
 			(${placeholders})
 		`,
@@ -94,17 +94,29 @@ export async function findByPostIds(db: DB, postIds: PostId[]): Promise<Pick<Tag
 
 export async function autocomplete(db: DB, prefix: string, limit = 20): Promise<TagRow[]> {
 	const norm = normalizeTag(prefix);
-	const safePattern = norm.replace(/[%_\\]/g, '\\$&');
+	if (!norm || norm.length > 40) return [];
+	const pattern = `${norm.replace(/[%_\\]/g, '\\$&')}%`;
+	const columns = 't.id, t.normalized_name, t.display_name, t.description, t.category, t.usage_count, t.status, t.created_by, t.created_at, t.updated_at';
+	const tags = await queryAll<TagRow>(db, `SELECT ${columns} FROM tags t WHERE t.status = 'active' AND t.normalized_name LIKE ? ESCAPE '\\' ORDER BY t.usage_count DESC, t.normalized_name ASC LIMIT ?`, [pattern, limit]);
+	const aliases = await queryAll<TagRow>(
+		db,
+		`SELECT ${columns} FROM tag_aliases a JOIN tags t ON t.id = a.tag_id WHERE t.status = 'active' AND a.alias_normalized LIKE ? ESCAPE '\\' ORDER BY t.usage_count DESC, t.normalized_name ASC LIMIT ?`,
+		[pattern, limit],
+	);
 
-	return queryAll<TagRow>(db, "SELECT * FROM tags WHERE normalized_name LIKE ? || '%' ESCAPE '\\' ORDER BY usage_count DESC, normalized_name ASC LIMIT ?", [safePattern, limit]);
+	return [...new Map([...tags, ...aliases].map((tag) => [tag.id, tag])).values()].sort((a, b) => b.usage_count - a.usage_count || a.normalized_name.localeCompare(b.normalized_name)).slice(0, limit);
 }
 
 export async function findByPostId(db: DB, postId: number): Promise<TagRow[]> {
-	return queryAll<TagRow>(db, 'SELECT t.* FROM tags t JOIN post_tags pt ON pt.tag_id = t.id WHERE pt.post_id = ? ORDER BY t.normalized_name', [postId]);
+	return queryAll<TagRow>(
+		db,
+		"SELECT t.id, t.normalized_name, t.display_name, t.description, t.category, t.usage_count, t.status, t.created_by, t.created_at, t.updated_at FROM tags t JOIN post_tags pt ON pt.tag_id = t.id WHERE pt.post_id = ? AND t.status = 'active' ORDER BY t.normalized_name",
+		[postId],
+	);
 }
 
 export async function findById(db: DB, id: number): Promise<TagRow | null> {
-	return queryOne<TagRow>(db, 'SELECT * FROM tags WHERE id = ?', [id]);
+	return queryOne<TagRow>(db, 'SELECT id, normalized_name, display_name, description, category, usage_count, status, created_by, created_at, updated_at FROM tags WHERE id = ?', [id]);
 }
 
 export async function listByCategory(db: DB, category: string, opts: ListByCategoryOpts): Promise<TagRow[]> {
@@ -114,11 +126,11 @@ export async function listByCategory(db: DB, category: string, opts: ListByCateg
 	return queryAll<TagRow>(
 		db,
 		`SELECT
-			*
+			id, normalized_name, display_name, description, category, usage_count, status, created_by, created_at, updated_at
 		FROM
 			tags
 		WHERE
-			category = ?
+			category = ? AND status = 'active'
 		ORDER BY
 			usage_count DESC,
 			normalized_name ASC
@@ -132,7 +144,8 @@ export async function listByCategory(db: DB, category: string, opts: ListByCateg
 export async function listGroupedByCategory(db: DB, perCategoryLimit = 25): Promise<Record<string, TagRow[]>> {
 	const sql = `
 		WITH ranked AS (
-			SELECT *, ROW_NUMBER() OVER (PARTITION BY category ORDER BY normalized_name ASC) AS rn
+			SELECT id, normalized_name, display_name, category, usage_count, status, created_by, created_at, updated_at,
+				ROW_NUMBER() OVER (PARTITION BY category ORDER BY normalized_name ASC) AS rn
 			FROM tags
 			WHERE status = 'active'
 		)

@@ -81,6 +81,16 @@ export function normalizeTag(input: string): string {
 		.replace(/__+/g, '_');
 }
 
+export const TagInputSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.max(100)
+	.refine((value) => {
+		const normalized = normalizeTag(value);
+		return normalized.length > 0 && normalized.length <= 40;
+	}, 'Invalid tag name');
+
 function parseQueryWithArrays(url: string): Record<string, string | string[]> {
 	const sp = new URL(url).searchParams;
 	const out: Record<string, string | string[]> = {};
@@ -112,7 +122,7 @@ export const tagNormalizedSchema = z
 export const CreatePostSchema = z.object({
 	title: sanitizedString(120).optional().nullable(),
 	description: sanitizedString(2000).optional().nullable(),
-	tags: z.array(z.string()).min(1).max(20),
+	tags: z.array(TagInputSchema).min(1).max(20),
 	media_type: z.enum(MEDIA_TYPES),
 });
 
@@ -172,29 +182,27 @@ export const ProfilePostsQuerySchema = z.object({ cursor: z.string().max(200).op
 
 export const SearchCursorSchema = z.object({ id: z.number().int().positive(), score: z.number().optional(), published_at: z.number().optional() });
 
-export const SearchQuerySchema = z.object({
-	tags: z
-		.union([z.string(), z.array(z.string())])
-		.transform((value) => (Array.isArray(value) ? value.join(' ') : value))
-		.pipe(z.string().max(500))
-		.refine((value) => value.trim().split(/\s+/).filter(Boolean).length <= 40, 'Too many search tags')
-		.refine(
-			(value) =>
-				value
-					.split(/\s+/)
-					.filter(Boolean)
-					.every((tag) => normalizeTag(tag.replace(/^-/, '')).length > 0),
-			'Invalid search tag',
-		)
-		.optional(),
-	q: z.string().trim().min(1).max(100).optional().catch(undefined),
-	sort: z.enum(['recent', 'popular']).catch('recent').default('recent'),
-	cursor: z.string().max(200).optional(),
-	limit: z.coerce.number().int().min(1).max(60).catch(20).default(20),
-	page: z.coerce.number().int().min(1).catch(1).default(1),
-	sort_by: z.enum(['created_at', 'title', 'published_at', 'score']).catch('created_at').default('created_at'),
-	sort_order: z.enum(['asc', 'desc']).catch('desc').default('desc'),
-});
+export const SearchQuerySchema = z
+	.object({
+		tags: z
+			.union([z.string(), z.array(z.string())])
+			.transform((value) => (Array.isArray(value) ? value.join(' ') : value))
+			.pipe(z.string().max(500))
+			.refine((value) => value.trim().split(/\s+/).filter(Boolean).length <= 40, 'Too many search tags')
+			.refine(
+				(value) =>
+					value
+						.split(/\s+/)
+						.filter(Boolean)
+						.every((tag) => normalizeTag(tag.replace(/^-/, '')).length > 0),
+				'Invalid search tag',
+			)
+			.optional(),
+		sort: z.enum(['recent', 'popular']).catch('recent').default('recent'),
+		cursor: z.string().max(200).optional(),
+		limit: z.coerce.number().int().min(1).max(60).catch(20).default(20),
+	})
+	.strict();
 
 export const PostFilterSchema = z.object({
 	status: z
@@ -233,7 +241,18 @@ export const ProfilePostsResponseSchema = z.object({
 	nextCursor: z.string().nullable(),
 });
 export const AutocompleteResponseSchema = z.object({ tags: z.array(z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number().optional() })) });
-export const TagEditResponseSchema = z.object({ id: z.number(), normalized_name: z.string(), display_name: z.string().nullable(), category: z.enum(TAG_CATEGORIES) });
+export const TagEditResponseSchema = z.object({
+	id: z.number(),
+	normalized_name: z.string(),
+	display_name: z.string().nullable(),
+	description: z.string().nullable(),
+	category: z.enum(TAG_CATEGORIES),
+	usage_count: z.number(),
+	status: z.string(),
+});
+export const TagDirectoryResponseSchema = z.object({ data: z.array(TagEditResponseSchema), nextCursor: z.number().nullable() });
+export const AliasItemSchema = z.object({ id: z.number(), alias_normalized: z.string(), normalized_name: z.string(), tag_id: z.number(), created_at: z.number() });
+export const AliasDirectoryResponseSchema = z.object({ data: z.array(AliasItemSchema), nextCursor: z.number().nullable() });
 export const TagItemSchema = z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number() });
 export const BrowseTagsQuerySchema = z.object({
 	category: z.enum(TAG_CATEGORIES).optional().catch(undefined),
@@ -260,6 +279,7 @@ export const PostResponseSchema = z.object({
 	rating_count: z.number().optional(),
 	published_at: z.number().optional(),
 	post_id: z.number().optional(),
+	author_id: z.number().optional(),
 	restricted: z.boolean().optional(),
 	redirectTo: z.string().optional(),
 });

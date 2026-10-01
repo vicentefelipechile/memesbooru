@@ -38,6 +38,8 @@ const routes: Route[] = [
 	{ pattern: /^\/random$/, render: () => renderRandom(new URL(location.href).searchParams.get('tags') ?? undefined), bind: () => bindRandom() },
 	{ pattern: /^\/comments$/, render: () => renderSection('comments'), bind: () => bindSection('comments') },
 	{ pattern: /^\/(wiki|aliases|artists|pools|forum)\/create$/, render: (m) => renderSection(m[1], 'create'), bind: (m) => bindSection(m[1]) },
+	{ pattern: /^\/tags\/create$/, render: () => renderSection('tags', 'create'), bind: () => bindSection('tags') },
+	{ pattern: /^\/aliases\/edit$/, render: () => renderSection('aliases', 'edit'), bind: () => bindSection('aliases') },
 	{ pattern: /^\/tags\/edit$/, render: () => renderSection('tags', 'edit'), bind: () => bindSection('tags') },
 	{ pattern: /^\/wiki(?:\/[^/]+)?$/, render: () => renderSection('wiki'), bind: () => bindSection('wiki') },
 	{ pattern: /^\/aliases$/, render: () => renderSection('aliases'), bind: () => bindSection('aliases') },
@@ -99,7 +101,7 @@ async function renderRoute(path: string): Promise<void> {
 
 function updateNavigation(pathname: string): void {
 	const subnav = document.querySelector('.site-subnav');
-	if (subnav) subnav.outerHTML = renderSubNav(pathname, store.get().user?.username);
+	if (subnav) subnav.outerHTML = renderSubNav(pathname, store.get().user?.username, store.get().user?.permissions?.includes('edit_tags') === true);
 
 	const section = navigationSection(pathname);
 	for (const link of Array.from(document.querySelectorAll<HTMLAnchorElement>('.site-nav a[data-link], .site-subnav a[data-link]'))) {

@@ -9,7 +9,7 @@
 // =========================================================================================================
 
 import { queryOne, queryAll, batch, execute, type DB } from '../db/client';
-import type { TagAliasRow, TagRow, PostTagRow, NextIdRow } from '../db/schema';
+import type { TagAliasRow, TagRow, PostTagRow } from '../db/schema';
 import type { PostId } from '../types';
 import { resolveTagIds, resolveTags, findByPostIds, findByPostId, listByCategory, listGroupedByCategory, autocomplete, sortTagIdsByUsage, type ResolveAliasesResult, type ListByCategoryOpts } from './tag-lookup';
 
@@ -43,25 +43,18 @@ export function buildInsertPostTagStatement(db: DB, row: InsertPostTagStatementD
 // Commands
 // =========================================================================================================
 
-export async function incrementUsage(db: DB, tagIds: number[]): Promise<void> {
-	if (!tagIds.length) return;
-
-	const stmts = tagIds.map((id) => db.prepare('UPDATE tags SET usage_count = usage_count + 1, updated_at = ? WHERE id = ?').bind(Date.now(), id));
-
-	await batch(db, stmts);
-}
-
 export async function ensureTags(db: DB, normalized: string[], authorId: number): Promise<number[]> {
 	const ids: number[] = [];
 	const now = Date.now();
 
-	for (const n of normalized) {
-		const id = await findOrCreateTagId(db, n, authorId, now);
+	for (const n of new Set(normalized)) {
+		const resolved = await resolveTagIds(db, [n]);
+		const id = resolved[0] ?? (await findOrCreateTagId(db, n, authorId, now));
 
 		ids.push(id);
 	}
 
-	return ids;
+	return [...new Set(ids)];
 }
 
 export class TagRepository {
@@ -103,12 +96,38 @@ export class TagRepository {
 		return autocomplete(this.db, prefix, limit);
 	}
 
-	list(limit = 100, offset = 0): Promise<TagRow[]> {
-		return queryAll<TagRow>(this.db, 'SELECT id, normalized_name, display_name, description, category, usage_count, status, created_by, created_at, updated_at FROM tags ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?', [limit, offset]);
+	list(limit = 100, cursor?: number, prefix = '', category?: string): Promise<TagRow[]> {
+		const pattern = `${prefix.replace(/[%_\\]/g, '\\$&')}%`;
+		return queryAll<TagRow>(
+			this.db,
+			`SELECT id, normalized_name, display_name, description, category, usage_count, status, created_by, created_at, updated_at FROM tags WHERE id < ? AND normalized_name LIKE ? ESCAPE '\\'${category ? ' AND category = ?' : ''} ORDER BY id DESC LIMIT ?`,
+			[cursor ?? Number.MAX_SAFE_INTEGER, pattern, ...(category ? [category] : []), limit],
+		);
 	}
 
-	findById(id: number): Promise<Pick<TagRow, 'id' | 'normalized_name' | 'display_name' | 'category'> | null> {
-		return queryOne(this.db, 'SELECT id, normalized_name, display_name, category FROM tags WHERE id = ? AND status = ?', [id, 'active']);
+	findById(id: number): Promise<TagRow | null> {
+		return queryOne<TagRow>(this.db, 'SELECT id, normalized_name, display_name, description, category, usage_count, status, created_by, created_at, updated_at FROM tags WHERE id = ?', [id]);
+	}
+
+	findByName(name: string): Promise<Pick<TagRow, 'id'> | null> {
+		return queryOne<Pick<TagRow, 'id'>>(this.db, 'SELECT id FROM tags WHERE normalized_name = ?', [name]);
+	}
+
+	findAlias(id: number): Promise<(TagAliasRow & Pick<TagRow, 'normalized_name'>) | null> {
+		return queryOne<TagAliasRow & Pick<TagRow, 'normalized_name'>>(this.db, 'SELECT a.id, a.alias_normalized, a.tag_id, a.created_by, a.created_at, t.normalized_name FROM tag_aliases a JOIN tags t ON t.id = a.tag_id WHERE a.id = ?', [id]);
+	}
+
+	findAliasByName(name: string): Promise<TagAliasRow | null> {
+		return queryOne<TagAliasRow>(this.db, 'SELECT id, alias_normalized, tag_id, created_by, created_at FROM tag_aliases WHERE alias_normalized = ?', [name]);
+	}
+
+	async create(name: string, display: string | null, description: string | null, category: string, userId: number): Promise<number> {
+		const now = Date.now();
+		await execute(this.db, 'INSERT INTO tags (normalized_name, display_name, description, category, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [name, display, description, category, userId, now, now]);
+		const row = await this.findByName(name);
+		if (!row) throw new Error('Tag creation failed');
+
+		return row.id;
 	}
 
 	async update(id: number, displayName: string, description: string | null | undefined, category: string, userId: number): Promise<void> {
@@ -124,15 +143,23 @@ export class TagRepository {
 	}
 
 	async addAlias(alias: string, tagId: number, userId: number): Promise<void> {
-		const id = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id), 0) + 1 AS v FROM tag_aliases', []))?.v ?? 1;
-		await execute(this.db, 'INSERT INTO tag_aliases (id, alias_normalized, tag_id, created_by, created_at) VALUES (?, ?, ?, ?, ?)', [id, alias, tagId, userId, Date.now()]);
+		await execute(this.db, 'INSERT INTO tag_aliases (alias_normalized, tag_id, created_by, created_at) VALUES (?, ?, ?, ?)', [alias, tagId, userId, Date.now()]);
 	}
 
-	listAliases(limit = 100, offset = 0): Promise<(TagAliasRow & Pick<TagRow, 'normalized_name'>)[]> {
+	updateAlias(id: number, alias: string, tagId: number): Promise<D1Result> {
+		return execute(this.db, 'UPDATE tag_aliases SET alias_normalized = ?, tag_id = ? WHERE id = ?', [alias, tagId, id]);
+	}
+
+	deleteAlias(id: number): Promise<D1Result> {
+		return execute(this.db, 'DELETE FROM tag_aliases WHERE id = ?', [id]);
+	}
+
+	listAliases(limit = 100, cursor?: number, prefix = ''): Promise<(TagAliasRow & Pick<TagRow, 'normalized_name'>)[]> {
+		const pattern = `${prefix.replace(/[%_\\]/g, '\\$&')}%`;
 		return queryAll<TagAliasRow & Pick<TagRow, 'normalized_name'>>(
 			this.db,
-			'SELECT a.id, a.alias_normalized, a.tag_id, a.created_by, a.created_at, t.normalized_name FROM tag_aliases a JOIN tags t ON t.id = a.tag_id ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?',
-			[limit, offset],
+			"SELECT a.id, a.alias_normalized, a.tag_id, a.created_by, a.created_at, t.normalized_name FROM tag_aliases a JOIN tags t ON t.id = a.tag_id WHERE a.id < ? AND a.alias_normalized LIKE ? ESCAPE '\\' ORDER BY a.id DESC LIMIT ?",
+			[cursor ?? Number.MAX_SAFE_INTEGER, pattern, limit],
 		);
 	}
 
@@ -140,41 +167,31 @@ export class TagRepository {
 		return queryAll(this.db, 'SELECT id, tag_id, action, previous_value, new_value, created_by, created_at FROM tag_history WHERE tag_id = ? ORDER BY id DESC', [tagId]);
 	}
 
+	findHistory(tagId: number, historyId: number): Promise<Pick<TagRow, 'id'> | null> {
+		return queryOne<Pick<TagRow, 'id'>>(this.db, 'SELECT id FROM tag_history WHERE id = ? AND tag_id = ? AND previous_value IS NOT NULL', [historyId, tagId]);
+	}
+
 	async revert(tagId: number, historyId: number, userId: number): Promise<void> {
 		const history = await queryOne<{ previous_value: string | null }>(this.db, 'SELECT previous_value FROM tag_history WHERE id = ? AND tag_id = ?', [historyId, tagId]);
 		if (!history?.previous_value) throw new Error('history not found');
+		const current = await queryOne<Pick<TagRow, 'display_name' | 'description' | 'category'>>(this.db, 'SELECT display_name, description, category FROM tags WHERE id = ?', [tagId]);
+		if (!current) throw new Error('tag not found');
 		const now = Date.now();
 		await batch(this.db, [
-			this.db.prepare("UPDATE tags SET display_name = json_extract(?, '$.display_name'), category = json_extract(?, '$.category'), updated_at = ? WHERE id = ?").bind(history.previous_value, history.previous_value, now, tagId),
+			this.db
+				.prepare("UPDATE tags SET display_name = json_extract(?, '$.display_name'), description = json_extract(?, '$.description'), category = json_extract(?, '$.category'), updated_at = ? WHERE id = ?")
+				.bind(history.previous_value, history.previous_value, history.previous_value, now, tagId),
 			this.db
 				.prepare('INSERT INTO tag_history (id, tag_id, action, previous_value, new_value, created_by, created_at) VALUES (COALESCE((SELECT MAX(id) + 1 FROM tag_history), 1), ?, ?, ?, ?, ?, ?)')
-				.bind(tagId, 'revert', null, history.previous_value, userId, now),
+				.bind(tagId, 'revert', JSON.stringify(current), history.previous_value, userId, now),
 		]);
 	}
 }
 
 async function findOrCreateTagId(db: DB, normalized: string, authorId: number, now: number): Promise<number> {
-	const existing = await queryOne<Pick<TagRow, 'id'>>(db, 'SELECT id FROM tags WHERE normalized_name = ?', [normalized]);
-	if (existing) return existing.id;
+	await execute(db, 'INSERT OR IGNORE INTO tags (normalized_name, created_by, created_at, updated_at) VALUES (?, ?, ?, ?)', [normalized, authorId, now, now]);
+	const tag = await queryOne<Pick<TagRow, 'id' | 'status'>>(db, 'SELECT id, status FROM tags WHERE normalized_name = ?', [normalized]);
+	if (!tag || tag.status !== 'active') throw new Error('Tag not active');
 
-	const nextId = (await queryOne<NextIdRow>(db, 'SELECT COALESCE(MAX(id),0)+1 as v FROM tags', []))?.v ?? 1;
-
-	await batch(db, [
-		db
-			.prepare(
-				`INSERT INTO tags (
-					id,
-					normalized_name,
-					category,
-					usage_count,
-					status,
-					created_by,
-					created_at,
-					updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			)
-			.bind(nextId, normalized, 'reaction', 0, 'active', authorId, now, now),
-	]);
-
-	return nextId;
+	return tag.id;
 }

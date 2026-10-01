@@ -32,18 +32,27 @@ function esc(value: string | number | null | undefined): string {
 
 function form(name: string, fields: string, submit: string): string {
 	const widget = name === 'login' || name === 'register' ? '<div data-turnstile aria-label="Verificación antibots"></div>' : '';
-	return `<form id="create" class="form-stack section-form" data-section-form="${name}">${fields}${widget}<button class="primary" type="submit" ${widget ? 'disabled' : ''}>${submit}</button><p class="form-msg" data-form-status></p></form>`;
+	return `<form id="create" class="form-stack section-form" data-section-form="${name}">${fields}${widget}<button class="primary" type="submit" ${widget ? 'disabled' : ''}>${submit}</button><p class="form-msg" data-form-status role="status" aria-live="polite"></p></form>`;
 }
 
 export async function renderSection(name: string, mode: 'list' | 'create' | 'edit' = 'list'): Promise<string> {
 	if (mode !== 'list') {
-		const tagId = name === 'tags' ? Number(new URL(location.href).searchParams.get('id')) : 0;
-		if (name === 'tags' && (!Number.isSafeInteger(tagId) || tagId < 1)) return '<p class="error">Selecciona un tag desde la lista.</p>';
-		const tag = name === 'tags' ? await api.tags.get(tagId) : null;
+		if ((name === 'tags' || name === 'aliases') && !store.get().user?.permissions?.includes('edit_tags')) return '<p class="error">Necesitas permiso para editar tags.</p>';
+		const query = new URL(location.href).searchParams;
+		const tagId = name === 'tags' && mode === 'edit' ? Number(query.get('id')) : 0;
+		if (name === 'tags' && mode === 'edit' && (!Number.isSafeInteger(tagId) || tagId < 1)) return '<p class="error">Selecciona un tag desde la lista.</p>';
+		const tag = name === 'tags' && mode === 'edit' ? await api.tags.get(tagId) : null;
+		const aliasId = name === 'aliases' && mode === 'edit' ? Number(query.get('id')) : 0;
+		if (name === 'aliases' && mode === 'edit' && (!Number.isSafeInteger(aliasId) || aliasId < 1)) return '<p class="error">Selecciona un alias desde la lista.</p>';
+		const alias = aliasId ? await api.tags.getAlias(aliasId) : null;
 		const tagField = `<div class="field"><label for="section-tag-input">Tag</label>${renderTagAutocompleteField('<input id="section-tag-input" name="tag" required maxlength="100" autocomplete="off" data-single-tag>')}</div>`;
 		const forms: Record<string, string> = {
 			wiki: form('wiki', `${tagField}<label>Título<input name="title" required maxlength="200"></label><label>Contenido<textarea name="body" required maxlength="10000"></textarea></label>`, 'Crear artículo'),
-			aliases: form('alias', `<label>Alias<input name="alias" required maxlength="100"></label>${tagField}`, 'Añadir alias'),
+			aliases: form(
+				'alias',
+				`${aliasId ? `<input type="hidden" name="id" value="${aliasId}">` : ''}<label>Alias<input name="alias" value="${esc(alias?.alias_normalized)}" required maxlength="100"></label><small class="hint">Nombre alternativo de un tag existente; se normaliza a minúsculas y guiones bajos.</small>${tagField.replace('name="tag"', `name="tag" value="${esc(alias?.normalized_name)}"`)}`,
+				aliasId ? 'Guardar alias' : 'Añadir alias',
+			),
 			artists: form('artist', '<label>Nombre<input name="name" required maxlength="100"></label>', 'Crear artista'),
 			pools: form('pool', '<label>Nombre<input name="name" required maxlength="120"></label><label>Descripción<textarea name="description" maxlength="2000"></textarea></label>', 'Crear pool'),
 			forum: form(
@@ -52,12 +61,12 @@ export async function renderSection(name: string, mode: 'list' | 'create' | 'edi
 				'Crear tema',
 			),
 			tags: form(
-				'tag',
-				`<input name="id" type="hidden" value="${tagId}"><label>Nombre visible<input name="display_name" value="${esc(tag?.display_name ?? tag?.normalized_name)}" required maxlength="100" pattern="[a-z0-9]+(_[a-z0-9]+)*(_\\([a-z0-9]+(_[a-z0-9]+)*\\))?" title="Minúsculas, números y guiones bajos; opcionalmente _(tipo)." autocomplete="off"><small class="hint">Sin espacios. Ej.: curitoons, carl_jhonson_(personaje).</small></label><label>Categoría<select name="category">${CATEGORY_ORDER.map((category) => `<option value="${category}" ${tag?.category === category ? 'selected' : ''}>${category === 'source' ? 'Origen (juegos, series, películas)' : CATEGORY_LABELS[category]}</option>`).join('')}</select></label>`,
+				mode === 'create' ? 'tag-create' : 'tag',
+				`${tag ? `<input name="id" type="hidden" value="${tagId}">` : '<label>Nombre del tag<input name="name" required maxlength="100" placeholder="nombre_del_tag"></label>'}<label>Nombre visible<input name="display_name" value="${esc(tag?.display_name ?? tag?.normalized_name)}" ${tag ? 'required' : ''} maxlength="100" pattern="[a-z0-9]+(_[a-z0-9]+)*(_\\([a-z0-9]+(_[a-z0-9]+)*\\))?" title="Minúsculas, números y guiones bajos; opcionalmente _(tipo)." autocomplete="off"><small class="hint">Sin espacios. Ej.: curitoons, carl_jhonson_(personaje).</small></label><label>Descripción<textarea name="description" maxlength="2000">${esc(tag?.description)}</textarea></label><label>Categoría<select name="category">${CATEGORY_ORDER.map((category) => `<option value="${category}" ${tag?.category === category ? 'selected' : ''}>${category === 'source' ? 'Origen (juegos, series, películas)' : CATEGORY_LABELS[category]}</option>`).join('')}</select></label>`,
 				'Guardar tag',
 			),
 		};
-		const title: Record<string, string> = { wiki: 'Crear artículo', aliases: 'Añadir alias', artists: 'Añadir artista', tags: 'Editar tag', pools: 'Crear pool', forum: 'Crear tema' };
+		const title: Record<string, string> = { wiki: 'Crear artículo', aliases: aliasId ? 'Editar alias' : 'Añadir alias', artists: 'Añadir artista', tags: tag ? 'Editar tag' : 'Crear tag', pools: 'Crear pool', forum: 'Crear tema' };
 
 		return `<section class="page-head"><h1>${title[name]}${tag ? `: ${esc(tag.normalized_name)}` : ''}</h1></section>${forms[name]}`;
 	}
@@ -120,20 +129,32 @@ export async function renderSection(name: string, mode: 'list' | 'create' | 'edi
 	}
 
 	if (name === 'aliases') {
-		const result = await api.tags.aliases().catch(() => ({ data: [] }));
-		const rows = result.data.map((item) => `<tr><td>${esc(item.alias_normalized)}</td><td>${esc(item.normalized_name)}</td><td>${esc(item.created_at)}</td></tr>`).join('');
-		return `<section class="page-head"><h1>Aliases</h1><p>Los aliases redirigen nombres alternativos al tag canónico.</p></section><table class="data-table"><thead><tr><th>Alias</th><th>Destino</th><th>Creado</th></tr></thead><tbody>${rows || '<tr><td colspan="3">No hay aliases.</td></tr>'}</tbody></table>`;
-	}
-
-	if (name === 'tags') {
-		const result = await api.tags.list().catch(() => ({ data: [] }));
+		const params = new URL(location.href).searchParams;
+		const q = params.get('q') ?? '';
+		const result = await api.tags.aliases(q, Number(params.get('cursor')) || undefined);
+		const canEdit = store.get().user?.permissions?.includes('edit_tags');
 		const rows = result.data
 			.map(
 				(item) =>
-					`<tr><td>${esc(item.display_name ?? item.normalized_name)}</td><td>${esc(CATEGORY_LABELS[String(item.category)] ?? item.category)}</td><td>${esc(item.usage_count)}</td><td>${esc(item.status)}</td><td><button data-tag-edit="${esc(item.id)}">Editar</button></td></tr>`,
+					`<tr><td>${esc(item.alias_normalized)}</td><td><a href="/posts?tags=${encodeURIComponent(item.normalized_name)}" data-link>${esc(item.normalized_name)}</a></td><td>${new Date(item.created_at).toLocaleDateString('es-ES')}</td>${canEdit ? `<td><a href="/aliases/edit?id=${item.id}" data-link>Editar</a> <button data-alias-delete="${item.id}">Eliminar</button></td>` : ''}</tr>`,
 			)
 			.join('');
-		return `<section class="page-head"><h1>Tags</h1><p>Listado y categorías de tags.</p></section><table class="data-table"><thead><tr><th>Nombre</th><th>Categoría</th><th>Posts</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No hay tags.</td></tr>'}</tbody></table>`;
+		return `<section class="page-head"><h1>Aliases</h1><p>Nombres alternativos que apuntan a un tag.</p></section><form data-directory="aliases"><label>Buscar alias <input name="q" value="${esc(q)}" maxlength="100"></label><button>Buscar</button></form><p data-directory-status role="status" aria-live="polite"></p><table class="data-table"><thead><tr><th>Alias</th><th>Destino</th><th>Creado</th>${canEdit ? '<th>Acciones</th>' : ''}</tr></thead><tbody>${rows || `<tr><td colspan="${canEdit ? 4 : 3}">No hay aliases.</td></tr>`}</tbody></table>${result.nextCursor ? `<a href="/aliases?q=${encodeURIComponent(q)}&cursor=${result.nextCursor}" data-link>Siguiente →</a>` : ''}`;
+	}
+
+	if (name === 'tags') {
+		const params = new URL(location.href).searchParams;
+		const q = params.get('q') ?? '';
+		const category = params.get('category') ?? '';
+		const result = await api.tags.list(q, Number(params.get('cursor')) || undefined, category);
+		const canEdit = store.get().user?.permissions?.includes('edit_tags');
+		const rows = result.data
+			.map(
+				(item) =>
+					`<tr><td><a href="/posts?tags=${encodeURIComponent(item.normalized_name)}" data-link>${esc(item.display_name ?? item.normalized_name)}</a></td><td>${esc(CATEGORY_LABELS[String(item.category)] ?? item.category)}</td><td>${item.usage_count}</td><td>${esc(item.status)}</td>${canEdit ? `<td><button data-tag-edit="${item.id}">Editar</button></td>` : ''}</tr>`,
+			)
+			.join('');
+		return `<section class="page-head"><h1>Tags</h1><p>Listado y categorías de tags.</p></section><form data-directory="tags"><label>Buscar tag <input name="q" value="${esc(q)}" maxlength="100"></label><label>Categoría <select name="category"><option value="">Todas</option>${CATEGORY_ORDER.map((value) => `<option value="${value}" ${category === value ? 'selected' : ''}>${CATEGORY_LABELS[value]}</option>`).join('')}</select></label><button>Buscar</button></form><table class="data-table"><thead><tr><th>Nombre</th><th>Categoría</th><th>Posts</th><th>Estado</th>${canEdit ? '<th>Acciones</th>' : ''}</tr></thead><tbody>${rows || `<tr><td colspan="${canEdit ? 5 : 4}">No hay tags.</td></tr>`}</tbody></table>${result.nextCursor ? `<a href="/tags?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}&cursor=${result.nextCursor}" data-link>Siguiente →</a>` : ''}`;
 	}
 
 	if (name === 'moderation') {
@@ -175,6 +196,29 @@ export async function renderSection(name: string, mode: 'list' | 'create' | 'edi
 }
 
 export function bindSection(name: string): void {
+	const directory = document.querySelector<HTMLFormElement>('[data-directory]');
+	directory?.addEventListener('submit', (event) => {
+		event.preventDefault();
+		const data = new FormData(directory);
+		const params = new URLSearchParams();
+		if (data.get('q')) params.set('q', String(data.get('q')).trim());
+		if (data.get('category')) params.set('category', String(data.get('category')));
+		history.pushState(null, '', `/${name}${params.size ? `?${params}` : ''}`);
+		window.dispatchEvent(new PopStateEvent('popstate'));
+	});
+	for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('[data-alias-delete]'))) {
+		button.addEventListener('click', async () => {
+			button.disabled = true;
+			try {
+				await api.tags.deleteAlias(Number(button.dataset.aliasDelete));
+				button.closest('tr')?.remove();
+			} catch (error) {
+				button.disabled = false;
+				const status = document.querySelector<HTMLElement>('[data-directory-status]');
+				if (status) status.textContent = error instanceof Error ? error.message : 'No se pudo eliminar.';
+			}
+		});
+	}
 	if (name === 'tags') {
 		for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('[data-tag-edit]')))
 			button.addEventListener('click', () => {
@@ -215,6 +259,9 @@ export function bindSection(name: string): void {
 	formElement.addEventListener('submit', async (event) => {
 		event.preventDefault();
 		const status = formElement.querySelector<HTMLElement>('[data-form-status]');
+		const submit = formElement.querySelector<HTMLButtonElement>('button[type="submit"]');
+		if (submit?.disabled) return;
+		if (submit) submit.disabled = true;
 		const data: Record<string, string> = {};
 		new FormData(formElement).forEach((value, key) => {
 			if (typeof value === 'string') data[key] = value;
@@ -239,16 +286,27 @@ export function bindSection(name: string): void {
 			else if (name === 'pool') await api.community.createPool(data);
 			else if (name === 'topic') await api.community.createTopic({ ...data, category_id: Number(data.category_id) });
 			else if (name === 'wiki') await api.community.createWiki(data);
-			else if (name === 'alias') await api.tags.addAlias(data);
-			else if (name === 'tag') {
+			else if (name === 'alias') {
+				if (data.id) await api.tags.editAlias(Number(data.id), { alias: data.alias, tag: data.tag });
+				else await api.tags.addAlias({ alias: data.alias, tag: data.tag });
+				history.pushState(null, '', '/aliases');
+				window.dispatchEvent(new PopStateEvent('popstate'));
+				return;
+			} else if (name === 'tag-create') {
+				await api.tags.create({ name: data.name, display_name: data.display_name || null, description: data.description || null, category: data.category });
+				history.pushState(null, '', '/tags');
+				window.dispatchEvent(new PopStateEvent('popstate'));
+				return;
+			} else if (name === 'tag') {
 				if (!Number.isSafeInteger(Number(data.id)) || Number(data.id) < 1) throw new Error('Selecciona un tag de la lista.');
-				await api.tags.edit(Number(data.id), { display_name: data.display_name || null, description: data.description || null, category: data.category });
+				await api.tags.edit(Number(data.id), { display_name: data.display_name, description: data.description || null, category: data.category });
 			}
 			if (status) status.textContent = 'Guardado.';
 			if (name !== 'tag') formElement.reset();
 		} catch (error) {
 			if (status) status.textContent = error instanceof Error ? error.message : 'No se pudo guardar.';
 		} finally {
+			if (submit) submit.disabled = false;
 			if (name === 'login' || name === 'register') widget?.reset();
 		}
 	});

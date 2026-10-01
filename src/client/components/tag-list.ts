@@ -7,5 +7,5 @@ export type TagItem = { name: string; category: string; count: number };
 
 export function renderTagList(tags: TagItem[]): string {
 	if (tags.length === 0) return '';
-	return `<div class="tag-list">${tags.map((t) => `<a href="/?tags=${encodeURIComponent(t.name)}" data-link>${t.name}</a>`).join(' ')}</div>`;
+	return `<div class="tag-list">${tags.map((t) => `<a href="/posts?tags=${encodeURIComponent(t.name)}" data-link>${t.name}</a>`).join(' ')}</div>`;
 }

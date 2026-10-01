@@ -2,7 +2,7 @@ import { api, apiUrl } from '../services/api.js';
 import { renderScore } from '../components/score.js';
 import { renderCommentList, renderCommentForm, formatDate } from '../components/comment.js';
 import { renderStatistics, renderTagged, type SidebarTag } from '../components/tag-sidebar.js';
-import { formatCount } from '../components/search.js';
+import { escapeAttr, formatCount } from '../components/search.js';
 import { sanitizeMarkup } from '../components/sanitize.js';
 import { store } from '../state/store.js';
 
@@ -40,12 +40,13 @@ export async function renderPost(publicId: string): Promise<string> {
 
 	const user = store.get().user;
 	const restricted = data.restricted === true;
+	const canEditTags = user && (user.id === data.author_id || user.permissions?.includes('edit_tags'));
 
 	return `
     <div class="post-layout">
       <aside class="post-side">
         <section class="side-block"><h2>Estadísticas</h2><div id="stats">${renderStatistics(buildStatistics(data))}</div></section>
-        <section class="side-block"><h2>Tags</h2>${renderTagged(data.tags ?? [])}</section>
+		 <section class="side-block"><h2>Tags</h2><div id="post-tags">${renderTagged(data.tags ?? [])}</div>${canEditTags ? `<button id="edit-post-tags" type="button">Editar tags</button><form id="post-tags-form" class="form-stack" hidden><label>Tags separados por espacios<input name="tags" value="${escapeAttr((data.tags ?? []).map((tag) => tag.name).join(' '))}" required></label><button type="submit">Guardar</button><p role="status" aria-live="polite"></p></form>` : ''}</section>
       </aside>
       <section class="post-main">
         <div class="post-media">
@@ -128,6 +129,28 @@ export function bindPost(publicId: string): void {
 			.report({ target_type: 'post', target_id: targetId, reason })
 			.then(() => alert('Reportado'))
 			.catch(() => alert('No se pudo reportar'));
+	});
+	q('#edit-post-tags')?.addEventListener('click', () => {
+		const form = document.getElementById('post-tags-form');
+		if (form instanceof HTMLFormElement) form.hidden = !form.hidden;
+	});
+	const tagsForm = document.getElementById('post-tags-form');
+	tagsForm?.addEventListener('submit', async (event) => {
+		event.preventDefault();
+		if (!(tagsForm instanceof HTMLFormElement)) return;
+		const input = tagsForm.querySelector<HTMLInputElement>('[name="tags"]');
+		const status = tagsForm.querySelector('p[role="status"]');
+		if (!input || !status) return;
+		try {
+			await api.posts.setTags(publicId, input.value.trim().split(/\s+/).filter(Boolean));
+			const post = await api.posts.get(publicId, true);
+			const tags = document.getElementById('post-tags');
+			if (tags) tags.innerHTML = sanitizeMarkup(renderTagged(post.tags ?? []));
+			input.value = (post.tags ?? []).map((tag) => tag.name).join(' ');
+			status.textContent = 'Tags guardados.';
+		} catch (error) {
+			status.textContent = error instanceof Error ? error.message : 'No se pudieron guardar los tags.';
+		}
 	});
 
 	bindCommentForm(publicId);

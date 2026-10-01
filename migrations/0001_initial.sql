@@ -447,3 +447,46 @@ INSERT INTO role_permissions (role_id, permission) VALUES
 CREATE TRIGGER users_default_role AFTER INSERT ON users BEGIN
   INSERT INTO user_roles (user_id, role_id) VALUES (NEW.id, 4);
 END;
+
+-- Count only posts visible in the catalog, including when their status changes.
+CREATE TRIGGER post_tags_count_insert AFTER INSERT ON post_tags
+WHEN (SELECT status FROM posts WHERE id = NEW.post_id) = 'available'
+BEGIN
+  UPDATE tags SET usage_count = usage_count + 1 WHERE id = NEW.tag_id;
+END;
+
+CREATE TRIGGER post_tags_count_delete AFTER DELETE ON post_tags
+WHEN (SELECT status FROM posts WHERE id = OLD.post_id) = 'available'
+BEGIN
+  UPDATE tags SET usage_count = usage_count - 1 WHERE id = OLD.tag_id;
+END;
+
+CREATE TRIGGER posts_count_publish AFTER UPDATE OF status ON posts
+WHEN OLD.status != 'available' AND NEW.status = 'available'
+BEGIN
+  UPDATE tags SET usage_count = usage_count + 1 WHERE id IN (SELECT tag_id FROM post_tags WHERE post_id = NEW.id);
+END;
+
+CREATE TRIGGER posts_count_unpublish AFTER UPDATE OF status ON posts
+WHEN OLD.status = 'available' AND NEW.status != 'available'
+BEGIN
+  UPDATE tags SET usage_count = usage_count - 1 WHERE id IN (SELECT tag_id FROM post_tags WHERE post_id = NEW.id);
+END;
+
+CREATE TRIGGER tags_name_unique_alias BEFORE INSERT ON tags
+WHEN EXISTS (SELECT 1 FROM tag_aliases WHERE alias_normalized = NEW.normalized_name)
+BEGIN
+  SELECT RAISE(ABORT, 'Tag name already belongs to an alias');
+END;
+
+CREATE TRIGGER aliases_name_unique_tag BEFORE INSERT ON tag_aliases
+WHEN EXISTS (SELECT 1 FROM tags WHERE normalized_name = NEW.alias_normalized)
+BEGIN
+  SELECT RAISE(ABORT, 'Alias name already belongs to a tag');
+END;
+
+CREATE TRIGGER aliases_name_unique_tag_update BEFORE UPDATE OF alias_normalized ON tag_aliases
+WHEN EXISTS (SELECT 1 FROM tags WHERE normalized_name = NEW.alias_normalized)
+BEGIN
+  SELECT RAISE(ABORT, 'Alias name already belongs to a tag');
+END;

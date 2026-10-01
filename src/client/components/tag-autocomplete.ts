@@ -27,11 +27,19 @@ export function bindTagAutocomplete(input: HTMLInputElement): () => void {
 	const singleTag = input.hasAttribute('data-single-tag');
 	let timer: number | undefined;
 	let version = 0;
+	if (dropdown && input.id) {
+		dropdown.id = `${input.id}-suggestions`;
+		input.setAttribute('role', 'combobox');
+		input.setAttribute('aria-autocomplete', 'list');
+		input.setAttribute('aria-controls', dropdown.id);
+		input.setAttribute('aria-expanded', 'false');
+	}
 
 	function clear(): void {
 		clearTimeout(timer);
 		version++;
 		if (dropdown) dropdown.innerHTML = '';
+		input.setAttribute('aria-expanded', 'false');
 	}
 
 	input.addEventListener('input', () => {
@@ -46,7 +54,10 @@ export function bindTagAutocomplete(input: HTMLInputElement): () => void {
 			try {
 				const result = await api.tags.autocomplete(term);
 
-				if (current === version && input.isConnected && input.value === value && dropdown) dropdown.innerHTML = sanitizeMarkup(renderSuggestions(result.tags));
+				if (current === version && input.isConnected && input.value === value && dropdown) {
+					dropdown.innerHTML = sanitizeMarkup(renderSuggestions(result.tags));
+					input.setAttribute('aria-expanded', String(result.tags.length > 0));
+				}
 			} catch (error) {
 				console.error('Autocomplete failed', error);
 			}
@@ -59,6 +70,23 @@ export function bindTagAutocomplete(input: HTMLInputElement): () => void {
 			event.preventDefault();
 			dropdown?.querySelector('a')?.focus();
 		}
+	});
+	dropdown?.addEventListener('keydown', (event) => {
+		if (!(event instanceof KeyboardEvent)) return;
+		if (event.key === 'Escape') {
+			clear();
+			input.focus();
+		} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			const links = Array.from(dropdown.querySelectorAll<HTMLAnchorElement>('a[data-ac]'));
+			const current = links.indexOf(document.activeElement as HTMLAnchorElement);
+			const next = current + (event.key === 'ArrowDown' ? 1 : -1);
+			if (next < 0) input.focus();
+			else links[Math.min(next, links.length - 1)]?.focus();
+		}
+	});
+	input.parentElement?.addEventListener('focusout', (event) => {
+		if (!input.parentElement?.contains(event.relatedTarget as Node | null)) clear();
 	});
 
 	dropdown?.addEventListener('click', (event) => {

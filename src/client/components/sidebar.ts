@@ -31,7 +31,7 @@ export function renderPageTags(tags: SidebarTag[]): string {
 				<a class="tag-help" href="/help" data-link aria-label="Ayuda sobre tags">?</a>
 				<button type="button" data-include="${escapeAttr(tag.name)}" aria-label="Añadir ${escapeAttr(tag.name)}">+</button>
 				<button type="button" data-exclude="${escapeAttr(tag.name)}" aria-label="Excluir ${escapeAttr(tag.name)}">−</button>
-				<a href="/?tags=${encodeURIComponent(tag.name)}" data-link>${escapeHtml(tag.name.replaceAll('_', ' '))}</a>
+				<a href="/posts?tags=${encodeURIComponent(tag.name)}" data-link>${escapeHtml(tag.name.replaceAll('_', ' '))}</a>
 				<span class="count" title="Publicaciones en todo el catálogo">${tag.count}</span>
 			</li>`,
 				)

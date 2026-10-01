@@ -140,6 +140,25 @@ describe('booru controls', () => {
 		expect(html).toContain('data-exclude="falling"');
 		expect(html).toContain('2345');
 		expect(html).not.toContain('data-cat="source"');
+		expect(html).toContain('href="/posts?tags=falling"');
+	});
+
+	it('keeps tag and alias editor links restricted and directory names searchable', async () => {
+		const { renderSection } = await import('../../src/client/pages/sections');
+		const { store } = await import('../../src/client/state/store');
+		const { api } = await import('../../src/client/services/api');
+		vi.stubGlobal('location', { href: 'https://memesbooru.example/tags' });
+		const previous = store.get().user;
+		store.set({ user: null });
+		const list = vi.spyOn(api.tags, 'list').mockResolvedValue({ data: [{ id: 1, normalized_name: 'dog', display_name: null, description: null, category: 'character', usage_count: 1, status: 'active' }], nextCursor: 1 });
+		expect(await renderSection('tags')).toContain('href="/posts?tags=dog"');
+		expect(await renderSection('tags')).not.toContain('data-tag-edit');
+		expect(renderSubNav('/aliases')).not.toContain('/aliases/create');
+		store.set({ user: { id: 1, username: 'editor', permissions: ['edit_tags'] } });
+		expect(renderSubNav('/aliases', 'editor', true)).toContain('/aliases/create');
+		expect(await renderSection('tags', 'create')).toContain('name="name"');
+		list.mockRestore();
+		store.set({ user: previous });
 	});
 
 	it('reuses the autocomplete field and completes only the final tag', async () => {
@@ -155,6 +174,9 @@ describe('booru controls', () => {
 
 	it('asks for tag names instead of tag IDs on every tag creation form', async () => {
 		const { renderSection } = await import('../../src/client/pages/sections');
+		const { store } = await import('../../src/client/state/store');
+		const previous = store.get().user;
+		store.set({ user: { id: 1, username: 'editor', permissions: ['edit_tags'] } });
 
 		for (const section of ['aliases', 'wiki']) {
 			const html = await renderSection(section, 'create');
@@ -163,26 +185,47 @@ describe('booru controls', () => {
 			expect(html).not.toContain('Tag ID');
 			expect(html).not.toContain('name="tag_id"');
 		}
+		store.set({ user: previous });
 	});
 
-	it('edits the selected tag with readable meme categories and no description field', async () => {
+	it('edits the selected tag with its description and readable meme categories', async () => {
 		vi.stubGlobal('location', { href: 'https://memesbooru.example/tags/edit?id=1' });
 		const { renderSection } = await import('../../src/client/pages/sections');
 		const { api } = await import('../../src/client/services/api');
-		const get = vi.spyOn(api.tags, 'get').mockResolvedValue({ id: 1, normalized_name: 'cj', display_name: null, category: 'character' });
+		const { store } = await import('../../src/client/state/store');
+		const previous = store.get().user;
+		store.set({ user: { id: 1, username: 'editor', permissions: ['edit_tags'] } });
+		const get = vi.spyOn(api.tags, 'get').mockResolvedValue({ id: 1, normalized_name: 'cj', display_name: null, description: 'An existing description', category: 'character', usage_count: 1, status: 'active' });
 		const html = await renderSection('tags', 'edit');
 
 		expect(html).toContain('Editar tag: cj');
 		expect(html).toContain('value="cj"');
 		expect(html).toContain('Personajes ficticios');
 		expect(html).toContain('value="character" selected');
-		expect(html).not.toContain('name="description"');
+		expect(html).toContain('name="description"');
+		expect(html).toContain('An existing description');
 		const pattern = html.match(/pattern="([^"]+)"/)?.[1];
 		expect(pattern).toBeDefined();
 		const validName = new RegExp(`^(?:${pattern})$`);
 		expect(validName.test('cj_(personaje)')).toBe(true);
 		expect(validName.test('asdasd asdas')).toBe(false);
 		get.mockRestore();
+		store.set({ user: previous });
+	});
+
+	it('loads an alias from the API before showing its edit form', async () => {
+		vi.stubGlobal('location', { href: 'https://memesbooru.example/aliases/edit?id=7' });
+		const { renderSection } = await import('../../src/client/pages/sections');
+		const { api } = await import('../../src/client/services/api');
+		const { store } = await import('../../src/client/state/store');
+		const previous = store.get().user;
+		store.set({ user: { id: 1, username: 'editor', permissions: ['edit_tags'] } });
+		const get = vi.spyOn(api.tags, 'getAlias').mockResolvedValue({ id: 7, alias_normalized: 'puppy', normalized_name: 'dog', tag_id: 1, created_at: 1 });
+		const html = await renderSection('aliases', 'edit');
+		expect(html).toContain('value="puppy"');
+		expect(html).toContain('name="tag" value="dog"');
+		get.mockRestore();
+		store.set({ user: previous });
 	});
 
 	it('does not create links for unknown intermediate pages', () => {

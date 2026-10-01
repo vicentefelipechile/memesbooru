@@ -9,11 +9,11 @@
 // =========================================================================================================
 
 import type { DB } from '../db/client';
-import type { TagRow } from '../db/schema';
+import type { TagAliasRow, TagRow } from '../db/schema';
 import { TagRepository } from '../repositories/tag-repository';
-import type { BrowseTagsResponse } from '../validators';
+import { normalizeTag, TagInputSchema, type BrowseTagsResponse } from '../validators';
 import type { AuthUser, BrowseCategoryParams, BrowseParams, TagItemsResult } from '../types';
-import { NotFoundError } from '../domain/errors';
+import { ConflictError, NotFoundError, ValidationError } from '../domain/errors';
 import { PermissionService } from './permission-service';
 
 // =========================================================================================================
@@ -51,20 +51,38 @@ export class TagService {
 		return { tags: rows.map((t) => ({ name: t.normalized_name, display: t.display_name, usage: t.usage_count })) };
 	}
 
-	list(limit = 100, offset = 0) {
-		return this.tags.list(limit, offset);
+	async list(limit = 50, cursor?: number, prefix = '', category?: string) {
+		const normalized = normalizeTag(prefix);
+		if (prefix && !normalized) return { data: [], nextCursor: null };
+		const rows = await this.tags.list(limit + 1, cursor, normalized, category);
+		return { data: rows.slice(0, limit), nextCursor: rows.length > limit ? rows[limit - 1].id : null };
 	}
 
-	async get(id: number): Promise<Pick<TagRow, 'id' | 'normalized_name' | 'display_name' | 'category'>> {
+	async get(id: number): Promise<TagRow> {
 		const tag = await this.tags.findById(id);
 		if (!tag) throw new NotFoundError('Tag no encontrado');
 
 		return tag;
 	}
 
-	update(id: number, displayName: string, description: string | null | undefined, category: string, user: AuthUser): Promise<void> {
+	async getByName(name: string): Promise<TagRow> {
+		return this.get(await this.resolveId(name));
+	}
+
+	async create(name: string, displayName: string | null, description: string | null, category: string, user: AuthUser): Promise<Pick<TagRow, 'id'>> {
 		this.assertEditor(user);
-		return this.tags.update(id, displayName, description, category, user.id);
+		const parsed = TagInputSchema.safeParse(name);
+		if (!parsed.success) throw new ValidationError('Invalid tag name');
+		const normalized = normalizeTag(parsed.data);
+		if ((await this.tags.findByName(normalized)) || (await this.tags.findAliasByName(normalized))) throw new ConflictError('Tag name already exists');
+
+		return { id: await this.tags.create(normalized, displayName, description, category, user.id) };
+	}
+
+	async update(id: number, displayName: string, description: string | null | undefined, category: string, user: AuthUser): Promise<void> {
+		this.assertEditor(user);
+		await this.get(id);
+		await this.tags.update(id, displayName, description, category, user.id);
 	}
 
 	async resolveId(name: string): Promise<number> {
@@ -78,21 +96,52 @@ export class TagService {
 	async addAlias(alias: string, name: string, user: AuthUser): Promise<void> {
 		this.assertEditor(user);
 		const tagId = await this.resolveId(name);
+		const normalized = normalizeTag(alias);
+		if (!normalized || normalized.length > 40) throw new ValidationError('Invalid alias');
+		if ((await this.tags.findByName(normalized)) || (await this.tags.findAliasByName(normalized))) throw new ConflictError('Alias name already exists');
 
-		await this.tags.addAlias(alias, tagId, user.id);
+		await this.tags.addAlias(normalized, tagId, user.id);
 	}
 
-	listAliases(limit = 100, offset = 0) {
-		return this.tags.listAliases(limit, offset);
+	async updateAlias(id: number, alias: string, name: string, user: AuthUser): Promise<void> {
+		this.assertEditor(user);
+		await this.getAlias(id);
+		const tagId = await this.resolveId(name);
+		const normalized = normalizeTag(alias);
+		if (!normalized || normalized.length > 40) throw new ValidationError('Invalid alias');
+		const conflict = await this.tags.findAliasByName(normalized);
+		if ((await this.tags.findByName(normalized)) || (conflict && conflict.id !== id)) throw new ConflictError('Alias name already exists');
+		await this.tags.updateAlias(id, normalized, tagId);
+	}
+
+	async deleteAlias(id: number, user: AuthUser): Promise<void> {
+		this.assertEditor(user);
+		await this.getAlias(id);
+		await this.tags.deleteAlias(id);
+	}
+
+	async getAlias(id: number): Promise<TagAliasRow & Pick<TagRow, 'normalized_name'>> {
+		const alias = await this.tags.findAlias(id);
+		if (!alias) throw new NotFoundError('Alias not found');
+		return alias;
+	}
+
+	async listAliases(limit = 100, cursor?: number, prefix = '') {
+		const normalized = normalizeTag(prefix);
+		if (prefix && !normalized) return { data: [], nextCursor: null };
+		const rows = await this.tags.listAliases(limit + 1, cursor, normalized);
+		return { data: rows.slice(0, limit), nextCursor: rows.length > limit ? rows[limit - 1].id : null };
 	}
 
 	listHistory(tagId: number) {
 		return this.tags.listHistory(tagId);
 	}
 
-	revert(tagId: number, historyId: number, user: AuthUser): Promise<void> {
+	async revert(tagId: number, historyId: number, user: AuthUser): Promise<void> {
 		this.assertEditor(user);
-		return this.tags.revert(tagId, historyId, user.id);
+		await this.get(tagId);
+		if (!(await this.tags.findHistory(tagId, historyId))) throw new NotFoundError('Tag history not found');
+		await this.tags.revert(tagId, historyId, user.id);
 	}
 
 	private assertEditor(user: AuthUser): void {

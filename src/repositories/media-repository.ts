@@ -133,7 +133,7 @@ export async function recalcScoreWithDecay(db: DB, postId: number): Promise<void
 }
 
 export async function recalcAllTagUsage(db: DB): Promise<void> {
-	await execute(db, 'UPDATE tags SET usage_count = (SELECT COUNT(*) FROM post_tags WHERE tag_id = tags.id), updated_at = ?', [Date.now()]);
+	await execute(db, "UPDATE tags SET usage_count = (SELECT COUNT(*) FROM post_tags pt JOIN posts p ON p.id = pt.post_id WHERE pt.tag_id = tags.id AND p.status = 'available'), updated_at = ?", [Date.now()]);
 }
 
 export class MediaRepository {

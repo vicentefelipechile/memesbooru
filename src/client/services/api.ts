@@ -10,7 +10,10 @@
 
 import {
 	AutocompleteResponseSchema,
+	AliasItemSchema,
+	AliasDirectoryResponseSchema,
 	TagEditResponseSchema,
+	TagDirectoryResponseSchema,
 	BrowseTagsResponseSchema,
 	CommentListResponseSchema,
 	CommunityListResponseSchema,
@@ -97,7 +100,7 @@ export class MemesBooruApi {
 
 			return this.get(`/api/posts?${query}`, SearchResponseSchema);
 		},
-		get: (publicId: string) => this.get(`/api/posts/${encodeURIComponent(publicId)}`, PostResponseSchema),
+		get: (publicId: string, fresh = false) => this.get(`/api/posts/${encodeURIComponent(publicId)}${fresh ? `?updated=${Date.now()}` : ''}`, PostResponseSchema),
 		random: (tags?: string) => this.getJson<{ public_id: string | null }>(`/api/posts/random${tags ? `?tags=${encodeURIComponent(tags)}` : ''}`),
 		create: (input: CreatePostInput) => {
 			const form = new FormData();
@@ -107,13 +110,14 @@ export class MemesBooruApi {
 			if (input.title) form.set('title', input.title);
 			return this.upload('/api/posts', form, CreatePostResponseSchema);
 		},
+		setTags: (publicId: string, tags: string[]) => this.request(`/api/posts/${encodeURIComponent(publicId)}/tags`, { method: 'PUT', body: { tags } }),
 		videoUploadUrl: (title: string | null, tags: string[]) => this.post('/api/posts/video/upload-url', { title, tags }, undefined),
 		uploadVideo: async (file: File, title: string | null, tags: string[]) => {
 			const target = (await this.posts.videoUploadUrl(title, tags)) as { uploadURL: string; id: string };
 			const form = new FormData();
 			form.set('file', file);
 			const response = await fetch(target.uploadURL, { method: 'POST', body: form });
-			if (!response.ok) throw new ApiError(response.status, await response.text());
+			await this.assertSuccess(response);
 			return this.post('/api/posts/video/complete', { id: target.id, title, tags }, CreatePostResponseSchema);
 		},
 		rate: (publicId: string, value: number) => this.post(`/api/post/${encodeURIComponent(publicId)}/rating`, { value }),
@@ -125,10 +129,14 @@ export class MemesBooruApi {
 		autocomplete: (query: string) => this.get(`/api/tags/autocomplete?q=${encodeURIComponent(query)}`, AutocompleteResponseSchema),
 		get: (id: number) => this.get(`/api/tags/by-id/${id}`, TagEditResponseSchema),
 		browse: (per = 25) => this.get(`/api/tags/browse?per=${per}`, BrowseTagsResponseSchema),
-		list: (limit = 100, offset = 0) => this.get(`/api/tags/?limit=${limit}&offset=${offset}`, CommunityListResponseSchema),
-		aliases: () => this.get('/api/tags/aliases', CommunityListResponseSchema),
+		list: (q = '', cursor?: number, category = '') => this.get(`/api/tags?limit=50&q=${encodeURIComponent(q)}${cursor ? `&cursor=${cursor}` : ''}${category ? `&category=${encodeURIComponent(category)}` : ''}`, TagDirectoryResponseSchema),
+		aliases: (q = '', cursor?: number) => this.get(`/api/tags/aliases?limit=50&q=${encodeURIComponent(q)}${cursor ? `&cursor=${cursor}` : ''}`, AliasDirectoryResponseSchema),
+		getAlias: (id: number) => this.get(`/api/tags/aliases/${id}`, AliasItemSchema),
+		create: (input: JsonValue) => this.post('/api/tags', input),
 		edit: (id: number, input: JsonValue) => this.post(`/api/tags/${id}/edit`, input),
 		addAlias: (input: JsonValue) => this.post('/api/tags/aliases', input),
+		editAlias: (id: number, input: JsonValue) => this.request(`/api/tags/aliases/${id}`, { method: 'PATCH', body: input }),
+		deleteAlias: (id: number) => this.request(`/api/tags/aliases/${id}`, { method: 'DELETE' }),
 	};
 
 	readonly comments = {
@@ -192,15 +200,28 @@ export class MemesBooruApi {
 			body: body === undefined ? undefined : JSON.stringify(body),
 		});
 
-		if (!response.ok) throw new ApiError(response.status, await response.text());
+		await this.assertSuccess(response);
 
 		return response.json() as Promise<JsonValue>;
 	}
 
 	private async upload<T extends JsonValue>(path: string, body: FormData, schema: { safeParse: (value: JsonValue) => { success: true; data: T } | { success: false } }): Promise<T> {
 		const response = await fetch(apiUrl(path), { method: 'POST', credentials: 'include', body });
-		if (!response.ok) throw new ApiError(response.status, await response.text());
+		await this.assertSuccess(response);
 		return this.parse(path, schema, (await response.json()) as JsonValue);
+	}
+
+	private async assertSuccess(response: Response): Promise<void> {
+		if (response.ok) return;
+		const text = await response.text();
+		let message = text || response.statusText;
+		try {
+			const parsed = JSON.parse(text) as JsonValue;
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && typeof parsed.error === 'string') message = parsed.error;
+		} catch {
+			// Preserve non-JSON error text.
+		}
+		throw new ApiError(response.status, message);
 	}
 
 	private async get<T extends JsonValue>(path: string, schema: { safeParse: (value: JsonValue) => { success: true; data: T } | { success: false } }): Promise<T> {

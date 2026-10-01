@@ -42,15 +42,15 @@ const MINIMAL_USERS = [
 const MINIMAL_TAGS = [
 	{ id: 1, normalized_name: 'pepe', display_name: 'Pepe', category: 'character', usage_count: 120 },
 	{ id: 2, normalized_name: 'doge', display_name: 'Doge', category: 'character', usage_count: 95 },
-	{ id: 3, normalized_name: 'gato_triste', display_name: 'Gato Triste', category: 'general', usage_count: 80 },
-	{ id: 4, normalized_name: 'programacion', display_name: 'Programacion', category: 'general', usage_count: 60 },
-	{ id: 5, normalized_name: 'reaccion', display_name: 'Reaccion', category: 'general', usage_count: 150 },
-	{ id: 6, normalized_name: 'drake', display_name: 'Drake', category: 'general', usage_count: 70 },
+	{ id: 3, normalized_name: 'gato_triste', display_name: 'Gato Triste', category: 'character', usage_count: 80 },
+	{ id: 4, normalized_name: 'programacion', display_name: 'Programacion', category: 'source', usage_count: 60 },
+	{ id: 5, normalized_name: 'reaccion', display_name: 'Reaccion', category: 'reaction', usage_count: 150 },
+	{ id: 6, normalized_name: 'drake', display_name: 'Drake', category: 'reaction', usage_count: 70 },
 	{ id: 7, normalized_name: 'wojak', display_name: 'Wojak', category: 'character', usage_count: 55 },
 	{ id: 8, normalized_name: 'chad', display_name: 'Chad', category: 'character', usage_count: 40 },
-	{ id: 9, normalized_name: 'distracted_boyfriend', display_name: 'Distracted Boyfriend', category: 'general', usage_count: 65 },
-	{ id: 10, normalized_name: 'coffin_dance', display_name: null, category: 'general', usage_count: 30 },
-	{ id: 11, normalized_name: 'this_is_fine', display_name: null, category: 'general', usage_count: 45 },
+	{ id: 9, normalized_name: 'distracted_boyfriend', display_name: 'Distracted Boyfriend', category: 'reaction', usage_count: 65 },
+	{ id: 10, normalized_name: 'coffin_dance', display_name: null, category: 'source', usage_count: 30 },
+	{ id: 11, normalized_name: 'this_is_fine', display_name: null, category: 'reaction', usage_count: 45 },
 	{ id: 12, normalized_name: 'surprised_pikachu', display_name: null, category: 'character', usage_count: 50 },
 ] as const;
 
@@ -297,11 +297,11 @@ function mulberry32(seed: number): () => number {
 }
 
 function nowUnix(): number {
-	return 1_727_000_000;
+	return 1_727_000_000_000;
 }
 
 function daysAgo(days: number): number {
-	return nowUnix() - days * 86_400;
+	return nowUnix() - days * 86_400_000;
 }
 
 function chunk<T>(arr: readonly T[], size: number): T[][] {
@@ -337,7 +337,7 @@ export function generateMinimalSql(): string {
 	for (const t of FIXED_MINIMAL_TAGS) {
 		const display = t.display_name ? escapeSqlText(t.display_name) : 'NULL';
 		const by = 1;
-		sql += `INSERT OR IGNORE INTO tags (id, normalized_name, display_name, category, usage_count, status, created_by, created_at, updated_at) VALUES (${t.id}, ${escapeSqlText(t.normalized_name)}, ${display}, ${escapeSqlText(t.category)}, ${t.usage_count}, 'active', ${by}, ${nowUnix()}, ${nowUnix()});\n`;
+		sql += `INSERT OR IGNORE INTO tags (id, normalized_name, display_name, category, usage_count, status, created_by, created_at, updated_at) VALUES (${t.id}, ${escapeSqlText(t.normalized_name)}, ${display}, ${escapeSqlText(t.category)}, 0, 'active', ${by}, ${nowUnix()}, ${nowUnix()});\n`;
 	}
 
 	// Aliases
@@ -352,7 +352,7 @@ export function generateMinimalSql(): string {
 		const title = p.title ? escapeSqlText(p.title) : 'NULL';
 		const desc = p.description ? escapeSqlText(p.description) : 'NULL';
 		const published = daysAgo(p.published_at_offset_days);
-		const created = published - 3600;
+		const created = published - 3_600_000;
 		const lowKey = `media/${p.public_id}/low.avif`;
 		const medKey = `media/${p.public_id}/medium.avif`;
 		const origKey = `media/${p.public_id}/original`;
@@ -434,8 +434,7 @@ export function generateScaleSql(opts: Partial<ScaleOptions> = {}): string {
 		Array.from({ length: o.tagCount - FIXED_MINIMAL_TAGS.length }, (_, idx) => {
 			const id = startTagId + idx;
 			const name = randTagName(id);
-			const usage = Math.floor(rand() * 500);
-			return `(${id}, ${escapeSqlText(name)}, NULL, 'general', ${usage}, 'active', 1, ${nowUnix()}, ${nowUnix()})`;
+			return `(${id}, ${escapeSqlText(name)}, NULL, 'meta', 0, 'active', 1, ${nowUnix()}, ${nowUnix()})`;
 		}),
 		o.batchSize,
 	);
@@ -463,7 +462,7 @@ export function* generateScalePostBatches(opts: Partial<ScaleOptions> = {}): Gen
 			const mediaPick = rand();
 			const mediaType: MinimalPostSeed['media_type'] = mediaPick < 0.8 ? 'image' : mediaPick < 0.95 ? 'gif' : 'video';
 			const score = Math.round(rand() * 100 * 10) / 10;
-			const pub = nowUnix() - Math.floor(rand() * 30 * 86_400);
+			const pub = nowUnix() - Math.floor(rand() * 30 * 86_400_000);
 			const pubId = `p${String(pid).padStart(7, '0')}`;
 			const lowKey = `media/${pubId}/low.avif`;
 			const medKey = `media/${pubId}/medium.avif`;
@@ -472,9 +471,9 @@ export function* generateScalePostBatches(opts: Partial<ScaleOptions> = {}): Gen
 			const checksum = `X'${toHex4(pid)}${toHex4(pid * 31)}${toHex4(pid * 131)}${toHex4(pid * 7919)}'`;
 			const w = 400 + Math.floor(rand() * 800);
 			const h = 400 + Math.floor(rand() * 800);
-			sql += `INSERT OR IGNORE INTO posts (id, public_id, author_id, media_type, status, score, rating_count, favorite_count, comment_count, created_at, published_at, updated_at) VALUES (${pid}, ${escapeSqlText(pubId)}, ${author}, ${escapeSqlText(mediaType)}, 'available', ${score}, 0, 0, 0, ${pub - 3600}, ${pub}, ${pub});\n`;
+			sql += `INSERT OR IGNORE INTO posts (id, public_id, author_id, media_type, status, score, rating_count, favorite_count, comment_count, created_at, published_at, updated_at) VALUES (${pid}, ${escapeSqlText(pubId)}, ${author}, ${escapeSqlText(mediaType)}, 'available', ${score}, 0, 0, 0, ${pub - 3_600_000}, ${pub}, ${pub});\n`;
 			sql += `INSERT OR IGNORE INTO post_listing (post_id, public_id, media_type, status, low_variant_key, medium_variant_key, width, height, score, rating_count, favorite_count, comment_count, published_at) VALUES (${pid}, ${escapeSqlText(pubId)}, ${escapeSqlText(mediaType)}, 'available', ${escapeSqlText(lowKey)}, ${escapeSqlText(medKey)}, ${w}, ${h}, ${score}, 0, 0, 0, ${pub});\n`;
-			sql += `INSERT OR IGNORE INTO media_assets (id, post_id, media_type, provider, original_object_key, mime_type, byte_size, width, height, checksum, processing_status, created_at) VALUES (${pid}, ${pid}, ${escapeSqlText(mediaType)}, 'r2', ${escapeSqlText(origKey)}, ${escapeSqlText(mime)}, ${800_000}, ${w}, ${h}, ${checksum}, 'done', ${pub - 3600});\n`;
+			sql += `INSERT OR IGNORE INTO media_assets (id, post_id, media_type, provider, original_object_key, mime_type, byte_size, width, height, checksum, processing_status, created_at) VALUES (${pid}, ${pid}, ${escapeSqlText(mediaType)}, 'r2', ${escapeSqlText(origKey)}, ${escapeSqlText(mime)}, ${800_000}, ${w}, ${h}, ${checksum}, 'done', ${pub - 3_600_000});\n`;
 			// post_tags para este post
 			const used = new Set<number>();
 			for (let k = 0; k < o.tagsPerPost; k++) {

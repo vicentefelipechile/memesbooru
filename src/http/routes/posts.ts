@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { requireAuth, optionalAuth, type AuthVariables } from '../middleware/auth';
 import { PostService } from '../../services/post-service';
 import { fail } from '../responses';
-import { CreatePostSchema, SearchQuerySchema, parseQueryWithArrays } from '../../validators';
+import { CreatePostSchema, SearchQuerySchema, TagInputSchema, parseQueryWithArrays } from '../../validators';
 import { ValidationError } from '../../domain/errors';
 import { detectMime, imageDimensions, validateFileSize } from '../../helpers/file-validation';
 import { parseJsonBody } from '../../helpers/http';
@@ -24,7 +24,7 @@ import { PermissionService } from '../../services/permission-service';
 // =========================================================================================================
 
 const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
-const streamCompleteSchema = z.object({ id: z.string().min(8).max(100), title: z.string().trim().max(120).nullable().optional(), tags: z.array(z.string().trim().min(1).max(100)).max(50) });
+const streamCompleteSchema = z.object({ id: z.string().min(8).max(100), title: z.string().trim().max(120).nullable().optional(), tags: z.array(TagInputSchema).min(1).max(50) });
 
 // =========================================================================================================
 // GET /api/posts
@@ -58,8 +58,10 @@ router.get('/random', async (c) => {
 
 	const service = new PostService(db);
 	const tags = c.req.query('tags');
-	const filtered = tags ? await service.search({ tags, sort: 'recent', limit: 60 }) : null;
-	const pid = filtered?.data.length ? filtered.data[Math.floor(Math.random() * filtered.data.length)].public_id : await service.random();
+	const parsed = SearchQuerySchema.pick({ tags: true }).safeParse({ tags });
+	if (!parsed.success) return fail(c, 'Invalid tags', 400, parsed.error.issues);
+	const filtered = tags ? await service.search({ tags: parsed.data.tags, sort: 'recent', limit: 60 }) : null;
+	const pid = filtered ? (filtered.data.length ? filtered.data[Math.floor(Math.random() * filtered.data.length)].public_id : null) : await service.random();
 
 	if (!pid) return c.json({ public_id: null }, 404);
 
@@ -165,7 +167,7 @@ router.post('/video/upload-url', requireAuth, async (c) => {
 	new PermissionService(c.env.DB).require(viewer, 'upload_video');
 	const body = await parseJsonBody(c);
 	if (!body.ok) return body.response;
-	const metadata = z.object({ title: z.string().trim().max(120).nullable().optional(), tags: z.array(z.string().trim().min(1).max(100)).max(50) }).safeParse(body.data);
+	const metadata = z.object({ title: z.string().trim().max(120).nullable().optional(), tags: z.array(TagInputSchema).min(1).max(50) }).safeParse(body.data);
 	if (!metadata.success) return fail(c, 'datos invalidos', 400, metadata.error.issues);
 	const upload = await c.env.STREAM.createDirectUpload({
 		maxDurationSeconds: 3600,
@@ -189,6 +191,13 @@ router.post('/video/complete', requireAuth, async (c) => {
 
 	const result = await new PostService(c.env.DB).createStreamPost(viewer, parsed.data.title ?? null, parsed.data.tags, parsed.data.id);
 	return c.json({ publicId: result.publicId, postId: result.postId, status: 'processing' }, 201);
+});
+
+router.put('/:publicId/tags', requireAuth, async (c) => {
+	const parsed = z.object({ tags: z.array(TagInputSchema).min(1).max(50) }).safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return fail(c, 'Invalid tags', 400, parsed.error.issues);
+	await new PostService(c.env.DB).replaceTags(c.get('user'), c.req.param('publicId')!, parsed.data.tags);
+	return c.json({ ok: true });
 });
 
 // =========================================================================================================

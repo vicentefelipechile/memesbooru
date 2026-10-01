@@ -17,7 +17,7 @@ import { NotFoundError, ForbiddenError, ValidationError } from '../domain/errors
 import type { AuthUser, CreatedPostResult, PostSearchResult, PostDetailResult, SearchResult, JsonValue } from '../types';
 import { toPostId, toPublicId, toUserId } from '../types';
 import { decodeCursor, encodeCursor as encodeCursorHelper, type PostCursor } from '../helpers/cursor';
-import { normalizeTag, SearchCursorSchema } from '../validators';
+import { normalizeTag, SearchCursorSchema, TagInputSchema } from '../validators';
 import type { CreatePostInput, SearchQueryInput } from '../validators';
 import type { PostRow } from '../db/schema';
 
@@ -184,5 +184,13 @@ export class PostService {
 		await this.posts.updateUserActivityOnUpload(viewer.id);
 
 		return { publicId, postId };
+	}
+
+	async replaceTags(viewer: AuthUser, publicId: string, names: string[]): Promise<void> {
+		const post = await this.posts.findPostForTags(publicId);
+		if (!post || post.status !== 'available') throw new NotFoundError('Post not found');
+		if (viewer.status !== 'active' || (viewer.id !== post.author_id && !new PermissionService(this.db).has(viewer, 'edit_tags'))) throw new ForbiddenError('Permission denied');
+		if (!names.length || names.length > (post.media_type === 'video' ? 50 : 20) || names.some((name) => !TagInputSchema.safeParse(name).success)) throw new ValidationError('Invalid post tags');
+		await this.posts.replaceTags(post.id, names, viewer.id);
 	}
 }

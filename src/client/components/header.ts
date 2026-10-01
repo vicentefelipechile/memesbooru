@@ -5,7 +5,7 @@
 
 import { renderSubNav } from './sub-nav.js';
 
-export function renderHeader(user: { username: string } | null): string {
+export function renderHeader(user: { username: string; permissions?: string[] } | null): string {
 	return `
    <a href="#page" class="skip-link">Saltar al contenido</a>
   <header class="site-header">
@@ -24,5 +24,5 @@ export function renderHeader(user: { username: string } | null): string {
 		<a href="/help" data-link>Help</a>
     </nav>
   </header>
-	  ${renderSubNav(location.pathname, user?.username)}`;
+	  ${renderSubNav(location.pathname, user?.username, user?.permissions?.includes('edit_tags') === true)}`;
 }

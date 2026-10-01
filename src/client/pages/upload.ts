@@ -4,6 +4,8 @@
 
 import { store } from '../state/store.js';
 import { api, loginUrl } from '../services/api.js';
+import { bindTagAutocomplete, renderTagAutocompleteField } from '../components/tag-autocomplete.js';
+import { normalizeTag } from '../../validators';
 
 export function mediaTypeForFile(mime: string): 'image' | 'gif' | 'video' | null {
 	if (mime === 'image/gif') return 'gif';
@@ -31,8 +33,8 @@ export async function renderUpload(): Promise<string> {
       </div>
       <div class="field">
         <label for="tags">Tags</label>
-        <input id="tags" name="tags" placeholder="pepe doge reaccion" required />
-        <span class="hint">Separados por espacio, en minusculas.</span>
+		 ${renderTagAutocompleteField('<input id="tags" name="tags" placeholder="pepe doge reaccion" maxlength="500" autocomplete="off" required />')}
+		 <span class="hint">Separados por espacio. Los tags nuevos se crean como reacción; los existentes pueden seleccionarse en la lista.</span>
       </div>
       <button type="submit" class="primary">Subir</button>
     </form>
@@ -45,6 +47,8 @@ export function bindUpload(): void {
 	const form = document.getElementById('upload-form');
 
 	if (!(form instanceof HTMLFormElement)) return;
+	const input = document.getElementById('tags');
+	if (input instanceof HTMLInputElement) bindTagAutocomplete(input);
 
 	form.addEventListener('submit', async (e) => {
 		e.preventDefault();
@@ -71,15 +75,20 @@ export function bindUpload(): void {
 			return;
 		}
 
-		const tags = tagsEl.value.trim().split(/\s+/).filter(Boolean);
+		const rawTags = tagsEl.value.trim().split(/\s+/).filter(Boolean);
+		const tags = [...new Set(rawTags.map(normalizeTag))];
 
-		if (tags.length === 0) {
-			status.textContent = 'Escribe al menos un tag.';
+		if (tags.length === 0 || tags.some((tag) => !tag || tag.length > 40)) {
+			status.textContent = 'Escribe tags válidos de hasta 40 caracteres.';
 
 			return;
 		}
 
 		const title = titleEl.value.trim() || null;
+		if (tags.length > (mediaType === 'video' ? 50 : 20)) {
+			status.textContent = `Demasiados tags (máximo ${mediaType === 'video' ? 50 : 20}).`;
+			return;
+		}
 
 		status.textContent = 'Subiendo...';
 

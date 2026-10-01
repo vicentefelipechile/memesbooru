@@ -72,6 +72,7 @@ export class ModerationRepository {
 
 		if (data.targetType === 'post' && data.action === 'reject') {
 			stmts.push(this.db.prepare("UPDATE posts SET status = 'rejected', updated_at = ? WHERE id = ?").bind(now, data.targetId));
+			stmts.push(this.db.prepare("UPDATE post_listing SET status = 'rejected' WHERE post_id = ?").bind(data.targetId));
 		}
 
 		if (data.targetType === 'user' && data.action === 'ban') {

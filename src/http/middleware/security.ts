@@ -41,7 +41,7 @@ export function securityMiddleware(app: Hono<{ Bindings: Env }>) {
 				if ((ALLOWED_ORIGINS as readonly string[]).includes(origin)) return origin;
 				return null;
 			},
-			allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+			allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
 			allowHeaders: ['Content-Type', 'Authorization'],
 			credentials: true,
 		}),

@@ -60,7 +60,12 @@ async function loadResults(): Promise<void> {
 	} catch (error) {
 		console.error('Catalog search failed', error);
 
-		if (version === requestVersion && status?.isConnected) status.textContent = 'No se pudo cargar la búsqueda. Pulsa Buscar para reintentar.';
+		if (version === requestVersion && results?.isConnected) {
+			results.replaceChildren();
+			const tags = document.getElementById('page-tags');
+			if (tags) tags.textContent = '';
+			if (status) status.textContent = 'No se pudo cargar la búsqueda. Pulsa Buscar para reintentar.';
+		}
 	} finally {
 		if (version === requestVersion) results?.removeAttribute('aria-busy');
 	}
