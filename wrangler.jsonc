@@ -11,13 +11,15 @@
 	"assets": {
 		"directory": "dist/client/client",
 		"not_found_handling": "single-page-application",
-		"run_worker_first": ["/api/*"]
+		"run_worker_first": [
+			"/api/*"
+		]
 	},
 	"d1_databases": [
 		{
 			"binding": "DB",
 			"database_name": "memesbooru",
-			"database_id": "e3dcdb4a-5368-40c6-a0d7-944b756fdeb4",
+			"database_id": "a714941c-43e5-4088-9b04-b1d8ac98141a",
 			"migrations_dir": "migrations"
 		}
 	],

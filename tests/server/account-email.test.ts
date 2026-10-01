@@ -6,43 +6,24 @@
 
 import { env } from 'cloudflare:test';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import initialSql from '../../migrations/0001_initial.sql?raw';
-import credentialsSql from '../../migrations/0003_account_credentials.sql?raw';
-import communitySql from '../../migrations/0004_community_entities.sql?raw';
-import profilesSql from '../../migrations/0007_user_profiles.sql?raw';
-import removalSql from '../../migrations/0008_remove_account_email.sql?raw';
 import authRoutes from '../../src/http/routes/auth';
 import { AuthService } from '../../src/services/auth-service';
 import { CommunityService } from '../../src/services/community-service';
 import { ProfileService } from '../../src/services/profile-service';
 import { toUserId } from '../../src/types';
-import { applyPermissions } from './apply-permissions';
+import { applySchema } from './apply-schema';
 
 beforeAll(async () => {
-	const statements = `${initialSql}\n${credentialsSql}\n${communitySql}\n${profilesSql}`
-		.replace(/--[^\n]*/g, '')
-		.split(';')
-		.map((sql) => sql.trim())
-		.filter(Boolean);
-	await env.DB.batch(statements.map((sql) => env.DB.prepare(sql)));
-	await env.DB.prepare("INSERT INTO users (id, username, email, created_at) VALUES (1, 'old_local', 'manually@entered.cl', 1), (2, 'old_google', 'previous@entered.cl', 1)").run();
+	await applySchema(env.DB);
+	await env.DB.prepare("INSERT INTO users (id, username, created_at) VALUES (1, 'old_local', 1), (2, 'old_google', 1)").run();
 	await env.DB.prepare("INSERT INTO google_identities (user_id, google_subject, created_at) VALUES (2, 'google-old', 1)").run();
-	await env.DB.prepare("INSERT INTO contact_tickets (id, email, subject, body, created_at, updated_at) VALUES (1, 'contact@entered.cl', 'Hello', 'Help', 1, 1)").run();
-	await env.DB.batch(
-		removalSql
-			.replace(/--[^\n]*/g, '')
-			.split(';')
-			.map((sql) => sql.trim())
-			.filter(Boolean)
-			.map((sql) => env.DB.prepare(sql)),
-	);
-	await applyPermissions(env.DB);
+	await env.DB.prepare("INSERT INTO contact_tickets (id, subject, body, created_at, updated_at) VALUES (1, 'Hello', 'Help', 1, 1)").run();
 });
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('account email boundary', () => {
-	it('removes old manually entered addresses, email editing and internal mail tables', async () => {
+	it('does not collect email in local accounts or contact tickets', async () => {
 		const users = await env.DB.prepare('SELECT email FROM users ORDER BY id').all<{ email: string | null }>();
 		expect(users.results).toEqual([{ email: null }, { email: null }]);
 		const columns = await env.DB.prepare('PRAGMA table_info(contact_tickets)').all<{ name: string }>();

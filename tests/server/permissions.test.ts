@@ -1,39 +1,29 @@
 // =========================================================================================================
-// PERMISSIONS: migration, effective roles, revocation, and protected management.
+// PERMISSIONS: schema bootstrap, effective roles, revocation, and protected management.
 // =========================================================================================================
 
 import { env } from 'cloudflare:test';
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
-import initialSql from '../../migrations/0001_initial.sql?raw';
 import { PermissionService } from '../../src/services/permission-service';
 import { ModerationService } from '../../src/services/moderation-service';
 import { toUserId, type AuthUser } from '../../src/types';
 import { hashToken } from '../../src/helpers/crypto';
 import roleRoutes from '../../src/http/routes/permissions';
 import { DomainError } from '../../src/domain/errors';
-import { applyPermissions } from './apply-permissions';
+import { applySchema } from './apply-schema';
 
 beforeAll(async () => {
-	const apply = async (sql: string) =>
-		env.DB.batch(
-			sql
-				.replace(/--[^\n]*/g, '')
-				.split(';')
-				.map((statement) => statement.trim())
-				.filter(Boolean)
-				.map((statement) => env.DB.prepare(statement)),
-		);
-	await apply(initialSql);
-	await env.DB.prepare("INSERT INTO users (id, username, rank, created_at) VALUES (1, 'owner', 'trusted', 1), (2, 'reader', 'normal', 1), (3, 'newcomer', 'new', 1)").run();
-	await applyPermissions(env.DB);
+	await applySchema(env.DB);
+	await env.DB.prepare("INSERT INTO users (id, username, created_at) VALUES (1, 'owner', 1), (2, 'reader', 1), (3, 'newcomer', 1)").run();
+	await env.DB.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (1, 1), (2, 3)').run();
 });
 
 describe('roles and permissions', () => {
 	const service = new PermissionService(env.DB);
 	const account = async (id: number): Promise<AuthUser> => ({ id: toUserId(id), username: `user${id}`, status: 'active', permissions: await service.forUser(toUserId(id)) });
 
-	it('migrates old accounts, eliminates rank columns, and assigns a base role to new users', async () => {
+	it('seeds roles, omits rank columns, and assigns a base role to new users', async () => {
 		expect((await account(1)).permissions).toContain('manage_roles');
 		expect((await account(2)).permissions).toContain('upload_without_cooldown');
 		expect((await account(3)).permissions).not.toContain('upload_without_cooldown');

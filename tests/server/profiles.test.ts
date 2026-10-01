@@ -7,25 +7,16 @@
 import { env } from 'cloudflare:test';
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
-import initialSql from '../../migrations/0001_initial.sql?raw';
-import credentialsSql from '../../migrations/0003_account_credentials.sql?raw';
-import profilesSql from '../../migrations/0007_user_profiles.sql?raw';
 import profileRoutes from '../../src/http/routes/profiles';
 import { ProfileService } from '../../src/services/profile-service';
 import { DomainError } from '../../src/domain/errors';
 import { toUserId } from '../../src/types';
 import { ProfileSchema } from '../../src/validators';
-import { applyPermissions } from './apply-permissions';
+import { applySchema } from './apply-schema';
 
 beforeAll(async () => {
-	const statements = `${initialSql}\n${credentialsSql}\n${profilesSql}`
-		.replace(/--[^\n]*/g, '')
-		.split(';')
-		.map((sql) => sql.trim())
-		.filter(Boolean);
-	await env.DB.batch(statements.map((sql) => env.DB.prepare(sql)));
-	await env.DB.prepare("INSERT INTO users (id, username, rank, created_at) VALUES (1, 'alice', 'new', 1), (2, 'blocked', 'new', 1)").run();
-	await applyPermissions(env.DB);
+	await applySchema(env.DB);
+	await env.DB.prepare("INSERT INTO users (id, username, created_at) VALUES (1, 'alice', 1), (2, 'blocked', 1)").run();
 	await env.DB.prepare("UPDATE users SET status = 'banned' WHERE id = 2").run();
 	await env.DB.prepare("INSERT INTO posts (id, public_id, author_id, media_type, status, created_at, updated_at) VALUES (1, 'one', 1, 'image', 'available', 10, 10), (2, 'two', 1, 'image', 'available', 10, 10), (3, 'hidden', 1, 'image', 'hidden', 11, 11)").run();
 	await env.DB.prepare("INSERT INTO post_listing (post_id, public_id, media_type, status, low_variant_key, published_at) VALUES (1, 'one', 'image', 'available', 'low', 10), (2, 'two', 'image', 'available', 'low', 10), (3, 'hidden', 'image', 'hidden', 'low', 11)").run();

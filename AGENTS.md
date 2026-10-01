@@ -42,7 +42,7 @@ src/
   validators.ts  # single Zod validator monolith
   types.ts       # single type monolith (DTOs + branded ids + helpers)
   index.ts       # Hono app
-migrations/      # D1 versioned SQL
+migrations/      # One consolidated D1 schema bootstrap (0001_initial.sql)
 tests/           # server/* (vitest + miniflare)
 ```
 
@@ -192,7 +192,7 @@ La portada `/` es una entrada de búsqueda estática y no solicita resultados al
 
 ### 11.4 Tag categories (memes domain)
 
-5 categories, alphabetically ordered inside the sidebar (RULE34 pattern): `reaction` (pepe/wojak/doge), `source` (mangas/pelis/juegos), `people` (real people — políticos, famosos), `character` (personajes ficticios), `meta` (meta-tags — rare_tags/hd/wallpaper). Defined in `validators.ts` `TAG_CATEGORIES` and enforced by `CHECK` in `migrations/0002_tag_categories.sql` (table rebuilt to swap `general/copyright/series/artist` for the new set, remapping old rows). The R34-style sidebar labels are in `components/sidebar.ts` `CATEGORY_LABELS`.
+5 categories, alphabetically ordered inside the sidebar (RULE34 pattern): `reaction` (pepe/wojak/doge), `source` (mangas/pelis/juegos), `people` (real people — políticos, famosos), `character` (personajes ficticios), `meta` (meta-tags — rare_tags/hd/wallpaper). Defined in `validators.ts` `TAG_CATEGORIES` and enforced by `CHECK` in `migrations/0001_initial.sql`. The R34-style sidebar labels are in `components/sidebar.ts` `CATEGORY_LABELS`.
 
 ### 11.5 Themes (user-selectable)
 
@@ -216,15 +216,15 @@ Light utilitarian base (no dark-mode reflex), self-hosted `@fontsource/ibm-plex-
 
 ### 11.9 Tag browse endpoint
 
-`GET /api/tags/browse?per=25` returns `BrowseTagsResponse = { groups: Record<Category, {tags: TagItem[]}> }` (one query via `ROW_NUMBER() OVER (PARTITION BY category)` over `tags WHERE status='active'`, ordered by `normalized_name ASC`). Cached `public, max-age=300`. Pagination per category is `GET /api/tags/browse/:category?limit&offset`. Migration 0002 rebuilds the `tags` table to enforce the 5-category `CHECK`.
+`GET /api/tags/browse?per=25` returns `BrowseTagsResponse = { groups: Record<Category, {tags: TagItem[]}> }` (one query via `ROW_NUMBER() OVER (PARTITION BY category)` over `tags WHERE status='active'`, ordered by `normalized_name ASC`). Cached `public, max-age=300`. Pagination per category is `GET /api/tags/browse/:category?limit&offset`. The consolidated schema enforces the 5-category `CHECK` directly.
 
-### Roles and permissions (migration 0009)
+### Roles and permissions (consolidated schema)
 
 `users.rank`, `trust_score`, and `user_rank_history` are removed. `roles`, `role_permissions`, and `user_roles` store additive capabilities; every new user receives `Member` via a DB trigger. Existing privileged accounts migrate to `Administrator`, regular accounts to `Contributor`, and new accounts to `Member`. `Administrator` and `Member` are protected roles; `manage_roles` is reserved to `Administrator` and the last administrator cannot be removed. Moderation cannot ban an administrator until its administrator role is revoked.
 
 `src/repositories/permission-repository.ts` owns role SQL; `src/services/permission-service.ts` checks privileges and handles role management. `src/http/routes/permissions.ts` exposes role CRUD and user role assignment. `/settings` shows role controls for administrators. `AuthUser.permissions` is recomputed per request, so revocation takes effect without a new session. Use `PermissionService.require(user, permission)` in services for privileged actions; do not reintroduce rank checks.
 
-Cloudflare D1 check (2026-09-28, https://developers.cloudflare.com/d1/worker-api/d1-database/#batch): **fact:** `batch()` executes statements sequentially in a transaction and rolls back on failure. **Decision:** role permissions are replaced in one batch. **Inference:** a subsequent request to the primary reads changed roles. **Unknown:** behavior under future read replication without Sessions API is `no confirmado`; replication is not configured.
+Cloudflare D1 check (2026-09-28, https://developers.cloudflare.com/d1/worker-api/d1-database/#batch): **fact:** `batch()` executes statements sequentially in a transaction and rolls back on failure. **Decision:** role permissions are replaced in one batch. **Inference:** a subsequent request to the primary reads changed roles. **Unknown:** behavior under future read replication without Sessions API is `no confirmado`; replication is not configured. `migrations/0001_initial.sql` is the complete bootstrap for a fresh database; previously deployed databases retain their applied migration records.
 
 ## 12. Cloudflare Verification Rule
 

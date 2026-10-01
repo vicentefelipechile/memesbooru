@@ -4,25 +4,16 @@
 
 import { env } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
-import initialSql from '../../migrations/0001_initial.sql?raw';
-import communitySql from '../../migrations/0004_community_entities.sql?raw';
-import tagDescriptionsSql from '../../migrations/0005_tag_descriptions.sql?raw';
 import { PostService } from '../../src/services/post-service';
 import { TagService } from '../../src/services/tag-service';
 import { CommunityService } from '../../src/services/community-service';
 import { toUserId } from '../../src/types';
 import { SearchQuerySchema, TagDisplayNameSchema } from '../../src/validators';
-import { applyPermissions } from './apply-permissions';
+import { applySchema } from './apply-schema';
 
 beforeAll(async () => {
-	const statements = `${initialSql}\n${communitySql}\n${tagDescriptionsSql}`
-		.replace(/--[^\n]*/g, '')
-		.split(';')
-		.map((sql) => sql.trim())
-		.filter(Boolean);
-	await env.DB.batch(statements.map((sql) => env.DB.prepare(sql)));
+	await applySchema(env.DB);
 	await env.DB.prepare("INSERT INTO users (id, username, created_at) VALUES (1, 'tester', 1)").run();
-	await applyPermissions(env.DB);
 	await env.DB.batch([
 		env.DB.prepare("INSERT INTO tags (id, normalized_name, category, usage_count, created_at, updated_at) VALUES (1, 'dog', 'character', 3, 1, 1), (2, 'falling', 'meta', 1, 1, 1), (3, 'cat', 'character', 1, 1, 1)"),
 		env.DB.prepare("INSERT INTO tag_aliases (id, alias_normalized, tag_id, created_by, created_at) VALUES (1, 'puppy', 1, 1, 1)"),

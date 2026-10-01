@@ -1,12 +1,12 @@
 // =========================================================================================================
-// Apply the role migration in isolated D1 tests that bootstrap earlier schemas manually.
+// Bootstrap the single-schema migration in isolated D1 tests.
 // =========================================================================================================
 
-import permissionsSql from '../../migrations/0009_permissions.sql?raw';
+import schemaSql from '../../migrations/0001_initial.sql?raw';
 
-export async function applyPermissions(db: D1Database): Promise<void> {
-	const [migration, trigger] = permissionsSql.split('CREATE TRIGGER');
-	const statements = migration
+export async function applySchema(db: D1Database): Promise<void> {
+	const [schema, trigger] = schemaSql.split('CREATE TRIGGER');
+	const statements = schema
 		.replace(/--[^\n]*/g, '')
 		.split(';')
 		.map((statement) => statement.trim())
