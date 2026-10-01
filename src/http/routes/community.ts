@@ -1,211 +1,52 @@
 // =========================================================================================================
 // COMMUNITY ROUTES
 // =========================================================================================================
+// Mounts artist, pool, forum, and wiki routes; handles contact submissions.
+// =========================================================================================================
+
+// =========================================================================================================
+// Imports
+// =========================================================================================================
 
 import { Hono } from 'hono';
-import { requireAuth, type AuthVariables } from '../middleware/auth';
 import { parseJsonBody } from '../../helpers/http';
-import { fail } from '../responses';
-import { z } from 'zod';
 import { CommunityService } from '../../services/community-service';
+import { CommunityContactSchema } from '../../validators';
+import { requireAuth, type AuthVariables } from '../middleware/auth';
+import { fail } from '../responses';
+import { artistAliasRoutes, artistRoutes, postArtistRoutes } from './community-artists';
+import forumRoutes from './community-forum';
+import { poolPostRoutes, poolRoutes } from './community-pools';
+import wikiRoutes from './community-wiki';
+
+// =========================================================================================================
+// Routes
+// =========================================================================================================
 
 const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
-const limitSchema = z.coerce.number().int().min(1).max(100).catch(50);
-const idSchema = z.coerce.number().int().positive();
-const artistSchema = z.object({ name: z.string().trim().min(1).max(100) });
-const artistStatusSchema = z.object({ status: z.enum(['active', 'deleted']) });
-const artistAliasSchema = z.object({ artist_id: z.number().int().positive(), alias: z.string().trim().min(1).max(100) });
-const postArtistSchema = z.object({ post_id: z.number().int().positive(), artist_id: z.number().int().positive() });
-const poolSchema = z.object({ name: z.string().trim().min(1).max(120), description: z.string().max(2000).nullable().optional() });
-const topicSchema = z.object({ category_id: z.number().int().positive(), title: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(5000) });
-const wikiSchema = z.object({ tag: z.string().trim().min(1).max(100), title: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(10000) });
-const replySchema = z.object({ topic_id: z.number().int().positive(), body: z.string().trim().min(1).max(5000) });
-const poolPostSchema = z.object({ pool_id: z.number().int().positive(), post_id: z.number().int().positive() });
-const wikiRevisionSchema = z.object({ body: z.string().trim().min(1).max(10000), reason: z.string().trim().max(200).nullable().optional() });
-const wikiRevertSchema = z.object({ revision_id: z.number().int().positive() });
-const contactSchema = z.object({ subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(10000) });
-const poolOrderSchema = z.object({ pool_id: z.number().int().positive(), post_id: z.number().int().positive(), position: z.number().int().positive() });
-const topicEditSchema = z.object({ topic_id: z.number().int().positive(), title: z.string().trim().min(1).max(200) });
-const topicStatusSchema = z.object({ topic_id: z.number().int().positive(), status: z.enum(['open', 'locked', 'hidden']), pinned: z.boolean() });
-const forumPostEditSchema = z.object({ post_id: z.number().int().positive(), body: z.string().trim().min(1).max(5000) });
 
-router.get('/artists', async (c) => c.json({ data: await new CommunityService(c.env.DB).listArtists(limitSchema.parse(c.req.query('limit'))) }));
-router.get('/post-artists/:postId', async (c) => {
-	const id = idSchema.safeParse(c.req.param('postId'));
-	if (!id.success) return fail(c, 'Invalid post ID', 400, id.error.issues);
-	return c.json({ data: await new CommunityService(c.env.DB).listPostArtists(id.data) });
-});
-router.get('/pools', async (c) => c.json({ data: await new CommunityService(c.env.DB).listPools(limitSchema.parse(c.req.query('limit'))) }));
-router.get('/forum/topics', async (c) => c.json({ data: await new CommunityService(c.env.DB).listTopics(limitSchema.parse(c.req.query('limit'))) }));
-router.get('/forum/categories', async (c) => c.json({ data: await new CommunityService(c.env.DB).listCategories() }));
-router.get('/wiki', async (c) => c.json({ data: await new CommunityService(c.env.DB).listWiki(limitSchema.parse(c.req.query('limit'))) }));
-router.get('/wiki/:id/revisions', async (c) => {
-	const id = idSchema.safeParse(c.req.param('id'));
-	if (!id.success) return fail(c, 'Invalid wiki ID', 400, id.error.issues);
-	return c.json({ data: await new CommunityService(c.env.DB).listWikiRevisions(id.data) });
-});
-router.get('/pools/:id/posts', async (c) => {
-	const id = idSchema.safeParse(c.req.param('id'));
-	if (!id.success) return fail(c, 'Invalid pool ID', 400, id.error.issues);
-	return c.json({ data: await new CommunityService(c.env.DB).listPoolPosts(id.data) });
-});
-router.get('/forum/topics/:id/posts', async (c) => {
-	const id = idSchema.safeParse(c.req.param('id'));
-	if (!id.success) return fail(c, 'Invalid topic ID', 400, id.error.issues);
-	return c.json({ data: await new CommunityService(c.env.DB).listForumPosts(id.data) });
-});
-router.get('/forum/topics/:id', async (c) => {
-	const id = idSchema.safeParse(c.req.param('id'));
-	if (!id.success) return fail(c, 'Invalid topic ID', 400, id.error.issues);
-	return c.json(await new CommunityService(c.env.DB).getTopic(id.data));
-});
-
-router.post('/artists', requireAuth, async (c) => {
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const parsed = artistSchema.safeParse(body.data);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).createArtist(c.get('user'), parsed.data.name);
-	return c.json({ ok: true }, 201);
-});
-
-router.patch('/artists/:id/status', requireAuth, async (c) => {
-	const id = idSchema.safeParse(c.req.param('id'));
-	if (!id.success) return fail(c, 'Invalid artist ID', 400, id.error.issues);
-	const parsed = artistStatusSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).setArtistStatus(id.data, parsed.data.status, c.get('user'));
-	return c.json({ ok: true });
-});
-
-router.post('/artist-aliases', requireAuth, async (c) => {
-	const parsed = artistAliasSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).addArtistAlias(c.get('user'), parsed.data.artist_id, parsed.data.alias);
-	return c.json({ ok: true }, 201);
-});
-
-router.post('/post-artists', requireAuth, async (c) => {
-	const parsed = postArtistSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).addPostArtist(c.get('user'), parsed.data.post_id, parsed.data.artist_id);
-	return c.json({ ok: true }, 201);
-});
-
-router.delete('/post-artists', requireAuth, async (c) => {
-	const parsed = postArtistSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).removePostArtist(c.get('user'), parsed.data.post_id, parsed.data.artist_id);
-	return c.json({ ok: true });
-});
-
-router.post('/pools', requireAuth, async (c) => {
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const parsed = poolSchema.safeParse(body.data);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).createPool(c.get('user'), parsed.data.name, parsed.data.description ?? null);
-	return c.json({ ok: true }, 201);
-});
-
-router.post('/forum/topics', requireAuth, async (c) => {
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const parsed = topicSchema.safeParse(body.data);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).createTopic(c.get('user'), parsed.data.category_id, parsed.data.title, parsed.data.body);
-	return c.json({ ok: true }, 201);
-});
-
-router.post('/wiki', requireAuth, async (c) => {
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const parsed = wikiSchema.safeParse(body.data);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).createWiki(c.get('user'), parsed.data.tag, parsed.data.title, parsed.data.body);
-	return c.json({ ok: true }, 201);
-});
-
-router.post('/forum/replies', requireAuth, async (c) => {
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const parsed = replySchema.safeParse(body.data);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).addReply(c.get('user'), parsed.data.topic_id, parsed.data.body);
-	return c.json({ ok: true }, 201);
-});
-
-router.post('/pools/posts', requireAuth, async (c) => {
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const parsed = poolPostSchema.safeParse(body.data);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).addPoolPost(c.get('user'), parsed.data.pool_id, parsed.data.post_id);
-	return c.json({ ok: true }, 201);
-});
-
-router.post('/wiki/:id/revisions', requireAuth, async (c) => {
-	const id = idSchema.safeParse(c.req.param('id'));
-	if (!id.success) return fail(c, 'Invalid wiki ID', 400, id.error.issues);
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const parsed = wikiRevisionSchema.safeParse(body.data);
-	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).reviseWiki(c.get('user'), id.data, parsed.data.body, parsed.data.reason ?? null);
-	return c.json({ ok: true }, 201);
-});
-
-router.post('/wiki/:id/revert', requireAuth, async (c) => {
-	const id = idSchema.safeParse(c.req.param('id'));
-	if (!id.success) return fail(c, 'Invalid wiki ID', 400, id.error.issues);
-	const parsed = wikiRevertSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).revertWiki(c.get('user'), id.data, parsed.data.revision_id);
-	return c.json({ ok: true });
-});
+router.route('/artists', artistRoutes);
+router.route('/artist-aliases', artistAliasRoutes);
+router.route('/post-artists', postArtistRoutes);
+router.route('/pools', poolRoutes);
+router.route('/pools/posts', poolPostRoutes);
+router.route('/forum', forumRoutes);
+router.route('/wiki', wikiRoutes);
 
 router.post('/contact', requireAuth, async (c) => {
 	const body = await parseJsonBody(c);
 	if (!body.ok) return body.response;
-	const parsed = contactSchema.safeParse(body.data);
+
+	const parsed = CommunityContactSchema.safeParse(body.data);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
+
 	await new CommunityService(c.env.DB).createContact(c.get('user'), parsed.data.subject, parsed.data.body);
+
 	return c.json({ ok: true }, 201);
 });
 
-router.delete('/pools/posts', requireAuth, async (c) => {
-	const parsed = poolPostSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).removePoolPost(parsed.data.pool_id, parsed.data.post_id, c.get('user'));
-	return c.json({ ok: true });
-});
-
-router.post('/pools/posts/reorder', requireAuth, async (c) => {
-	const parsed = poolOrderSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).reorderPoolPost(parsed.data.pool_id, parsed.data.post_id, parsed.data.position, c.get('user'));
-	return c.json({ ok: true });
-});
-
-router.patch('/forum/topics', requireAuth, async (c) => {
-	const parsed = topicEditSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).updateTopic(c.get('user'), parsed.data.topic_id, parsed.data.title);
-	return c.json({ ok: true });
-});
-
-router.patch('/forum/topics/status', requireAuth, async (c) => {
-	const parsed = topicStatusSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).setTopicStatus(c.get('user'), parsed.data.topic_id, parsed.data.status, parsed.data.pinned);
-	return c.json({ ok: true });
-});
-
-router.patch('/forum/posts', requireAuth, async (c) => {
-	const parsed = forumPostEditSchema.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return fail(c, 'Invalid body', 400, parsed.error.issues);
-	await new CommunityService(c.env.DB).editForumPost(c.get('user'), parsed.data.post_id, parsed.data.body);
-	return c.json({ ok: true });
-});
+// =========================================================================================================
+// Export
+// =========================================================================================================
 
 export default router;

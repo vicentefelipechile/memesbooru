@@ -19,7 +19,7 @@
 		{
 			"binding": "DB",
 			"database_name": "memesbooru",
-			"database_id": "a714941c-43e5-4088-9b04-b1d8ac98141a",
+			"database_id": "c664e6f4-34f8-46fc-a1b8-4344dc8813b2",
 			"migrations_dir": "migrations"
 		}
 	],

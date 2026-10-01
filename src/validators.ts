@@ -226,6 +226,29 @@ export const PaginationSchema = z.object({
 });
 
 // =========================================================================================================
+// Community input schemas
+// =========================================================================================================
+
+export const CommunityLimitSchema = z.coerce.number().int().min(1).max(100).catch(50);
+export const CommunityIdSchema = z.coerce.number().int().positive();
+export const CreateArtistSchema = z.object({ name: z.string().trim().min(1).max(100) });
+export const ArtistStatusSchema = z.object({ status: z.enum(['active', 'deleted']) });
+export const ArtistAliasSchema = z.object({ artist_id: z.number().int().positive(), alias: z.string().trim().min(1).max(100) });
+export const PostArtistSchema = z.object({ post_id: z.number().int().positive(), artist_id: z.number().int().positive() });
+export const CreatePoolSchema = z.object({ name: z.string().trim().min(1).max(120), description: z.string().max(2000).nullable().optional() });
+export const CreateTopicSchema = z.object({ category_id: z.number().int().positive(), title: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(5000) });
+export const CreateWikiSchema = z.object({ tag: z.string().trim().min(1).max(100), title: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(10000) });
+export const CreateReplySchema = z.object({ topic_id: z.number().int().positive(), body: z.string().trim().min(1).max(5000) });
+export const PoolPostSchema = z.object({ pool_id: z.number().int().positive(), post_id: z.number().int().positive() });
+export const WikiRevisionSchema = z.object({ body: z.string().trim().min(1).max(10000), reason: z.string().trim().max(200).nullable().optional() });
+export const WikiRevertSchema = z.object({ revision_id: z.number().int().positive() });
+export const CommunityContactSchema = z.object({ subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(10000) });
+export const PoolOrderSchema = z.object({ pool_id: z.number().int().positive(), post_id: z.number().int().positive(), position: z.number().int().positive() });
+export const TopicEditSchema = z.object({ topic_id: z.number().int().positive(), title: z.string().trim().min(1).max(200) });
+export const TopicStatusSchema = z.object({ topic_id: z.number().int().positive(), status: z.enum(['open', 'locked', 'hidden']), pinned: z.boolean() });
+export const ForumPostEditSchema = z.object({ post_id: z.number().int().positive(), body: z.string().trim().min(1).max(5000) });
+
+// =========================================================================================================
 // Response schemas — shared frontend/backend, frontend safeParse sin as
 // =========================================================================================================
 
