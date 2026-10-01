@@ -26,6 +26,10 @@ describe('Turnstile', () => {
 		request.mockImplementation(async () => new Response(JSON.stringify({ success: true, hostname: 'memesbooru.vicentefelipechile.workers.dev', action: 'login' })));
 		expect(await verifyTurnstile('secret', 'token', 'login', 'memesbooru.vicentefelipechile.workers.dev')).toBe(true);
 		expect(await verifyTurnstile('secret', 'token', 'login', 'memesbooru.cl')).toBe(false);
+		request.mockImplementation(async () => new Response(JSON.stringify({ success: true, hostname: 'memesbooru.pages.dev', action: 'signup' })));
+		expect(await verifyTurnstile('secret', 'token', 'signup', 'memesbooru.vicentefelipechile.workers.dev', 'https://memesbooru.pages.dev')).toBe(true);
+		expect(await verifyTurnstile('secret', 'token', 'signup', 'memesbooru.vicentefelipechile.workers.dev', 'https://evil.example')).toBe(false);
+		expect(await verifyTurnstile('secret', 'token', 'signup', 'memesbooru.vicentefelipechile.workers.dev')).toBe(false);
 		request.mockImplementation(async () => new Response(JSON.stringify({ success: true, hostname: 'memesbooru.cl', action: 'login' })));
 		expect(await verifyTurnstile('secret', 'token', 'signup', 'memesbooru.cl')).toBe(false);
 		request.mockImplementation(async () => new Response(JSON.stringify({ success: true, hostname: 'localhost', action: 'login' })));

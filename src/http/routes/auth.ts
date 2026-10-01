@@ -44,7 +44,7 @@ router.post('/login', async (c) => {
 	const parsed = PasswordLoginSchema.safeParse(body);
 
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	if (!(await verifyTurnstile(c.env.TURNSTILE_SECRET_KEY, parsed.data.turnstile_token, 'login', new URL(c.req.url).hostname, c.req.header('cf-connecting-ip')))) return fail(c, 'Verification failed', 403);
+	if (!(await verifyTurnstile(c.env.TURNSTILE_SECRET_KEY, parsed.data.turnstile_token, 'login', new URL(c.req.url).hostname, c.req.header('origin'), c.req.header('cf-connecting-ip')))) return fail(c, 'Verification failed', 403);
 
 	const service = new AuthService(c.env.DB);
 	const user = await service.authenticatePassword(parsed.data.username, parsed.data.password);
@@ -61,7 +61,7 @@ router.post('/register', async (c) => {
 	const body = await c.req.json<JsonValue>().catch(() => null);
 	const parsed = RegisterSchema.safeParse(body);
 	if (!parsed.success) return fail(c, 'Validation error', 400, parsed.error.issues);
-	if (!(await verifyTurnstile(c.env.TURNSTILE_SECRET_KEY, parsed.data.turnstile_token, 'signup', new URL(c.req.url).hostname, c.req.header('cf-connecting-ip')))) return fail(c, 'Verification failed', 403);
+	if (!(await verifyTurnstile(c.env.TURNSTILE_SECRET_KEY, parsed.data.turnstile_token, 'signup', new URL(c.req.url).hostname, c.req.header('origin'), c.req.header('cf-connecting-ip')))) return fail(c, 'Verification failed', 403);
 	const service = new AuthService(c.env.DB);
 	const user = await service.register(parsed.data.username, parsed.data.password);
 	setCookie(c, 'session', await service.createSession(user.id), { httpOnly: true, secure: true, sameSite: 'None', path: '/', maxAge: 30 * 24 * 3600 });
