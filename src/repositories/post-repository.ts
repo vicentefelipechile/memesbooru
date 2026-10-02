@@ -9,23 +9,55 @@
 // =========================================================================================================
 
 import { queryOne, queryAll, batch, execute, type DB } from '../db/client';
-import type { FavoriteListingRow, PostRow, PostListingRow, MediaAssetRow, PostDetailRow, PostTagRow, PostRatingRow, UserActivityRow, NextIdRow } from '../db/schema';
-import { encodeCursor as encodeCursorHelper, decodeCursor as decodeCursorHelper } from '../helpers/cursor';
+import type { FavoriteListingRow, PostRow, PostListingRow, MediaAssetRow, PostDetailRow, PostTagRow, PostRatingRow, UserActivityRow, NextIdRow, CountRow } from '../db/schema';
+import { decodeCursor as decodeCursorHelper } from '../helpers/cursor';
+import type { PostCursor } from '../helpers/cursor';
+import { QueryBuilder } from '../helpers/query-builder';
 import { normalizeTag } from '../validators';
 import * as tagRepo from './tag-repository';
-import { buildInsertPostStatement, buildInsertMediaAssetStatement } from './post-types';
-import type { CreatePostData } from './post-types';
-import { searchByTags, findRandomPublicId, listTop, type SearchByTagsOpts } from './post-search';
 
 // =========================================================================================================
-// Export — canonical cursor helpers (single source in helpers/cursor.ts) + split modules for compat
+// Types
 // =========================================================================================================
 
-export const encodeCursor = encodeCursorHelper;
-export const decodeCursor = decodeCursorHelper;
-export type { CreatePostData, InsertPostStatementData, InsertMediaAssetStatementData, SearchByTagsOpts, PostCountFilter } from './post-types';
-export { buildInsertPostStatement, buildInsertMediaAssetStatement } from './post-types';
-export { searchByTags, count, findRandomPublicId, listTop } from './post-search';
+export type CreatePostData = {
+	publicId: PostRow['public_id'];
+	authorId: PostRow['author_id'];
+	mediaType: PostRow['media_type'];
+	tags: string[];
+	title: PostRow['title'];
+	checksum: MediaAssetRow['checksum'];
+	originalKey: MediaAssetRow['original_object_key'];
+	mimeType: MediaAssetRow['mime_type'];
+	byteSize: MediaAssetRow['byte_size'];
+};
+
+export type InsertPostStatementData = {
+	id: PostRow['id'];
+	publicId: PostRow['public_id'];
+	authorId: PostRow['author_id'];
+	canonicalPostId: PostRow['canonical_post_id'];
+	mediaType: PostRow['media_type'];
+	status: PostRow['status'];
+	title: PostRow['title'];
+	createdAt: PostRow['created_at'];
+	updatedAt: PostRow['updated_at'];
+};
+
+export type InsertMediaAssetStatementData = {
+	id: MediaAssetRow['id'];
+	postId: MediaAssetRow['post_id'];
+	mediaType: MediaAssetRow['media_type'];
+	originalKey: MediaAssetRow['original_object_key'];
+	mimeType: MediaAssetRow['mime_type'];
+	byteSize: MediaAssetRow['byte_size'];
+	checksum: MediaAssetRow['checksum'];
+	processingStatus: MediaAssetRow['processing_status'];
+	createdAt: MediaAssetRow['created_at'];
+};
+
+export type SearchByTagsOpts = { sort: 'recent' | 'popular'; excludedTagIds?: number[]; cursor?: string; limit: number };
+export type PostCountFilter = { status?: PostRow['status'] };
 
 // =========================================================================================================
 // Queries
@@ -35,15 +67,54 @@ export class PostRepository {
 	constructor(private readonly db: DB) {}
 
 	async searchByTags(tagIds: number[], opts: SearchByTagsOpts): Promise<PostListingRow[]> {
-		return searchByTags(this.db, tagIds, opts);
+		const cursor = opts.cursor ? decodeCursorHelper<PostCursor>(opts.cursor) : null;
+		const query = new QueryBuilder().where("pl.status = 'available'");
+		const [rarest, ...remaining] = tagIds;
+
+		if (rarest !== undefined) query.where('pl.post_id IN (SELECT post_id FROM post_tags WHERE tag_id = ?)', rarest);
+
+		for (const tagId of remaining) query.where('EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id = pl.post_id AND pt.tag_id = ?)', tagId);
+		for (const tagId of opts.excludedTagIds ?? []) query.where('NOT EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id = pl.post_id AND pt.tag_id = ?)', tagId);
+
+		const column = opts.sort === 'popular' ? 'score' : 'published_at';
+		const value = cursor?.[column];
+		if (cursor && value !== undefined) query.where('(pl.' + column + ' < ? OR (pl.' + column + ' = ? AND pl.post_id < ?))', value, value, cursor.id);
+
+		const { sql, params } = query.build(
+			`SELECT pl.post_id, pl.public_id, pl.media_type, pl.status, pl.low_variant_key, pl.medium_variant_key, pl.width, pl.height, pl.score, pl.rating_count, pl.favorite_count, pl.comment_count, pl.published_at FROM post_listing pl`,
+		);
+		return queryAll<PostListingRow>(this.db, `${sql} ORDER BY pl.${column} DESC, pl.post_id DESC LIMIT ?`, [...params, opts.limit]);
+	}
+
+	async count(filters?: PostCountFilter): Promise<number> {
+		const row = filters?.status ? await queryOne<CountRow>(this.db, 'SELECT COUNT(*) as c FROM posts WHERE status = ?', [filters.status]) : await queryOne<CountRow>(this.db, 'SELECT COUNT(*) as c FROM posts', []);
+		return row?.c ?? 0;
 	}
 
 	async findRandomPublicId(): Promise<string | null> {
-		return findRandomPublicId(this.db);
+		const row = await queryOne<Pick<PostRow, 'public_id'>>(this.db, `SELECT public_id FROM post_listing WHERE status = 'available' ORDER BY RANDOM() LIMIT 1`, []);
+		return row?.public_id ?? null;
 	}
 
 	listTop(limit = 100, since = 0, sort: 'score' | 'favorites' | 'recent' = 'score'): Promise<PostListingRow[]> {
-		return listTop(this.db, limit, since, sort);
+		const order = sort === 'favorites' ? 'pl.favorite_count DESC, pl.score DESC' : sort === 'recent' ? 'pl.published_at DESC, pl.post_id DESC' : 'pl.score DESC, pl.favorite_count DESC';
+		return queryAll<PostListingRow>(
+			this.db,
+			`SELECT pl.post_id, pl.public_id, pl.media_type, pl.status, pl.low_variant_key, pl.medium_variant_key, pl.width, pl.height, pl.score, pl.rating_count, pl.favorite_count, pl.comment_count, pl.published_at FROM post_listing pl WHERE pl.status = 'available' AND pl.published_at >= ? ORDER BY ${order}, pl.post_id DESC LIMIT ?`,
+			[since, limit],
+		);
+	}
+
+	private buildInsertPostStatement(row: InsertPostStatementData): D1PreparedStatement {
+		return this.db
+			.prepare('INSERT INTO posts (id, public_id, author_id, canonical_post_id, media_type, status, title, score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+			.bind(row.id, row.publicId, row.authorId, row.canonicalPostId, row.mediaType, row.status, row.title, 0, row.createdAt, row.updatedAt);
+	}
+
+	private buildInsertMediaAssetStatement(row: InsertMediaAssetStatementData): D1PreparedStatement {
+		return this.db
+			.prepare('INSERT INTO media_assets (id, post_id, media_type, original_object_key, mime_type, byte_size, checksum, processing_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+			.bind(row.id, row.postId, row.mediaType, row.originalKey, row.mimeType, row.byteSize, row.checksum, row.processingStatus, row.createdAt);
 	}
 
 	async findByPublicId(publicId: string): Promise<PostDetailRow | null> {
@@ -63,9 +134,10 @@ export class PostRepository {
 	}
 
 	async replaceTags(postId: number, names: string[], userId: number): Promise<void> {
-		const ids = await new tagRepo.TagRepository(this.db).ensureTags(names.map(normalizeTag), userId);
+		const tags = new tagRepo.TagRepository(this.db);
+		const ids = await tags.ensureTags(names.map(normalizeTag), userId);
 		const now = Date.now();
-		await batch(this.db, [this.db.prepare('DELETE FROM post_tags WHERE post_id = ?').bind(postId), ...ids.map((tagId) => tagRepo.buildInsertPostTagStatement(this.db, { postId, tagId, addedBy: userId, createdAt: now }))]);
+		await batch(this.db, [this.db.prepare('DELETE FROM post_tags WHERE post_id = ?').bind(postId), ...ids.map((tagId) => tags.buildInsertPostTagStatement({ postId, tagId, addedBy: userId, createdAt: now }))]);
 	}
 
 	async findPublicIdById(id: number): Promise<string | null> {
@@ -170,10 +242,11 @@ export class PostRepository {
 		const status = isDuplicate ? 'duplicate' : 'processing';
 		const canonical = dup?.post_id ?? null;
 
-		const tagIds = await new tagRepo.TagRepository(this.db).ensureTags(normalized, data.authorId);
+		const tags = new tagRepo.TagRepository(this.db);
+		const tagIds = await tags.ensureTags(normalized, data.authorId);
 
 		const stmts: D1PreparedStatement[] = [
-			buildInsertPostStatement(this.db, {
+			this.buildInsertPostStatement({
 				id: postId,
 				publicId: data.publicId,
 				authorId: data.authorId,
@@ -184,7 +257,7 @@ export class PostRepository {
 				createdAt: now,
 				updatedAt: now,
 			}),
-			buildInsertMediaAssetStatement(this.db, {
+			this.buildInsertMediaAssetStatement({
 				id: mediaAssetId,
 				postId,
 				mediaType: data.mediaType,

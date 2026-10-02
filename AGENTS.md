@@ -23,7 +23,7 @@ Hono (src/index.ts / src/http/routes/*)
 **Rules (enforced in review):**
 - Routes: zero business logic, zero SQL. `zValidator` or `parseJsonBody` + `Schema.safeParse` before service. `throw` DomainError, let `app.onError` (`src/index.ts:36`) handle it.
 - Services: every service is a class. No Hono or direct `c.env.DB`; inject `DB` through `constructor(db: DB)`. Use `src/types.ts` branded ids and `src/validators.ts` inferred types.
-- Repositories: every repository is a class with `DB` injected through its constructor. Repository methods are the only place for SQL via `queryOne<T> / queryAll<T> / execute / batch` from `src/db/client.ts`. Never import `c.env.DB` outside `index.ts` / routes.
+- Repositories: every repository file follows the same structure: one `export class ExampleRepository` with `DB` injected through its constructor; all SQL queries, commands, and statement builders for that domain are class methods (private helpers stay inside the class). Do not create functional repository modules or split one repository across same-domain files; combine those methods/types into the corresponding `*-repository.ts`. Repository methods are the only place for SQL via `queryOne<T> / queryAll<T> / execute / batch` from `src/db/client.ts`. Never import `c.env.DB` outside `index.ts` / routes.
 - Domain (`src/domain/errors.ts`): pure, no Cloudflare types. Services throw `NotFoundError / ValidationError / ForbiddenError` etc.
 - `src/index.ts` is composition root only: middleware, route mounting, `onError`, `notFound`, `fetch/queue/scheduled` exports.
 
@@ -117,7 +117,7 @@ Rules:
 
 ## 7. Code Style & Quality
 
-- **Files:** header comment `// ===` block, sections `// Imports`, `// Service`, `// Helpers`. Keep under ~200 lines; split if larger.
+- **Files:** header comment `// ===` block, sections `// Imports`, `// Service`, `// Helpers`. Keep under ~200 lines where practical; keep each repository's same-domain queries and commands together in its repository class.
 - **Imports:** absolute `src/*` via `paths: @/*`, but prefer relative. Group: external → internal → type.
 - **Naming:** `camelCase` vars/fns, `PascalCase` types/classes, `snake_case` DB columns only in `schema.ts`, `UPPER_SNAKE` for `MAX_FILE_SIZES`/`ALLOWED_ORIGINS`.
 - **Functions:** small, explicit return types on exports. Use `encodeCursor<T extends object>(obj:T)` generic (`src/helpers/cursor.ts:13`), `decodeCursor<T>(c:string):T|null`.
@@ -141,7 +141,7 @@ return c.json(data)
 async search(params: SearchParams): Promise<SearchResult> { ... }
 
 // Repository (src/repositories/post-repository.ts) — only SQL
-export async function searchByTags(db: DB, tagIds: TagId[], opts: SearchByTagsOpts): Promise<PostListingRow[]> { return queryAll<PostListingRow>(db, sql, params) }
+searchByTags(tagIds: TagId[], opts: SearchByTagsOpts): Promise<PostListingRow[]> { return queryAll<PostListingRow>(this.db, sql, params) }
 ```
 
 - Use `zValidator('json', CreatePostSchema)` where Hono can, otherwise `parseJsonBody<T extends JsonValue>` + `safeParse`.

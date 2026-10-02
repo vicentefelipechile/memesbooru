@@ -11,7 +11,7 @@
 import { queryOne, queryAll, batch, execute, type DB } from '../db/client';
 import type { TagAliasRow, TagRow, PostTagRow } from '../db/schema';
 import type { PostId } from '../types';
-import { resolveTagIds, resolveTags, findByPostIds, findByPostId, listByCategory, listGroupedByCategory, autocomplete, sortTagIdsByUsage, type ResolveAliasesResult, type ListByCategoryOpts } from './tag-lookup';
+import { normalizeTag } from '../validators';
 
 // =========================================================================================================
 // Types
@@ -24,76 +24,121 @@ export type InsertPostTagStatementData = {
 	createdAt: PostTagRow['created_at'];
 };
 
-// =========================================================================================================
-// Export — read-only lookup lives in ./tag-lookup (single source, re-exported here for compat)
-// =========================================================================================================
-
-export type { ResolveAliasesResult, ListByCategoryOpts } from './tag-lookup';
-export { resolveTagIds, resolveTags, autocomplete, findByPostId, findByPostIds, findById, listByCategory, listGroupedByCategory, getTagUsageCounts, sortTagIdsByUsage } from './tag-lookup';
+export type ResolveAliasesResult = { ids: number[]; known: Set<string> };
+export type ListByCategoryOpts = { limit: number; offset?: number };
 
 // =========================================================================================================
-// Builders
+// Repository
 // =========================================================================================================
-
-export function buildInsertPostTagStatement(db: DB, row: InsertPostTagStatementData): D1PreparedStatement {
-	return db.prepare('INSERT INTO post_tags (post_id, tag_id, added_by, created_at) VALUES (?, ?, ?, ?)').bind(row.postId, row.tagId, row.addedBy, row.createdAt);
-}
-
-// =========================================================================================================
-// Commands
-// =========================================================================================================
-
-export async function ensureTags(db: DB, normalized: string[], authorId: number): Promise<number[]> {
-	const ids: number[] = [];
-	const now = Date.now();
-
-	for (const n of new Set(normalized)) {
-		const resolved = await resolveTagIds(db, [n]);
-		const id = resolved[0] ?? (await findOrCreateTagId(db, n, authorId, now));
-
-		ids.push(id);
-	}
-
-	return [...new Set(ids)];
-}
 
 export class TagRepository {
 	constructor(private readonly db: DB) {}
 
 	async ensureTags(normalized: string[], authorId: number): Promise<number[]> {
-		return ensureTags(this.db, normalized, authorId);
+		const ids: number[] = [];
+		const now = Date.now();
+		for (const name of new Set(normalized)) {
+			const id = (await this.resolveTagIds([name]))[0] ?? (await this.findOrCreateTagId(name, authorId, now));
+			ids.push(id);
+		}
+		return [...new Set(ids)];
 	}
 
 	async resolveTagIds(inputs: string[]): Promise<number[]> {
-		return resolveTagIds(this.db, inputs);
+		return (await this.resolveTags(inputs)).ids;
 	}
 
 	async resolveTags(inputs: string[]): Promise<ResolveAliasesResult> {
-		return resolveTags(this.db, inputs);
+		const normalized = [...new Set(inputs.map(normalizeTag).filter(Boolean))];
+		if (!normalized.length) return { ids: [], known: new Set() };
+		const aliases = await this.resolveViaAliases(normalized);
+		const remaining = normalized.filter((name) => !aliases.known.has(name));
+		if (!remaining.length) return { ids: [...new Set(aliases.ids)], known: aliases.known };
+		const tags = await this.resolveViaTags(remaining);
+		return { ids: [...new Set([...aliases.ids, ...tags.map((tag) => tag.id)])], known: new Set([...aliases.known, ...tags.map((tag) => tag.normalized_name)]) };
 	}
 
 	async sortTagIdsByUsage(tagIds: number[]): Promise<number[]> {
-		return sortTagIdsByUsage(this.db, tagIds);
+		if (tagIds.length <= 1) return tagIds;
+		const counts = await this.getTagUsageCounts(tagIds);
+		return [...tagIds].sort((a, b) => (counts.get(a) ?? 0) - (counts.get(b) ?? 0));
 	}
 
 	async findByPostIds(postIds: PostId[]): Promise<Pick<TagRow, 'normalized_name' | 'category' | 'usage_count'>[]> {
-		return findByPostIds(this.db, postIds);
+		if (!postIds.length) return [];
+		const placeholders = postIds.map(() => '?').join(',');
+		return queryAll<Pick<TagRow, 'normalized_name' | 'category' | 'usage_count'>>(
+			this.db,
+			`SELECT DISTINCT t.normalized_name, t.category, t.usage_count FROM post_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id IN (${placeholders}) AND t.status = 'active' ORDER BY t.category, t.normalized_name`,
+			postIds,
+		);
 	}
 
 	async findByPostId(postId: number): Promise<TagRow[]> {
-		return findByPostId(this.db, postId);
+		return queryAll<TagRow>(
+			this.db,
+			"SELECT t.id, t.normalized_name, t.display_name, t.description, t.category, t.usage_count, t.status, t.created_by, t.created_at, t.updated_at FROM tags t JOIN post_tags pt ON pt.tag_id = t.id WHERE pt.post_id = ? AND t.status = 'active' ORDER BY t.normalized_name",
+			[postId],
+		);
 	}
 
 	async listByCategory(category: string, opts: ListByCategoryOpts): Promise<TagRow[]> {
-		return listByCategory(this.db, category, opts);
+		return queryAll<TagRow>(
+			this.db,
+			`SELECT id, normalized_name, display_name, description, category, usage_count, status, created_by, created_at, updated_at FROM tags WHERE category = ? AND status = 'active' ORDER BY usage_count DESC, normalized_name ASC LIMIT ? OFFSET ?`,
+			[category, opts.limit, opts.offset ?? 0],
+		);
 	}
 
 	async listGroupedByCategory(perCategoryLimit = 25): Promise<Record<string, TagRow[]>> {
-		return listGroupedByCategory(this.db, perCategoryLimit);
+		const rows = await queryAll<TagRow>(
+			this.db,
+			`WITH ranked AS (SELECT id, normalized_name, display_name, category, usage_count, status, created_by, created_at, updated_at, ROW_NUMBER() OVER (PARTITION BY category ORDER BY normalized_name ASC) AS rn FROM tags WHERE status = 'active') SELECT id, normalized_name, display_name, category, usage_count, status, created_by, created_at, updated_at FROM ranked WHERE rn <= ? ORDER BY category, normalized_name ASC`,
+			[perCategoryLimit],
+		);
+		const groups: Record<string, TagRow[]> = {};
+		for (const row of rows) (groups[row.category] ??= []).push(row);
+		return groups;
 	}
 
 	async autocomplete(prefix: string, limit = 20): Promise<TagRow[]> {
-		return autocomplete(this.db, prefix, limit);
+		const normalized = normalizeTag(prefix);
+		if (!normalized || normalized.length > 40) return [];
+		const pattern = `${normalized.replace(/[%_\\]/g, '\\$&')}%`;
+		const columns = 't.id, t.normalized_name, t.display_name, t.description, t.category, t.usage_count, t.status, t.created_by, t.created_at, t.updated_at';
+		const tags = await queryAll<TagRow>(this.db, `SELECT ${columns} FROM tags t WHERE t.status = 'active' AND t.normalized_name LIKE ? ESCAPE '\\' ORDER BY t.usage_count DESC, t.normalized_name ASC LIMIT ?`, [pattern, limit]);
+		const aliases = await queryAll<TagRow>(
+			this.db,
+			`SELECT ${columns} FROM tag_aliases a JOIN tags t ON t.id = a.tag_id WHERE t.status = 'active' AND a.alias_normalized LIKE ? ESCAPE '\\' ORDER BY t.usage_count DESC, t.normalized_name ASC LIMIT ?`,
+			[pattern, limit],
+		);
+		return [...new Map([...tags, ...aliases].map((tag) => [tag.id, tag])).values()].sort((a, b) => b.usage_count - a.usage_count || a.normalized_name.localeCompare(b.normalized_name)).slice(0, limit);
+	}
+
+	async getTagUsageCounts(tagIds: number[]): Promise<Map<number, number>> {
+		if (!tagIds.length) return new Map();
+		const placeholders = tagIds.map(() => '?').join(',');
+		const rows = await queryAll<Pick<TagRow, 'id' | 'usage_count'>>(this.db, `SELECT id, usage_count FROM tags WHERE id IN (${placeholders})`, tagIds);
+		return new Map(rows.map((row) => [row.id, row.usage_count]));
+	}
+
+	buildInsertPostTagStatement(row: InsertPostTagStatementData): D1PreparedStatement {
+		return this.db.prepare('INSERT INTO post_tags (post_id, tag_id, added_by, created_at) VALUES (?, ?, ?, ?)').bind(row.postId, row.tagId, row.addedBy, row.createdAt);
+	}
+
+	private async resolveViaAliases(normalized: string[]): Promise<ResolveAliasesResult> {
+		const placeholders = normalized.map(() => '?').join(',');
+		const aliases = await queryAll<Pick<TagAliasRow, 'tag_id' | 'alias_normalized'>>(
+			this.db,
+			`SELECT tag_id, alias_normalized FROM tag_aliases a JOIN tags t ON t.id = a.tag_id WHERE t.status = 'active' AND alias_normalized IN (${placeholders})`,
+			normalized,
+		);
+		return { ids: aliases.map((alias) => alias.tag_id), known: new Set(aliases.map((alias) => alias.alias_normalized)) };
+	}
+
+	private resolveViaTags(names: string[]): Promise<Pick<TagRow, 'id' | 'normalized_name'>[]> {
+		const placeholders = names.map(() => '?').join(',');
+		return queryAll<Pick<TagRow, 'id' | 'normalized_name'>>(this.db, `SELECT id, normalized_name FROM tags WHERE status = 'active' AND normalized_name IN (${placeholders})`, names);
 	}
 
 	list(limit = 100, cursor?: number, prefix = '', category?: string): Promise<TagRow[]> {
@@ -196,12 +241,12 @@ export class TagRepository {
 				.bind(tagId, 'revert', JSON.stringify(current), history.previous_value, userId, now),
 		]);
 	}
-}
 
-async function findOrCreateTagId(db: DB, normalized: string, authorId: number, now: number): Promise<number> {
-	await execute(db, 'INSERT OR IGNORE INTO tags (normalized_name, created_by, created_at, updated_at) VALUES (?, ?, ?, ?)', [normalized, authorId, now, now]);
-	const tag = await queryOne<Pick<TagRow, 'id' | 'status'>>(db, 'SELECT id, status FROM tags WHERE normalized_name = ?', [normalized]);
-	if (!tag || tag.status !== 'active') throw new Error('Tag not active');
+	private async findOrCreateTagId(normalized: string, authorId: number, now: number): Promise<number> {
+		await execute(this.db, 'INSERT OR IGNORE INTO tags (normalized_name, created_by, created_at, updated_at) VALUES (?, ?, ?, ?)', [normalized, authorId, now, now]);
+		const tag = await queryOne<Pick<TagRow, 'id' | 'status'>>(this.db, 'SELECT id, status FROM tags WHERE normalized_name = ?', [normalized]);
+		if (!tag || tag.status !== 'active') throw new Error('Tag not active');
 
-	return tag.id;
+		return tag.id;
+	}
 }
