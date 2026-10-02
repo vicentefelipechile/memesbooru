@@ -22,13 +22,15 @@ import { PermissionService } from './permission-service';
 
 export class ModerationService {
 	private readonly moderation: ModerationRepository;
+	private readonly permission: PermissionService;
 
 	constructor(private readonly db: DB) {
 		this.moderation = new ModerationRepository(db);
+		this.permission = new PermissionService(db);
 	}
 
 	private assertModerator(viewer: AuthUser): void {
-		new PermissionService(this.db).require(viewer, 'moderate');
+		this.permission.require(viewer, 'moderate');
 	}
 
 	async report(viewer: AuthUser, input: ReportInput): Promise<CreatedReportResult> {
@@ -50,7 +52,7 @@ export class ModerationService {
 		if (!((input.target_type === 'post' && (input.action === 'hide' || input.action === 'reject')) || (input.target_type === 'user' && input.action === 'ban'))) throw new ValidationError('Unsupported moderation action');
 		await this.assertTargetExists(input.target_type, input.target_id);
 
-		if (input.target_type === 'user' && input.action === 'ban' && (await new PermissionService(this.db).userRolesForLogin(input.target_id)).some((role) => role.id === 1)) throw new ForbiddenError('Revoke administrator role before banning');
+		if (input.target_type === 'user' && input.action === 'ban' && (await this.permission.userRolesForLogin(input.target_id)).some((role) => role.id === 1)) throw new ForbiddenError('Revoke administrator role before banning');
 
 		const id = await this.moderation.createAction({
 			targetType: input.target_type,
