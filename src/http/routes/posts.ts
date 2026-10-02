@@ -213,7 +213,8 @@ router.get('/:publicId/variants/:variant', optionalAuth, async (c) => {
 	if (post.restricted) throw new ForbiddenError('contenido restringido');
 	if (post.media_type === 'video' && post.lowVariantKey?.startsWith('stream/')) return c.redirect(`https://iframe.videodelivery.net/${post.lowVariantKey.slice(7)}`, 302);
 
-	const object = await c.env.MEDIA_BUCKET.get(`media/${publicId}/${variant === 'original' ? 'original' : `${variant}.avif`}`);
+	const objectKey = variant === 'original' ? 'original' : `${variant}.avif`;
+	const object = await c.env.MEDIA_BUCKET.get(`media/${publicId}/${objectKey}`);
 	if (!object) throw new NotFoundError('variante no disponible');
 
 	if (variant === 'original' || post.media_type === 'video') c.header('Cache-Control', 'private, no-store');

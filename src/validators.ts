@@ -260,7 +260,7 @@ export const TurnstileConfigResponseSchema = z.object({ siteKey: z.string().min(
 export const PublicProfileSchema = z.object({ id: z.number(), username: z.string(), display_name: z.string().nullable(), avatar_url: z.string().nullable(), bio: z.string().nullable(), roles: z.array(z.string()), created_at: z.number() });
 export const ProfileResponseSchema = z.object({ profile: PublicProfileSchema });
 export const ProfilePostsResponseSchema = z.object({
-	data: z.array(z.object({ public_id: z.string(), low_variant_key: z.string(), score: z.number(), favorite_count: z.number(), media_type: z.string() })),
+	data: z.array(z.object({ public_id: z.string(), low_variant_key: z.string(), preview_data: z.string().nullable().optional(), score: z.number(), favorite_count: z.number(), media_type: z.string() })),
 	nextCursor: z.string().nullable(),
 });
 export const AutocompleteResponseSchema = z.object({ tags: z.array(z.object({ name: z.string(), display: z.string().nullable().optional(), usage: z.number().optional() })) });
@@ -285,12 +285,21 @@ export const BrowseTagsQuerySchema = z.object({
 export const BrowseTagsResponseSchema = z.object({
 	groups: z.record(z.enum(TAG_CATEGORIES), z.object({ tags: z.array(TagItemSchema) })),
 });
-export const GridItemSchema = z.object({ public_id: z.string(), low_variant_key: z.string().nullable().optional(), score: z.number(), favorite_count: z.number(), media_type: z.string().optional(), tags: z.array(z.string()).optional() });
+export const GridItemSchema = z.object({
+	public_id: z.string(),
+	low_variant_key: z.string().nullable().optional(),
+	preview_data: z.string().nullable().optional(),
+	score: z.number(),
+	favorite_count: z.number(),
+	media_type: z.string().optional(),
+	tags: z.array(z.string()).optional(),
+});
 export const PostTagSchema = z.object({ name: z.string(), category: z.string(), count: z.number() });
 export const SearchResponseSchema = z.object({ data: z.array(GridItemSchema), tags: z.array(PostTagSchema), nextCursor: z.string().nullable(), hasMore: z.boolean(), warning: z.string().optional() });
 export const PostResponseSchema = z.object({
 	public_id: z.string().optional(),
 	publicId: z.string().optional(),
+	preview_data: z.string().nullable().optional(),
 	title: z.string().nullable().optional(),
 	description: z.string().nullable().optional(),
 	score: z.number().optional(),
@@ -313,7 +322,9 @@ export const TotpVerifyResponseSchema = z.object({ ok: z.boolean(), recoveryCode
 export const CommentItemSchema = z.object({ id: z.number(), body: z.string(), post_id: z.number(), author_id: z.number(), author_username: z.string().nullable().optional(), created_at: z.number().optional() });
 export const CommentListResponseSchema = z.object({ data: z.array(CommentItemSchema) });
 export const CommunityListResponseSchema = z.object({ data: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.null()]))) });
-export const TopResponseSchema = z.object({ data: z.array(z.object({ public_id: z.string(), media_type: z.string(), low_variant_key: z.string(), score: z.number(), favorite_count: z.number(), comment_count: z.number() })) });
+export const TopResponseSchema = z.object({
+	data: z.array(z.object({ public_id: z.string(), media_type: z.string(), low_variant_key: z.string(), preview_data: z.string().nullable().optional(), score: z.number(), favorite_count: z.number(), comment_count: z.number() })),
+});
 
 // =========================================================================================================
 // Inferred input types — single source for service signatures (never inline anonymous)

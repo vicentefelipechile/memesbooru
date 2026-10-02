@@ -48,7 +48,7 @@ export class ProfileService {
 		const last = visible.at(-1);
 
 		return {
-			data: visible.map(({ public_id, low_variant_key, score, favorite_count, media_type }) => ({ public_id, low_variant_key, score, favorite_count, media_type })),
+			data: visible.map(({ public_id, low_variant_key, preview_data, score, favorite_count, media_type }) => ({ public_id, low_variant_key, preview_data, score, favorite_count, media_type })),
 			nextCursor: rows.length > query.limit && last ? encodeCursor({ id: last.id, created_at: last.created_at } satisfies ProfilePostCursor) : null,
 		};
 	}

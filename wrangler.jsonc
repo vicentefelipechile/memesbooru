@@ -29,6 +29,9 @@
 			"bucket_name": "memesbooru-media"
 		},
 	],
+	"images": {
+		"binding": "IMAGES"
+	},
 	"stream": {
 		"binding": "STREAM"
 	},

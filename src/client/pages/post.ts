@@ -20,6 +20,7 @@ type PostDetail = {
 	post_id?: number;
 	restricted?: boolean;
 	redirectTo?: string;
+	preview_data?: string | null;
 };
 
 // =========================================================================================================
@@ -49,7 +50,7 @@ export async function renderPost(publicId: string): Promise<string> {
 		 <section class="side-block"><h2>Tags</h2><div id="post-tags">${renderTagged(data.tags ?? [])}</div>${canEditTags ? `<button id="edit-post-tags" type="button">Editar tags</button><form id="post-tags-form" class="form-stack" hidden><label>Tags separados por espacios<input name="tags" value="${escapeAttr((data.tags ?? []).map((tag) => tag.name).join(' '))}" required></label><button type="submit">Guardar</button><p role="status" aria-live="polite"></p></form>` : ''}</section>
       </aside>
       <section class="post-main">
-        <div class="post-media">
+		  <div class="post-media"${data.preview_data ? ` style="background-image:url('${data.preview_data}')"` : ''}>
 		  ${restricted ? `<p class="restricted">No tienes permiso para ver este video.</p>` : data.media_type === 'video' ? '<div id="video-player"></div>' : `<img src="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`)}" alt="post ${publicId}" loading="eager" />`}
         </div>
         <h1 class="post-title">${data.title ? escapeHtml(data.title) : `Post ${publicId}`}</h1>

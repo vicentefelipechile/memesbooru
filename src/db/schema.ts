@@ -82,6 +82,7 @@ export interface PostListingRow {
 	status: string;
 	low_variant_key: string;
 	medium_variant_key: string | null;
+	preview_data: string | null;
 	width: number | null;
 	height: number | null;
 	score: number;

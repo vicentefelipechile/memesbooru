@@ -17,7 +17,7 @@ import type { QueueMessage } from '../types';
 // Types
 // =========================================================================================================
 
-export type QueueEnv = Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket };
+export type QueueEnv = Cloudflare.Env & { DB: D1Database; MEDIA_BUCKET: R2Bucket; IMAGES: ImagesBinding };
 
 // =========================================================================================================
 // Handler
@@ -74,11 +74,21 @@ async function processMedia(env: QueueEnv, postId: number): Promise<void> {
 
 	if (!source) throw new Error(`missing media: ${asset.original_object_key}`);
 
-	const bytes = await source.arrayBuffer();
-	const metadata = { httpMetadata: { contentType: asset.mime_type } };
+	const sourceBytes = await source.arrayBuffer();
+	const [low, medium, preview] = await Promise.all([
+		transformImage(env.IMAGES, sourceBytes, { width: 175, height: 160, fit: 'scale-down' }),
+		transformImage(env.IMAGES, sourceBytes, { width: 1600, fit: 'scale-down' }),
+		transformImage(env.IMAGES, sourceBytes, { width: 20, height: 20, fit: 'cover', blur: 10 }, false),
+	]);
+	const previewData = `data:image/avif;base64,${btoa(String.fromCharCode(...new Uint8Array(preview)))}`;
+	const metadata = { httpMetadata: { contentType: 'image/avif' } };
+	await Promise.all([env.MEDIA_BUCKET.put(lowKey, low, metadata), env.MEDIA_BUCKET.put(medKey, medium, metadata)]);
+	await media.insertVariantsAndPublish(asset.id, postId, lowKey, medKey, previewData, low.byteLength);
+}
 
-	await env.MEDIA_BUCKET.put(lowKey, bytes, metadata);
-	await env.MEDIA_BUCKET.put(medKey, bytes, metadata);
-
-	await media.insertVariantsAndPublish(asset.id, postId, lowKey, medKey, bytes.byteLength);
+async function transformImage(images: ImagesBinding, bytes: ArrayBuffer, options: ImageTransform, anim = true): Promise<ArrayBuffer> {
+	const stream = new Response(bytes).body;
+	if (!stream) throw new Error('image stream unavailable');
+	const result = await images.input(stream).transform(options).output({ format: 'image/avif', anim });
+	return result.response().arrayBuffer();
 }

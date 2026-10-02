@@ -81,7 +81,7 @@ export class PostRepository {
 		if (cursor && value !== undefined) query.where('(pl.' + column + ' < ? OR (pl.' + column + ' = ? AND pl.post_id < ?))', value, value, cursor.id);
 
 		const { sql, params } = query.build(
-			`SELECT pl.post_id, pl.public_id, pl.media_type, pl.status, pl.low_variant_key, pl.medium_variant_key, pl.width, pl.height, pl.score, pl.rating_count, pl.favorite_count, pl.comment_count, pl.published_at FROM post_listing pl`,
+			`SELECT pl.post_id, pl.public_id, pl.media_type, pl.status, pl.low_variant_key, pl.medium_variant_key, pl.preview_data, pl.width, pl.height, pl.score, pl.rating_count, pl.favorite_count, pl.comment_count, pl.published_at FROM post_listing pl`,
 		);
 		return queryAll<PostListingRow>(this.db, `${sql} ORDER BY pl.${column} DESC, pl.post_id DESC LIMIT ?`, [...params, opts.limit]);
 	}
@@ -100,7 +100,7 @@ export class PostRepository {
 		const order = sort === 'favorites' ? 'pl.favorite_count DESC, pl.score DESC' : sort === 'recent' ? 'pl.published_at DESC, pl.post_id DESC' : 'pl.score DESC, pl.favorite_count DESC';
 		return queryAll<PostListingRow>(
 			this.db,
-			`SELECT pl.post_id, pl.public_id, pl.media_type, pl.status, pl.low_variant_key, pl.medium_variant_key, pl.width, pl.height, pl.score, pl.rating_count, pl.favorite_count, pl.comment_count, pl.published_at FROM post_listing pl WHERE pl.status = 'available' AND pl.published_at >= ? ORDER BY ${order}, pl.post_id DESC LIMIT ?`,
+			`SELECT pl.post_id, pl.public_id, pl.media_type, pl.status, pl.low_variant_key, pl.medium_variant_key, pl.preview_data, pl.width, pl.height, pl.score, pl.rating_count, pl.favorite_count, pl.comment_count, pl.published_at FROM post_listing pl WHERE pl.status = 'available' AND pl.published_at >= ? ORDER BY ${order}, pl.post_id DESC LIMIT ?`,
 			[since, limit],
 		);
 	}

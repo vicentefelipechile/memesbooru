@@ -16,6 +16,9 @@
 	justify-content: center;
 	width: 175px;
 	height: 160px;
+	background-position: center;
+	background-repeat: no-repeat;
+	background-size: cover;
 }
 
 .thumb img { max-width: 160px; max-height: 160px; width: auto; height: auto; object-fit: contain; }

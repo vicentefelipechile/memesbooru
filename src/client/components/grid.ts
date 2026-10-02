@@ -6,13 +6,13 @@
 import { escapeAttr } from './search.js';
 import { apiUrl } from '../services/api.js';
 
-export type GridItem = { public_id: string; low_variant_key?: string | null; score: number; favorite_count: number; media_type?: string };
+export type GridItem = { public_id: string; low_variant_key?: string | null; preview_data?: string | null; score: number; favorite_count: number; media_type?: string };
 
 export function renderCard(item: GridItem): string {
 	const isVideo = item.media_type === 'video' || item.media_type === 'gif';
 
 	return `
-  <a href="/post/${encodeURIComponent(item.public_id)}" class="thumb" data-link>
+	  <a href="/post/${encodeURIComponent(item.public_id)}" class="thumb"${item.preview_data ? ` style="background-image:url('${item.preview_data}')"` : ''} data-link>
 	    <img loading="lazy" src="${apiUrl(`/api/posts/${encodeURIComponent(item.public_id)}/variants/low`)}" alt="Meme ${escapeAttr(item.public_id)}" />
     ${isVideo ? `<span class="media-label">${item.media_type === 'gif' ? 'GIF' : 'Vídeo'}</span>` : ''}
   </a>`;

@@ -17,7 +17,7 @@ import type { UserRow } from '../db/schema';
 // Types
 // =========================================================================================================
 
-export type ProfilePostRow = Pick<PostRow, 'id' | 'created_at'> & Pick<PostListingRow, 'public_id' | 'low_variant_key' | 'score' | 'favorite_count' | 'media_type'>;
+export type ProfilePostRow = Pick<PostRow, 'id' | 'created_at'> & Pick<PostListingRow, 'public_id' | 'low_variant_key' | 'preview_data' | 'score' | 'favorite_count' | 'media_type'>;
 export type ProfilePostCursor = Pick<PostRow, 'id' | 'created_at'>;
 export type ProfileRow = Pick<UserRow, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'>;
 
@@ -42,7 +42,7 @@ export class ProfileRepository {
 
 		return queryAll<ProfilePostRow>(
 			this.db,
-			`SELECT p.id, p.created_at, pl.public_id, pl.low_variant_key, pl.score, pl.favorite_count, pl.media_type
+			`SELECT p.id, p.created_at, pl.public_id, pl.low_variant_key, pl.preview_data, pl.score, pl.favorite_count, pl.media_type
 			 FROM posts p JOIN post_listing pl ON pl.post_id = p.id
 			 WHERE p.author_id = ? AND p.status = 'available' AND pl.status = 'available' ${filter}
 			 ORDER BY p.created_at DESC, p.id DESC LIMIT ?`,
