@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { securityMiddleware } from './http/middleware/security';
 import { registerRateLimits } from './http/rate-limits';
+import { fail } from './http/responses';
 import { DomainError } from './domain/errors';
 import { SessionRepository } from './repositories/session-repository';
 import { PostRepository } from './repositories/post-repository';
@@ -39,16 +40,16 @@ registerRateLimits(app);
 
 app.onError((err, c) => {
 	if (err instanceof DomainError) {
-		return c.json(err.details === undefined ? { error: err.message } : { error: err.message, details: err.details }, err.status as 400 | 401 | 403 | 404 | 409 | 410 | 429);
+		return fail(c, err.message, err.status as 400 | 401 | 403 | 404 | 409 | 410 | 429, err.details);
 	}
 
 	if (err instanceof z.ZodError) {
-		return c.json({ error: 'Validation error', details: err.issues }, 400);
+		return fail(c, 'Validation error', 400, err.issues);
 	}
 
 	console.error('Unhandled error:', err instanceof Error ? (err.stack ?? err.message) : String(err));
 
-	return c.json({ error: 'Internal Server Error' }, 500);
+	return fail(c, 'Internal Server Error', 500);
 });
 
 // =========================================================================================================
