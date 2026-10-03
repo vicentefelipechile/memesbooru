@@ -15,17 +15,13 @@ import { PostService } from '../../services/post-service';
 import { fail } from '../responses';
 import { CreatePostSchema, SearchQuerySchema, TagInputSchema, parseQueryWithArrays } from '../../validators';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../domain/errors';
-import { detectMime, imageDimensions, validateFileSize } from '../../helpers/file-validation';
-import { parseJsonBody } from '../../helpers/http';
-import { PermissionService } from '../../services/permission-service';
+import { detectMime, imageDimensions, mp4DurationMs, validateFileSize } from '../../helpers/file-validation';
 
 // =========================================================================================================
 // Endpoints
 // =========================================================================================================
 
 const router = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
-const streamCompleteSchema = z.object({ id: z.string().min(8).max(100), title: z.string().trim().max(120).nullable().optional(), tags: z.array(TagInputSchema).min(1).max(50) });
-
 // =========================================================================================================
 // GET /api/posts
 // Search with tags, sort, cursor. DB unconfigured returns empty (dev).
@@ -130,6 +126,7 @@ router.post('/', requireAuth, async (c) => {
 	});
 
 	if (!parsed.success) return fail(c, 'datos invalidos', 400, parsed.error.issues);
+	if (parsed.data.media_type !== 'video' && parsed.data.tags.length > 20) return fail(c, 'demasiados tags', 400);
 
 	const bytes = new Uint8Array(await file.arrayBuffer());
 	const mimeType = detectMime(bytes);
@@ -138,7 +135,11 @@ router.post('/', requireAuth, async (c) => {
 
 	if (!validateFileSize(mimeType, bytes.length)) return fail(c, 'archivo demasiado grande', 413);
 
-	if ((parsed.data.media_type === 'video') !== mimeType.startsWith('video/')) return fail(c, 'el tipo no coincide con el archivo', 400);
+	if ((parsed.data.media_type === 'video') !== (mimeType === 'video/mp4') || (parsed.data.media_type === 'gif') !== (mimeType === 'image/gif')) return fail(c, 'el tipo no coincide con el archivo', 400);
+	if (parsed.data.media_type === 'video') {
+		const duration = mp4DurationMs(bytes);
+		if (!duration || duration > 60_000) return fail(c, 'el video debe ser MP4 valido de hasta 60 segundos', 400);
+	}
 	if (mimeType.startsWith('image/')) {
 		const dimensions = imageDimensions(bytes, mimeType);
 		if (!dimensions || dimensions.width < 1 || dimensions.height < 1 || dimensions.width > 10000 || dimensions.height > 10000) return fail(c, 'dimensiones de imagen invalidas', 400);
@@ -162,35 +163,6 @@ router.post('/', requireAuth, async (c) => {
 	return c.json({ publicId: result.publicId, postId: result.postId, status: 'processing' }, 201);
 });
 
-router.post('/video/upload-url', requireAuth, async (c) => {
-	const viewer = c.get('user');
-	new PermissionService(c.env.DB).require(viewer, 'upload_video');
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const metadata = z.object({ title: z.string().trim().max(120).nullable().optional(), tags: z.array(TagInputSchema).min(1).max(50) }).safeParse(body.data);
-	if (!metadata.success) return fail(c, 'datos invalidos', 400, metadata.error.issues);
-	const upload = await c.env.STREAM.createDirectUpload({
-		maxDurationSeconds: 3600,
-		creator: String(viewer.id),
-		meta: { username: viewer.username, title: metadata.data.title ?? '', tags: metadata.data.tags.join(' ') },
-	});
-	return c.json({ uploadURL: upload.uploadURL, id: upload.id }, 201);
-});
-
-router.post('/video/complete', requireAuth, async (c) => {
-	const viewer = c.get('user');
-	new PermissionService(c.env.DB).require(viewer, 'upload_video');
-
-	const body = await parseJsonBody(c);
-	if (!body.ok) return body.response;
-	const parsed = streamCompleteSchema.safeParse(body.data);
-	if (!parsed.success) return fail(c, 'datos invalidos', 400, parsed.error.issues);
-
-	const video = await c.env.STREAM.video(parsed.data.id).details();
-	const result = await new PostService(c.env.DB).createStreamPost(viewer, parsed.data.title ?? null, parsed.data.tags, parsed.data.id, video.creator);
-	return c.json({ publicId: result.publicId, postId: result.postId, status: 'processing' }, 201);
-});
-
 router.put('/:publicId/tags', requireAuth, async (c) => {
 	const parsed = z.object({ tags: z.array(TagInputSchema).min(1).max(50) }).safeParse(await c.req.json().catch(() => null));
 	if (!parsed.success) return fail(c, 'Invalid tags', 400, parsed.error.issues);
@@ -206,22 +178,45 @@ router.put('/:publicId/tags', requireAuth, async (c) => {
 router.get('/:publicId/variants/:variant', optionalAuth, async (c) => {
 	const variant = c.req.param('variant')!;
 	const publicId = c.req.param('publicId')!;
+	const format = c.req.query('format');
 
 	if (!['low', 'medium', 'original'].includes(variant)) return fail(c, 'variant invalido', 400);
 
 	const post = await new PostService(c.env.DB).detail(publicId, c.get('user') ?? null);
-	if (post.restricted) throw new ForbiddenError('contenido restringido');
-	if (post.media_type === 'video' && post.lowVariantKey?.startsWith('stream/')) return c.redirect(`https://iframe.videodelivery.net/${post.lowVariantKey.slice(7)}`, 302);
+	const publicPoster = post.media_type === 'video' && variant === 'low' && !format && !post.low_variant_key.startsWith('stream/');
+	if (post.restricted && !publicPoster) throw new ForbiddenError('contenido restringido');
+	if (post.media_type === 'video' && post.low_variant_key.startsWith('stream/')) {
+		if (format) return fail(c, 'formato invalido', 400);
+		const uid = post.low_variant_key.slice(7);
+		const url = variant === 'low' ? `https://videodelivery.net/${uid}/thumbnails/thumbnail.jpg?width=175&height=160&fit=clip` : `https://iframe.videodelivery.net/${uid}`;
 
-	const objectKey = variant === 'original' ? 'original' : `${variant}.avif`;
-	const object = await c.env.MEDIA_BUCKET.get(`media/${publicId}/${objectKey}`);
+		return c.redirect(url, 302);
+	}
+
+	const allowedFormats = post.media_type === 'video' ? ['mp4'] : post.media_type === 'gif' ? (variant === 'low' ? ['gif', 'webp'] : ['gif']) : ['webp', 'png'];
+	if (format && !allowedFormats.includes(format)) return fail(c, 'formato invalido', 400);
+	const preferredKey = variant === 'low' ? post.low_variant_key : post.medium_variant_key;
+	const objectKey = variant === 'original' && post.media_type === 'video' ? 'original.mp4' : variant === 'original' && (!format || post.media_type === 'gif') ? 'original' : format ? `${variant}.${format}` : preferredKey?.split('/').at(-1);
+	const isVideoFile = post.media_type === 'video' && (variant !== 'low' || format === 'mp4');
+	const rangeHeader = c.req.header('Range');
+	const range = isVideoFile && rangeHeader ? { range: new Headers({ Range: rangeHeader }) } : undefined;
+	let object = objectKey ? await c.env.MEDIA_BUCKET.get(`media/${publicId}/${objectKey}`, range) : null;
+	if (!object && variant !== 'original' && !format && preferredKey?.endsWith('.avif')) object = await c.env.MEDIA_BUCKET.get(preferredKey);
 	if (!object) throw new NotFoundError('variante no disponible');
 
-	if (variant === 'original' || post.media_type === 'video') c.header('Cache-Control', 'private, no-store');
+	if (isVideoFile || (variant === 'original' && !format)) c.header('Cache-Control', 'private, no-store');
 	else c.header('Cache-Control', 'public, max-age=31536000, immutable');
 
 	if (object.httpMetadata?.contentType) c.header('Content-Type', object.httpMetadata.contentType);
-	return c.body(object.body);
+	if (isVideoFile) c.header('Accept-Ranges', 'bytes');
+	if (rangeHeader && isVideoFile && object.range) {
+		const start = 'suffix' in object.range ? Math.max(0, object.size - object.range.suffix) : (object.range.offset ?? 0);
+		const length = 'suffix' in object.range ? Math.min(object.size, object.range.suffix) : (object.range.length ?? object.size - start);
+		c.header('Content-Range', `bytes ${start}-${start + length - 1}/${object.size}`);
+		c.header('Content-Length', String(length));
+	}
+
+	return c.body(object.body, rangeHeader && isVideoFile && object.range ? 206 : 200);
 });
 
 // =========================================================================================================

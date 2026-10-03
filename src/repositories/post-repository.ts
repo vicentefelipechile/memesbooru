@@ -282,36 +282,4 @@ export class PostRepository {
 
 		return postId;
 	}
-
-	async createStreamPost(data: { publicId: string; authorId: number; title: string | null; tags: string[]; streamUid: string }): Promise<PostRow['id']> {
-		const existing = await queryOne<Pick<PostRow, 'id'>>(this.db, 'SELECT id FROM posts WHERE stream_uid = ?', [data.streamUid]);
-		if (existing) return existing.id;
-
-		const now = Date.now();
-		const postId = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id),0)+1 AS v FROM posts', []))?.v ?? 1;
-		const assetId = (await queryOne<NextIdRow>(this.db, 'SELECT COALESCE(MAX(id),0)+1 AS v FROM media_assets', []))?.v ?? 1;
-		const tagIds = await new tagRepo.TagRepository(this.db).ensureTags(data.tags.map(normalizeTag).filter(Boolean), data.authorId);
-		const checksum = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data.streamUid));
-		const key = `stream/${data.streamUid}`;
-		const statements: D1PreparedStatement[] = [
-			this.db
-				.prepare("INSERT INTO posts (id, public_id, author_id, media_type, status, title, stream_uid, created_at, published_at, updated_at) VALUES (?, ?, ?, 'video', 'available', ?, ?, ?, ?, ?)")
-				.bind(postId, data.publicId, data.authorId, data.title, data.streamUid, now, now, now),
-			this.db
-				.prepare("INSERT INTO media_assets (id, post_id, media_type, provider, original_object_key, mime_type, byte_size, checksum, processing_status, created_at) VALUES (?, ?, 'video', 'stream', ?, 'video/mp4', 0, ?, 'done', ?)")
-				.bind(assetId, postId, key, checksum, now),
-			this.db
-				.prepare(
-					"INSERT INTO post_listing (post_id, public_id, media_type, status, low_variant_key, medium_variant_key, score, rating_count, favorite_count, comment_count, published_at) VALUES (?, ?, 'video', 'available', ?, ?, 0, 0, 0, 0, ?)",
-				)
-				.bind(postId, data.publicId, key, key, now),
-		];
-		for (const tagId of tagIds) statements.push(this.db.prepare('INSERT INTO post_tags (post_id, tag_id, added_by, created_at) VALUES (?, ?, ?, ?)').bind(postId, tagId, data.authorId, now));
-		await batch(this.db, statements);
-		return postId;
-	}
-
-	findStreamPost(streamUid: string): Promise<Pick<PostRow, 'id' | 'public_id'> | null> {
-		return queryOne<Pick<PostRow, 'id' | 'public_id'>>(this.db, 'SELECT id, public_id FROM posts WHERE stream_uid = ?', [streamUid]);
-	}
 }

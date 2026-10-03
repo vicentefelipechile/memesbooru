@@ -60,6 +60,39 @@ export function imageDimensions(bytes: Uint8Array, mime: string): { width: numbe
 	return null;
 }
 
+export function mp4DurationMs(bytes: Uint8Array): number | null {
+	let offset = 0;
+	while (offset + 8 <= bytes.length) {
+		const size = readU32(bytes, offset);
+		if (size < 8 || offset + size > bytes.length) return null;
+
+		if (boxType(bytes, offset) === 'moov') {
+			let child = offset + 8;
+			while (child + 8 <= offset + size) {
+				const childSize = readU32(bytes, child);
+				if (childSize < 8 || child + childSize > offset + size) return null;
+				if (boxType(bytes, child) === 'mvhd') {
+					const version = bytes[child + 8];
+					const timescaleOffset = child + (version === 1 ? 28 : 20);
+					if ((version !== 0 && version !== 1) || timescaleOffset + (version === 1 ? 12 : 8) > child + childSize) return null;
+					const timescale = readU32(bytes, timescaleOffset);
+					const duration = version === 1 ? Number(new DataView(bytes.buffer, bytes.byteOffset).getBigUint64(timescaleOffset + 4)) : readU32(bytes, timescaleOffset + 4);
+
+					return timescale && Number.isSafeInteger(duration) && duration > 0 ? (duration / timescale) * 1000 : null;
+				}
+				child += childSize;
+			}
+		}
+		offset += size;
+	}
+
+	return null;
+}
+
+function boxType(bytes: Uint8Array, offset: number): string {
+	return String.fromCharCode(...bytes.subarray(offset + 4, offset + 8));
+}
+
 function readU32(bytes: Uint8Array, offset: number): number {
 	return bytes[offset] * 0x1000000 + ((bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]);
 }

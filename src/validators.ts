@@ -122,7 +122,7 @@ export const tagNormalizedSchema = z
 export const CreatePostSchema = z.object({
 	title: sanitizedString(120).optional().nullable(),
 	description: sanitizedString(2000).optional().nullable(),
-	tags: z.array(TagInputSchema).min(1).max(20),
+	tags: z.array(TagInputSchema).min(1).max(50),
 	media_type: z.enum(MEDIA_TYPES),
 });
 
@@ -300,6 +300,7 @@ export const PostResponseSchema = z.object({
 	public_id: z.string().optional(),
 	publicId: z.string().optional(),
 	preview_data: z.string().nullable().optional(),
+	low_variant_key: z.string().nullable().optional(),
 	title: z.string().nullable().optional(),
 	description: z.string().nullable().optional(),
 	score: z.number().optional(),

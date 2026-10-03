@@ -32,8 +32,9 @@
 	"images": {
 		"binding": "IMAGES"
 	},
-	"stream": {
-		"binding": "STREAM"
+	"media": {
+		"binding": "MEDIA",
+		"remote": true
 	},
 	"queues": {
 		"producers": [

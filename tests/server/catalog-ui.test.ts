@@ -38,7 +38,7 @@ describe('booru controls', () => {
 		store.set({ user: { id: 1, username: 'tester', roles: ['Administrator'] } });
 		const html = await renderUpload();
 
-		expect(html).toContain('video/mp4,video/webm');
+		expect(html).toContain('video/mp4');
 		expect(html).not.toContain('name="mediaType"');
 		expect(mediaTypeForFile('image/png')).toBe('image');
 		expect(mediaTypeForFile('image/gif')).toBe('gif');

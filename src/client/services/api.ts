@@ -111,15 +111,6 @@ export class MemesBooruApi {
 			return this.upload('/api/posts', form, CreatePostResponseSchema);
 		},
 		setTags: (publicId: string, tags: string[]) => this.request(`/api/posts/${encodeURIComponent(publicId)}/tags`, { method: 'PUT', body: { tags } }),
-		videoUploadUrl: (title: string | null, tags: string[]) => this.post('/api/posts/video/upload-url', { title, tags }, undefined),
-		uploadVideo: async (file: File, title: string | null, tags: string[]) => {
-			const target = (await this.posts.videoUploadUrl(title, tags)) as { uploadURL: string; id: string };
-			const form = new FormData();
-			form.set('file', file);
-			const response = await fetch(target.uploadURL, { method: 'POST', body: form });
-			await this.assertSuccess(response);
-			return this.post('/api/posts/video/complete', { id: target.id, title, tags }, CreatePostResponseSchema);
-		},
 		rate: (publicId: string, value: number) => this.post(`/api/post/${encodeURIComponent(publicId)}/rating`, { value }),
 		favorite: (publicId: string) => this.post(`/api/post/${encodeURIComponent(publicId)}/favorite`, {}),
 		unfavorite: (publicId: string) => this.request(`/api/post/${encodeURIComponent(publicId)}/favorite`, { method: 'DELETE' }),

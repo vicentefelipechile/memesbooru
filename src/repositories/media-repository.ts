@@ -74,10 +74,10 @@ export class MediaRepository {
 		]);
 	}
 
-	async insertVariantsAndPublish(assetId: number, postId: number, lowKey: string, medKey: string, previewData: string, byteSize: number, now = Date.now()): Promise<void> {
+	async insertVariantsAndPublish(assetId: number, postId: number, lowKey: string, medKey: string, previewData: string, lowByteSize: number, mediumByteSize: number, mediumMime: string, now = Date.now()): Promise<void> {
 		await batch(this.db, [
-			this.buildInsertVariantStatement({ mediaAssetId: assetId, variantName: 'low', objectKey: lowKey, mimeType: 'image/avif', byteSize, qualityClass: 'low', visibility: 'public', createdAt: now }),
-			this.buildInsertVariantStatement({ mediaAssetId: assetId, variantName: 'medium', objectKey: medKey, mimeType: 'image/avif', byteSize, qualityClass: 'medium', visibility: 'public', createdAt: now }),
+			this.buildInsertVariantStatement({ mediaAssetId: assetId, variantName: 'low', objectKey: lowKey, mimeType: 'image/webp', byteSize: lowByteSize, qualityClass: 'low', visibility: 'public', createdAt: now }),
+			this.buildInsertVariantStatement({ mediaAssetId: assetId, variantName: 'medium', objectKey: medKey, mimeType: mediumMime, byteSize: mediumByteSize, qualityClass: 'medium', visibility: 'public', createdAt: now }),
 			this.db.prepare("UPDATE media_assets SET processing_status='done' WHERE id=?").bind(assetId),
 			this.db.prepare("UPDATE posts SET status='available', published_at=?, updated_at=? WHERE id=?").bind(now, now, postId),
 			this.db
@@ -85,6 +85,19 @@ export class MediaRepository {
 					"INSERT OR REPLACE INTO post_listing (post_id, public_id, media_type, status, low_variant_key, medium_variant_key, preview_data, published_at, score) SELECT id, public_id, media_type, 'available', ?, ?, ?, ?, score FROM posts WHERE id=?",
 				)
 				.bind(lowKey, medKey, previewData, now, postId),
+		]);
+	}
+
+	async insertVideoVariantsAndPublish(assetId: number, postId: number, posterKey: string, mediumKey: string, originalKey: string, posterSize: number, mediumSize: number, originalSize: number, now = Date.now()): Promise<void> {
+		await batch(this.db, [
+			this.buildInsertVariantStatement({ mediaAssetId: assetId, variantName: 'thumbnail', objectKey: posterKey, mimeType: 'image/jpeg', byteSize: posterSize, qualityClass: 'low', visibility: 'public', createdAt: now }),
+			this.buildInsertVariantStatement({ mediaAssetId: assetId, variantName: 'medium', objectKey: mediumKey, mimeType: 'video/mp4', byteSize: mediumSize, qualityClass: 'medium', visibility: 'public', createdAt: now }),
+			this.buildInsertVariantStatement({ mediaAssetId: assetId, variantName: 'original', objectKey: originalKey, mimeType: 'video/mp4', byteSize: originalSize, qualityClass: 'original', visibility: 'public', createdAt: now }),
+			this.db.prepare("UPDATE media_assets SET processing_status='done' WHERE id=?").bind(assetId),
+			this.db.prepare("UPDATE posts SET status='available', published_at=?, updated_at=? WHERE id=?").bind(now, now, postId),
+			this.db
+				.prepare("INSERT OR REPLACE INTO post_listing (post_id, public_id, media_type, status, low_variant_key, medium_variant_key, published_at, score) SELECT id, public_id, media_type, 'available', ?, ?, ?, score FROM posts WHERE id=?")
+				.bind(posterKey, mediumKey, now, postId),
 		]);
 	}
 

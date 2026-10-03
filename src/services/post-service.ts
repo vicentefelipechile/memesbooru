@@ -99,20 +99,6 @@ export class PostService {
 		return this.posts.listTop(Math.min(100, Math.max(1, limit)), age ? Date.now() - age : 0, sort);
 	}
 
-	async createStreamPost(user: AuthUser, title: string | null, tags: string[], streamUid: string, creator: string | null): Promise<CreatedPostResult> {
-		const permissions = new PermissionService(this.db);
-		permissions.require(user, 'upload_post');
-		permissions.require(user, 'upload_video');
-		if (creator !== String(user.id)) throw new ForbiddenError('upload no autorizado');
-		const existing = await this.posts.findStreamPost(streamUid);
-		if (existing) return { publicId: toPublicId(existing.public_id), postId: toPostId(existing.id) };
-		await this.assertTagsAvailable(tags);
-
-		const publicId = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
-		const postId = await this.posts.createStreamPost({ publicId, authorId: user.id, title, tags, streamUid });
-		return { publicId: toPublicId(publicId), postId: toPostId(postId) };
-	}
-
 	async detail(publicId: string, viewer: AuthUser | null): Promise<PostDetailResult> {
 		const row = await this.posts.findByPublicId(publicId);
 

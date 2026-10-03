@@ -21,6 +21,7 @@ type PostDetail = {
 	restricted?: boolean;
 	redirectTo?: string;
 	preview_data?: string | null;
+	low_variant_key?: string | null;
 };
 
 // =========================================================================================================
@@ -51,7 +52,7 @@ export async function renderPost(publicId: string): Promise<string> {
       </aside>
       <section class="post-main">
 		  <div class="post-media"${data.preview_data ? ` style="background-image:url('${data.preview_data}')"` : ''}>
-		  ${restricted ? `<p class="restricted">No tienes permiso para ver este video.</p>` : data.media_type === 'video' ? '<div id="video-player"></div>' : `<img src="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`)}" alt="post ${publicId}" loading="eager" />`}
+		  ${restricted ? `<p class="restricted">No tienes permiso para ver este video.</p>` : data.media_type === 'video' ? (data.low_variant_key?.startsWith('stream/') ? '<div id="video-player"></div>' : `<video controls preload="metadata" poster="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/low`)}" src="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`)}"></video>`) : `<img src="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/medium`)}" alt="post ${publicId}" loading="eager" />`}
         </div>
         <h1 class="post-title">${data.title ? escapeHtml(data.title) : `Post ${publicId}`}</h1>
         ${data.author_username ? `<p>Publicado por <a href="/users/${encodeURIComponent(data.author_username)}" data-link>${escapeHtml(data.author_username)}</a></p>` : ''}
@@ -62,7 +63,8 @@ export async function renderPost(publicId: string): Promise<string> {
           <button id="fav-btn">Favorito</button>
           <button id="report-btn">Reportar</button>
         </div>
-        <a href="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/original`)}" target="_blank" rel="noopener" class="button small">Ver original</a>
+		${restricted ? '' : `<a href="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/original`)}" target="_blank" rel="noopener" class="button small">Ver original</a>`}
+        ${!restricted && data.media_type === 'image' && data.low_variant_key?.endsWith('.webp') ? `<a href="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/original?format=webp`)}" target="_blank" rel="noopener" class="button small">WebP</a> <a href="${apiUrl(`/api/posts/${encodeURIComponent(publicId)}/variants/original?format=png`)}" target="_blank" rel="noopener" class="button small">PNG</a>` : ''}
         ${data.description ? `<div class="post-description">${escapeHtml(data.description)}</div>` : ''}
     <section id="comments" class="comments">
       <h2>Comentarios</h2>

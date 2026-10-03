@@ -1,5 +1,5 @@
 // =========================================================================================================
-// Single upload form: images and GIFs go to R2, videos use Stream.
+// Single upload form: images, GIFs and videos go to R2.
 // =========================================================================================================
 
 import { store } from '../state/store.js';
@@ -10,7 +10,7 @@ import { normalizeTag } from '../../validators';
 export function mediaTypeForFile(mime: string): 'image' | 'gif' | 'video' | null {
 	if (mime === 'image/gif') return 'gif';
 	if (mime === 'image/jpeg' || mime === 'image/png' || mime === 'image/webp') return 'image';
-	if (mime === 'video/mp4' || mime === 'video/webm') return 'video';
+	if (mime === 'video/mp4') return 'video';
 
 	return null;
 }
@@ -25,7 +25,7 @@ export async function renderUpload(): Promise<string> {
     <form id="upload-form" class="form-stack">
       <div class="field">
         <label for="file">Archivo</label>
-        <input type="file" id="file" name="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" required />
+		 <input type="file" id="file" name="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4" required />
       </div>
       <div class="field">
         <label for="title">Título (opcional)</label>
@@ -39,7 +39,7 @@ export async function renderUpload(): Promise<string> {
       <button type="submit" class="primary">Subir</button>
     </form>
     <div id="upload-status" class="form-msg" aria-live="polite"></div>
-    <p class="hint" style="margin-top:1rem">Las cuentas sin permiso de subida libre tienen un límite de 1 subida por hora. Los videos requieren permisos específicos. Se generan variantes low/medium automáticamente.</p>
+	 <p class="hint" style="margin-top:1rem">Las cuentas sin permiso de subida libre tienen un límite de 1 subida por hora. Las imágenes generan versiones WebP/PNG y los GIF conservan la animación. Los vídeos MP4 de hasta 60 segundos generan tres resoluciones en R2.</p>
   `;
 }
 
@@ -71,7 +71,7 @@ export function bindUpload(): void {
 		const mediaType = mediaTypeForFile(file.type);
 
 		if (!mediaType) {
-			status.textContent = 'Archivo no compatible. Usa JPG, PNG, WebP, GIF, MP4 o WebM.';
+			status.textContent = 'Archivo no compatible. Usa JPG, PNG, WebP, GIF o MP4.';
 			return;
 		}
 
@@ -93,12 +93,27 @@ export function bindUpload(): void {
 		status.textContent = 'Subiendo...';
 
 		try {
-			const result = mediaType === 'video' ? await api.posts.uploadVideo(file, title, tags) : await api.posts.create({ title, tags, media_type: mediaType, file });
-			status.textContent = 'Publicación creada; redirigiendo...';
-			setTimeout(() => {
-				history.pushState(null, '', `/post/${result.publicId}`);
-				window.dispatchEvent(new PopStateEvent('popstate'));
-			}, 600);
+			const result = await api.posts.create({ title, tags, media_type: mediaType, file });
+			status.textContent = 'Procesando publicación…';
+			for (let attempt = 0; attempt < 60 && status.isConnected; attempt++) {
+				const ready = await api.posts
+					.get(result.publicId)
+					.then(() => true)
+					.catch(() => false);
+				if (ready) {
+					history.pushState(null, '', `/post/${result.publicId}`);
+					window.dispatchEvent(new PopStateEvent('popstate'));
+					return;
+				}
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+			}
+			if (status.isConnected) {
+				const link = document.createElement('a');
+				link.href = `/post/${encodeURIComponent(result.publicId)}`;
+				link.dataset.link = '';
+				link.textContent = 'Ver publicación';
+				status.replaceChildren('El procesamiento continúa. Intenta abrirla en unos minutos: ', link);
+			}
 		} catch (error) {
 			status.textContent = `Error: ${error instanceof Error ? error.message : 'No se pudo subir el archivo.'}`;
 		}
